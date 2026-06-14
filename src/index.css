@@ -1,0 +1,131 @@
+@import "tailwindcss";
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-sidebar-background: var(--sidebar-background);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-ring: var(--sidebar-ring);
+
+  --color-surface: #1e1e1e;
+  --color-abyss: #171717;
+  --color-graphite: #3f3f3f;
+  --color-primary-container: #7c3aed;
+  --color-on-primary-container: #ede0ff;
+  --color-secondary-container: #4f319c;
+  --color-on-secondary-container: #bea8ff;
+  --color-tertiary-container: #7545df;
+  --color-on-tertiary-container: #ece0ff;
+  --color-on-surface: #e5e2e1;
+  --color-on-surface-variant: #ccc3d8;
+  --color-on-background: #e5e2e1;
+  --color-surface-container-lowest: #0e0e0e;
+  --color-surface-container-low: #1c1b1b;
+  --color-surface-container: #201f1f;
+  --color-surface-container-high: #2a2a2a;
+  --color-surface-container-highest: #353534;
+  --color-surface-bright: #393939;
+  --color-surface-dim: #131313;
+  --color-surface-variant: #353534;
+  --color-outline: #958da1;
+  --color-outline-variant: #4a4455;
+  --color-primary-fixed: #eaddff;
+  --color-tertiary: #d0bcff;
+  --color-secondary: #cebdff;
+  --color-success: #4ade80;
+  --color-warning: #facc15;
+  --color-error: #f87171;
+  --color-muted-gray: #a3a3a3;
+  --color-medium-gray: #bcbcbc;
+  --color-bright-gray: #eeeeee;
+  --color-abyss: #171717;
+
+  --font-sans: 'Inter', ui-sans-serif, system-ui, -apple-system, sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, monospace;
+
+  --radius: 0.625rem;
+  --radius-lg: 0.5rem;
+  --radius-xl: 0.75rem;
+  --radius-full: 9999px;
+
+  --shadow-vault: rgba(255, 255, 255, 0.05) 0px 0px 0px 1px inset;
+  --shadow-vault-sm: rgba(255, 255, 255, 0.02) 0px 0px 0px 1px inset;
+  --shadow-vault-glow: 0 0 12px rgba(124, 58, 237, 0.6), inset 0 0 4px rgba(255, 255, 255, 0.3);
+  --shadow-vault-hover: rgba(255, 255, 255, 0.1) 0px 0px 0px 1px inset;
+}
+
+@layer base {
+  * {
+    border-color: var(--color-graphite);
+  }
+  body {
+    background: var(--color-surface-dim);
+    color: var(--color-on-background);
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+  ::selection {
+    background: var(--color-primary-container);
+    color: white;
+  }
+  ::-webkit-scrollbar { width: 6px; height: 6px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: #3f3f3f; border-radius: 9999px; }
+  ::-webkit-scrollbar-thumb:hover { background: #4a4455; }
+}
+
+:root {
+  --radius: 0.625rem;
+  --background: #131313;
+  --foreground: #e5e2e1;
+  --card: #1e1e1e;
+  --card-foreground: #e5e2e1;
+  --popover: #1e1e1e;
+  --popover-foreground: #e5e2e1;
+  --primary: #d2bbff;
+  --primary-foreground: #3f008e;
+  --secondary: #cebdff;
+  --secondary-foreground: #21005e;
+  --muted: #353534;
+  --muted-foreground: #a3a3a3;
+  --accent: #7545df;
+  --accent-foreground: #ece0ff;
+  --destructive: #f87171;
+  --destructive-foreground: #690005;
+  --border: #3f3f3f;
+  --input: #3f3f3f;
+  --ring: #d2bbff;
+  --sidebar-background: #171717;
+  --sidebar-foreground: #e5e2e1;
+  --sidebar-primary: #7c3aed;
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: #4f319c;
+  --sidebar-accent-foreground: #bea8ff;
+  --sidebar-border: #3f3f3f;
+  --sidebar-ring: #d2bbff;
+}
