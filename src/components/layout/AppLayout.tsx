@@ -22,16 +22,16 @@ import { cn } from '@/lib/utils'
 
 const navItems = [
   { to: '/', icon: LayoutDashboard, label: 'Dashboard' },
-  { to: '/salary', icon: Wallet, label: 'Salary' },
-  { to: '/expenses', icon: ArrowUpRight, label: 'Expenses' },
-  { to: '/wants', icon: Heart, label: 'Wants' },
-  { to: '/savings', icon: PiggyBank, label: 'Savings' },
-  { to: '/debts', icon: Landmark, label: 'Debts' },
-  { to: '/goals', icon: Target, label: 'Goals' },
-  { to: '/wishlist', icon: ShoppingCart, label: 'Wishlist' },
-  { to: '/events', icon: Calendar, label: 'Events' },
-  { to: '/projections', icon: TrendingUp, label: 'Projections' },
-  { to: '/reminders', icon: Bell, label: 'Reminders' },
+  { to: '/salary', icon: Wallet, label: 'Salario' },
+  { to: '/expenses', icon: ArrowUpRight, label: 'Gastos' },
+  { to: '/wants', icon: Heart, label: 'Gustos' },
+  { to: '/savings', icon: PiggyBank, label: 'Ahorros' },
+  { to: '/debts', icon: Landmark, label: 'Deudas' },
+  { to: '/goals', icon: Target, label: 'Metas' },
+  { to: '/wishlist', icon: ShoppingCart, label: 'Deseos' },
+  { to: '/events', icon: Calendar, label: 'Eventos' },
+  { to: '/projections', icon: TrendingUp, label: 'Proyecciones' },
+  { to: '/reminders', icon: Bell, label: 'Recordatorios' },
 ]
 
 export function Sidebar() {
@@ -42,7 +42,7 @@ export function Sidebar() {
       <button
         className="fixed top-4 left-4 z-50 lg:hidden text-on-surface hover:text-primary transition-colors"
         onClick={() => setOpen(!open)}
-        aria-label="Toggle menu"
+        aria-label="Abrir menú"
       >
         {open ? <X className="size-5" /> : <Menu className="size-5" />}
       </button>
@@ -61,14 +61,14 @@ export function Sidebar() {
             <h1 className="text-[18px] font-semibold text-on-surface leading-tight tracking-tight">
               Vault 50/25/25
             </h1>
-            <p className="text-[12px] text-muted-gray">Crystalline Vault</p>
+            <p className="text-[12px] text-muted-gray">Bóveda Cristalina</p>
           </div>
         </div>
 
         <div className="px-3 mb-4">
           <button className="w-full flex items-center justify-center gap-2 py-2.5 px-4 rounded-lg bg-primary-container text-white text-sm font-medium shadow-vault hover:brightness-110 transition-all active:scale-[0.98]">
             <Plus className="size-4" />
-            Add Transaction
+            Agregar Transacción
           </button>
         </div>
 
@@ -97,11 +97,11 @@ export function Sidebar() {
         <div className="mt-auto flex flex-col gap-1 border-t border-graphite pt-3 px-3 pb-4">
           <a className="flex items-center gap-3 px-3 py-2 text-sm text-muted-gray hover:bg-surface-container-high hover:text-on-surface rounded-lg transition-all" href="#">
             <LifeBuoy className="size-[18px]" />
-            Support
+            Soporte
           </a>
           <a className="flex items-center gap-3 px-3 py-2 text-sm text-muted-gray hover:bg-surface-container-high hover:text-on-surface rounded-lg transition-all" href="#">
             <LogOut className="size-[18px]" />
-            Logout
+            Cerrar sesión
           </a>
         </div>
       </aside>

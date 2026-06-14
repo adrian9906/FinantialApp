@@ -7,7 +7,14 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "lint": "eslint .",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "db:generate": "prisma generate",
+    "db:migrate:dev": "prisma migrate dev --schema prisma/schema.dev.prisma",
+    "db:migrate:prod": "prisma migrate deploy --schema prisma/schema.prisma",
+    "db:push:dev": "prisma db push --schema prisma/schema.dev.prisma",
+    "db:push:prod": "prisma db push --schema prisma/schema.prisma",
+    "db:studio:dev": "prisma studio --schema prisma/schema.dev.prisma",
+    "db:studio:prod": "prisma studio --schema prisma/schema.prisma"
   },
   "dependencies": {
     "@base-ui/react": "^1.5.0",
@@ -28,6 +35,9 @@
     "zod": "^4.4.3",
     "zustand": "^5.0.14"
   },
+  "pnpm": {
+    "onlyBuiltDependencies": ["@prisma/engines", "prisma"]
+  },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
     "@tailwindcss/vite": "^4.3.0",
@@ -35,10 +45,12 @@
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.3",
     "@vitejs/plugin-react": "^6.0.1",
+    "dotenv": "^17.4.2",
     "eslint": "^10.3.0",
     "eslint-plugin-react-hooks": "^7.1.1",
     "eslint-plugin-react-refresh": "^0.5.2",
     "globals": "^17.6.0",
+    "prisma": "^7.8.0",
     "tailwindcss": "^4.3.0",
     "typescript": "~6.0.2",
     "typescript-eslint": "^8.59.2",

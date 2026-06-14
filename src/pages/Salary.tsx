@@ -52,7 +52,7 @@ export default function Salary() {
     <div className="space-y-6 animate-in fade-in duration-500">
       <header className="flex flex-col gap-1">
         <h1 className="text-[28px] md:text-[36px] font-semibold text-on-surface tracking-tight">
-          Income Matrix
+          Matriz de Ingresos
         </h1>
         <p className="text-sm text-muted-gray max-w-2xl">
           Distribuye tu capital entre obligaciones fijas, gastos variables y ahorro estructurado.
@@ -64,18 +64,18 @@ export default function Salary() {
           <div className="flex justify-between items-center pb-3 border-b border-graphite">
             <h3 className="text-lg font-semibold text-on-surface flex items-center gap-2">
               <Wallet className="size-8 text-primary" />
-              Monthly Inflow
+              Ingreso Mensual
             </h3>
             <Button variant="ghost" size="sm" onClick={() => handleOpen()} className="text-primary-container hover:text-white">
               <Plus className="size-4" />
-              {salaries.length > 0 ? 'Update' : 'Add'}
+              {salaries.length > 0 ? 'Actualizar' : 'Agregar'}
             </Button>
           </div>
 
           {latestSalary ? (
             <>
               <div className="flex flex-col gap-1">
-                <label className="text-xs text-medium-gray uppercase tracking-widest">Net Salary</label>
+                <label className="text-xs text-medium-gray uppercase tracking-widest">Salario Neto</label>
                 <div className="relative flex items-center">
                   <span className="absolute left-3 text-muted-gray text-lg">$</span>
                   <input
@@ -90,21 +90,21 @@ export default function Salary() {
 
               <div className="flex flex-col gap-2 bg-abyss rounded-lg p-4 shadow-vault-sm">
                 <div className="flex justify-between items-center text-sm">
-                  <span className="text-muted-gray">50% Needs</span>
+                  <span className="text-muted-gray">50% Necesidades</span>
                   <span className="text-base font-semibold text-primary-fixed">${half.toLocaleString()}</span>
                 </div>
                 <div className="w-full h-1 bg-graphite rounded-full overflow-hidden">
                   <div className="h-full bg-primary w-1/2 rounded-full" />
                 </div>
                 <div className="flex justify-between items-center text-sm mt-1">
-                  <span className="text-muted-gray">25% Wants</span>
+                  <span className="text-muted-gray">25% Gustos</span>
                   <span className="text-base font-semibold text-secondary">${quarter.toLocaleString()}</span>
                 </div>
                 <div className="w-full h-1 bg-graphite rounded-full overflow-hidden">
                   <div className="h-full bg-secondary w-1/4 rounded-full" />
                 </div>
                 <div className="flex justify-between items-center text-sm mt-1">
-                  <span className="text-muted-gray">25% Savings</span>
+                  <span className="text-muted-gray">25% Ahorros</span>
                   <span className="text-base font-semibold text-tertiary-container">${quarter.toLocaleString()}</span>
                 </div>
                 <div className="w-full h-1 bg-graphite rounded-full overflow-hidden">
@@ -117,7 +117,7 @@ export default function Salary() {
               <Wallet className="size-8" />
               <p>No hay salario registrado</p>
               <Button variant="secondary" size="sm" onClick={() => handleOpen()}>
-                <Plus className="size-4" /> Add Salary
+                <Plus className="size-4" /> Agregar Salario
               </Button>
             </div>
           )}
@@ -127,12 +127,12 @@ export default function Salary() {
           <div className="flex justify-between items-center pb-3 border-b border-graphite">
             <h3 className="text-lg font-semibold text-on-surface flex items-center gap-2">
               <Receipt className="size-8 text-secondary" />
-              Salary History
+              Historial de Salarios
             </h3>
           </div>
           {salaries.length === 0 ? (
             <div className="flex flex-col items-center py-10 text-muted-gray text-sm">
-              <p>No salary records</p>
+              <p>Sin registros</p>
             </div>
           ) : (
             <div className="flex flex-col gap-2 overflow-y-auto max-h-[350px] pr-1">
@@ -167,26 +167,26 @@ export default function Salary() {
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent className="bg-surface border-graphite">
           <DialogHeader>
-            <DialogTitle className="text-on-surface">{editId ? 'Edit Salary' : 'Add Salary'}</DialogTitle>
-            <DialogDescription>Enter your monthly income details</DialogDescription>
+            <DialogTitle className="text-on-surface">{editId ? 'Editar Salario' : 'Agregar Salario'}</DialogTitle>
+            <DialogDescription>Ingresa los detalles de tu ingreso mensual</DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
             <div className="space-y-2">
-              <Label htmlFor="amount" className="text-medium-gray">Amount</Label>
+              <Label htmlFor="amount" className="text-medium-gray">Monto</Label>
               <Input id="amount" type="number" placeholder="5000" value={amount}
                 onChange={(e) => setAmount(e.target.value)}
                 className="bg-abyss border-graphite text-on-surface focus:border-tertiary-container" />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="month" className="text-medium-gray">Month</Label>
+              <Label htmlFor="month" className="text-medium-gray">Mes</Label>
               <Input id="month" type="month" value={month}
                 onChange={(e) => setMonth(e.target.value)}
                 className="bg-abyss border-graphite text-on-surface focus:border-tertiary-container" />
             </div>
           </div>
           <DialogFooter>
-            <Button variant="ghost" onClick={() => setOpen(false)} className="text-muted-gray">Cancel</Button>
-            <Button onClick={handleSave} className="bg-primary-container text-white hover:brightness-110 shadow-vault">Save</Button>
+            <Button variant="ghost" onClick={() => setOpen(false)} className="text-muted-gray">Cancelar</Button>
+            <Button onClick={handleSave} className="bg-primary-container text-white hover:brightness-110 shadow-vault">Guardar</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

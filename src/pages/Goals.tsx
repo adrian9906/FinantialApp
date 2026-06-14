@@ -36,11 +36,11 @@ export default function Goals() {
     <div className="space-y-6 animate-in fade-in duration-500">
       <header className="flex items-center justify-between">
         <div>
-          <h1 className="text-[28px] md:text-[36px] font-semibold text-on-surface tracking-tight">Savings Goals</h1>
-          <p className="text-sm text-muted-gray">Track your savings objectives</p>
+          <h1 className="text-[28px] md:text-[36px] font-semibold text-on-surface tracking-tight">Metas de Ahorro</h1>
+          <p className="text-sm text-muted-gray">Sigue tus objetivos de ahorro</p>
         </div>
         <Button onClick={() => handleOpen()} className="bg-tertiary-container text-white hover:brightness-110 shadow-vault">
-          <Plus className="size-4" /> Add Goal
+          <Plus className="size-4" /> Agregar Meta
         </Button>
       </header>
 
@@ -48,8 +48,8 @@ export default function Goals() {
         <Card className="bg-surface border-0 shadow-vault">
           <div className="flex flex-col items-center gap-3 py-16 text-muted-gray text-sm">
             <Target className="size-8" />
-            <p>No goals set yet</p>
-            <Button variant="secondary" onClick={() => handleOpen()} className="bg-surface-container-high text-on-surface">Create a goal</Button>
+            <p>Sin metas establecidas</p>
+            <Button variant="secondary" onClick={() => handleOpen()} className="bg-surface-container-high text-on-surface">Crear una meta</Button>
           </div>
         </Card>
       ) : (
@@ -68,7 +68,7 @@ export default function Goals() {
                     </div>
                     <div>
                       <h3 className="text-[18px] font-medium text-on-surface">{g.name}</h3>
-                      <p className="text-xs text-muted-gray">Target: ${g.targetAmount.toLocaleString()}{g.targetDate ? ` by ${g.targetDate}` : ''}</p>
+                      <p className="text-xs text-muted-gray">Objetivo: ${g.targetAmount.toLocaleString()}{g.targetDate ? ` para ${g.targetDate}` : ''}</p>
                     </div>
                   </div>
                   <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
@@ -80,11 +80,11 @@ export default function Goals() {
                   <div className="h-full bg-success rounded-full transition-all duration-700" style={{ width: `${progress}%` }} />
                 </div>
                 <div className="flex justify-between text-xs">
-                  <span className="text-muted-gray">${g.currentAmount.toLocaleString()} saved</span>
+                  <span className="text-muted-gray">${g.currentAmount.toLocaleString()} ahorrado</span>
                   <span className="text-on-surface font-medium">{Math.round(progress)}%</span>
                 </div>
                 {monthlyNeeded > 0 && (
-                  <p className="text-xs text-muted-gray">Need ${Math.round(monthlyNeeded).toLocaleString()}/mo</p>
+                  <p className="text-xs text-muted-gray">Necesitas ${Math.round(monthlyNeeded).toLocaleString()}/mes</p>
                 )}
               </div>
             )
@@ -95,32 +95,32 @@ export default function Goals() {
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent className="bg-surface border-graphite">
           <DialogHeader>
-            <DialogTitle className="text-on-surface">{editId ? 'Edit Goal' : 'Add Goal'}</DialogTitle>
-            <DialogDescription>Define your savings goal</DialogDescription>
+            <DialogTitle className="text-on-surface">{editId ? 'Editar Meta' : 'Agregar Meta'}</DialogTitle>
+            <DialogDescription>Define tu meta de ahorro</DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
             <div className="space-y-2">
-              <Label className="text-medium-gray">Goal Name</Label>
-              <Input placeholder="Emergency Fund" value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} className="bg-abyss border-graphite text-on-surface" />
+              <Label className="text-medium-gray">Nombre de la Meta</Label>
+              <Input placeholder="Fondo de emergencia" value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} className="bg-abyss border-graphite text-on-surface" />
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label className="text-medium-gray">Target Amount</Label>
+                <Label className="text-medium-gray">Monto Objetivo</Label>
                 <Input type="number" value={form.targetAmount} onChange={e => setForm({ ...form, targetAmount: e.target.value })} className="bg-abyss border-graphite text-on-surface" />
               </div>
               <div className="space-y-2">
-                <Label className="text-medium-gray">Current Amount</Label>
+                <Label className="text-medium-gray">Monto Actual</Label>
                 <Input type="number" value={form.currentAmount} onChange={e => setForm({ ...form, currentAmount: e.target.value })} className="bg-abyss border-graphite text-on-surface" />
               </div>
             </div>
             <div className="space-y-2">
-              <Label className="text-medium-gray">Target Date</Label>
+              <Label className="text-medium-gray">Fecha Objetivo</Label>
               <Input type="date" value={form.targetDate} onChange={e => setForm({ ...form, targetDate: e.target.value })} className="bg-abyss border-graphite text-on-surface" />
             </div>
           </div>
           <DialogFooter>
-            <Button variant="ghost" onClick={() => setOpen(false)} className="text-muted-gray">Cancel</Button>
-            <Button onClick={handleSave} className="bg-primary-container text-white hover:brightness-110 shadow-vault">Save</Button>
+            <Button variant="ghost" onClick={() => setOpen(false)} className="text-muted-gray">Cancelar</Button>
+            <Button onClick={handleSave} className="bg-primary-container text-white hover:brightness-110 shadow-vault">Guardar</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

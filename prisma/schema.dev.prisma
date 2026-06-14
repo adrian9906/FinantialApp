@@ -1,0 +1,162 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "sqlite"
+}
+
+model Usuario {
+  id         String   @id @default(uuid())
+  nombre     String
+  correo     String   @unique
+  contrasena String
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  salarios       Salario[]
+  ahorros        Ahorro[]
+  gastos         Gasto[]
+  gustos         Gusto[]
+  eventos        Evento[]
+  deseos         Deseo[]
+  proyecciones   Proyeccion[]
+  notificaciones Notificacion[]
+
+  @@map("usuarios")
+}
+
+model Salario {
+  id        String   @id @default(uuid())
+  salario   Float
+  fecha     DateTime @default(now())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  usuarioId String
+  usuario   Usuario  @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+
+  @@map("salarios")
+}
+
+model Ahorro {
+  id        String   @id @default(uuid())
+  cantidad  Float
+  fecha     DateTime @default(now())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  usuarioId String
+  usuario   Usuario  @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+
+  @@map("ahorros")
+}
+
+model Gasto {
+  id        String   @id @default(uuid())
+  cantidad  Float
+  fecha     DateTime @default(now())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  usuarioId String
+  usuario   Usuario  @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+  items     Item[]
+
+  @@map("gastos")
+}
+
+model Gusto {
+  id        String   @id @default(uuid())
+  cantidad  Float
+  fecha     DateTime @default(now())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  usuarioId String
+  usuario   Usuario  @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+  items     Item[]
+
+  @@map("gustos")
+}
+
+model Item {
+  id        String   @id @default(uuid())
+  nombre    String
+  precio    Float
+  fecha     DateTime @default(now())
+  categoria String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  gastoId   String?
+  gustoId   String?
+  gasto     Gasto?   @relation(fields: [gastoId], references: [id], onDelete: Cascade)
+  gusto     Gusto?   @relation(fields: [gustoId], references: [id], onDelete: Cascade)
+
+  @@map("items")
+}
+
+model Evento {
+  id             String   @id @default(uuid())
+  nombre         String
+  cantidad       Float
+  isNotificacion Boolean  @default(false)
+  fecha          DateTime
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  usuarioId      String
+  usuario        Usuario  @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+
+  @@map("eventos")
+}
+
+model Deseo {
+  id        String   @id @default(uuid())
+  cantidad  Float
+  fecha     DateTime @default(now())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  usuarioId String
+  usuario   Usuario  @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+  items     DeseoItem[]
+
+  @@map("deseos")
+}
+
+model DeseoItem {
+  id                 String   @id @default(uuid())
+  nombre             String
+  precio             Float
+  foto               String?
+  prioridad          String   @default("media")
+  fecha              DateTime @default(now())
+  posibleCompraFecha DateTime?
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+  deseoId            String
+  deseo              Deseo    @relation(fields: [deseoId], references: [id], onDelete: Cascade)
+
+  @@map("deseos_items")
+}
+
+model Proyeccion {
+  id          String   @id @default(uuid())
+  salarioMeta Float
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  usuarioId   String
+  usuario     Usuario  @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+
+  @@map("proyecciones")
+}
+
+model Notificacion {
+  id          String   @id @default(uuid())
+  titulo      String
+  descripcion String?
+  fecha       DateTime
+  leida       Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  usuarioId   String
+  usuario     Usuario  @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+
+  @@map("notificaciones")
+}

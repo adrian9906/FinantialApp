@@ -56,15 +56,15 @@ export default function Projections() {
     return (
       <div className="space-y-6 animate-in fade-in duration-500">
         <header>
-          <h1 className="text-[28px] md:text-[36px] font-semibold text-on-surface tracking-tight">Projections</h1>
-          <p className="text-sm text-muted-gray">See how long until you can afford your goals</p>
+          <h1 className="text-[28px] md:text-[36px] font-semibold text-on-surface tracking-tight">Proyecciones</h1>
+          <p className="text-sm text-muted-gray">Mira cuánto falta para alcanzar tus metas</p>
         </header>
         <Card className="bg-surface border-0 shadow-vault">
           <div className="flex flex-col items-center gap-3 py-16 text-muted-gray text-sm">
             <TrendingUp className="size-8" />
-            <p>Set your salary first to see projections</p>
+            <p>Configura tu salario primero para ver proyecciones</p>
             <Button variant="secondary" className="bg-surface-container-high text-on-surface" onClick={() => window.location.href = '/salary'}>
-              Go to Salary
+              Ir a Salario
             </Button>
           </div>
         </Card>
@@ -77,14 +77,14 @@ export default function Projections() {
       <header className="flex flex-col sm:flex-row sm:items-end justify-between gap-4">
         <div>
           <h1 className="text-[28px] md:text-[36px] font-semibold text-on-surface tracking-tight">Projections</h1>
-          <p className="text-sm text-muted-gray">Based on your monthly savings of <span className="text-primary font-semibold">${overview.budgetSavings.toLocaleString()}</span></p>
+          <p className="text-sm text-muted-gray">Basado en tus ahorros mensuales de <span className="text-primary font-semibold">${overview.budgetSavings.toLocaleString()}</span></p>
         </div>
       </header>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         <div className="lg:col-span-2 bg-surface rounded-xl p-5 shadow-vault">
           <div className="flex items-center justify-between mb-4">
-            <h2 className="text-base font-medium text-on-surface">12-Month Savings Forecast</h2>
+            <h2 className="text-base font-medium text-on-surface">Pronóstico de Ahorro a 12 Meses</h2>
             <BarChart3 className="size-5 text-primary" />
           </div>
           <div className="h-64">
@@ -96,8 +96,8 @@ export default function Projections() {
                 <Tooltip
                   contentStyle={{ background: '#1e1e1e', border: '1px solid #3f3f3f', borderRadius: '12px', color: '#eeeeee' }}
                 />
-                <Bar dataKey="savings" fill="#7c3aed" name="Savings" radius={[4, 4, 0, 0]} />
-                <Bar dataKey="expenses" fill="#3f3f3f" name="Needs Budget" radius={[4, 4, 0, 0]} />
+                <Bar dataKey="savings" fill="#7c3aed" name="Ahorros" radius={[4, 4, 0, 0]} />
+                <Bar dataKey="expenses" fill="#3f3f3f" name="Presupuesto Necesidades" radius={[4, 4, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
           </div>
@@ -105,27 +105,27 @@ export default function Projections() {
 
         <div className="bg-surface rounded-xl p-5 shadow-vault flex flex-col">
           <div className="flex items-center justify-between mb-4">
-            <h2 className="text-base font-medium text-on-surface">Snapshot</h2>
+            <h2 className="text-base font-medium text-on-surface">Resumen</h2>
             <FileText className="size-5 text-primary" />
           </div>
           <div className="space-y-3 flex-1">
             <div className="p-3 rounded-lg bg-surface-container-low">
-              <div className="flex items-center gap-2 text-sm text-muted-gray"><CalendarClock className="size-4" /> Goals Tracked</div>
+              <div className="flex items-center gap-2 text-sm text-muted-gray"><CalendarClock className="size-4" /> Metas Rastreadas</div>
               <div className="text-xl font-semibold text-on-surface mt-1">{projections.length}</div>
             </div>
             <div className="p-3 rounded-lg bg-surface-container-low">
-              <div className="flex items-center gap-2 text-sm text-muted-gray"><Target className="size-4" /> Nearest Target</div>
+              <div className="flex items-center gap-2 text-sm text-muted-gray"><Target className="size-4" /> Meta Más Cercana</div>
               {projections.length > 0 ? (
                 <div className="mt-1">
                   <div className="text-sm font-medium text-on-surface">{projections[0].name}</div>
-                  <div className="text-xs text-muted-gray">{projections[0].months <= 1 ? 'Less than 1 month' : `${projections[0].months} months`}</div>
+                  <div className="text-xs text-muted-gray">{projections[0].months <= 1 ? 'Menos de 1 mes' : `${projections[0].months} meses`}</div>
                 </div>
               ) : (
-                <div className="text-xs text-muted-gray mt-1">No active targets</div>
+                <div className="text-xs text-muted-gray mt-1">Sin metas activas</div>
               )}
             </div>
             <div className="p-3 rounded-lg bg-surface-container-low">
-              <div className="flex items-center gap-2 text-sm text-muted-gray"><PiggyBank className="size-4" /> Monthly Savings</div>
+              <div className="flex items-center gap-2 text-sm text-muted-gray"><PiggyBank className="size-4" /> Ahorro Mensual</div>
               <div className="text-xl font-semibold text-primary mt-1">${overview.budgetSavings.toLocaleString()}</div>
             </div>
           </div>
@@ -135,8 +135,8 @@ export default function Projections() {
       {projections.length > 0 ? (
         <div className="bg-surface rounded-xl shadow-vault overflow-hidden">
           <div className="flex items-center justify-between p-4 border-b border-graphite">
-            <h2 className="text-base font-medium text-on-surface">Time to Goal</h2>
-            <span className="text-xs text-muted-gray">{projections.length} items</span>
+            <h2 className="text-base font-medium text-on-surface">Tiempo para la Meta</h2>
+            <span className="text-xs text-muted-gray">{projections.length} artículos</span>
           </div>
           <div className="divide-y divide-graphite">
             {projections.map((p, i) => {
@@ -150,7 +150,7 @@ export default function Projections() {
                     </div>
                     <div className="ml-3 px-2.5 py-1 rounded-full bg-primary-container/20 border border-primary-container/30">
                       <span className="text-xs text-primary font-medium whitespace-nowrap">
-                        {p.months <= 1 ? '&lt;1 month' : `${p.months} months`}
+                        {p.months <= 1 ? '&lt;1 mes' : `${p.months} meses`}
                       </span>
                     </div>
                   </div>
@@ -166,7 +166,7 @@ export default function Projections() {
         <Card className="bg-surface border-0 shadow-vault">
           <div className="flex flex-col items-center gap-3 py-16 text-muted-gray text-sm">
             <PlusCircle className="size-8" />
-            <p>Add items to your wishlist or goals to see projections</p>
+            <p>Agrega artículos a tu lista de deseos o metas para ver proyecciones</p>
           </div>
         </Card>
       )}

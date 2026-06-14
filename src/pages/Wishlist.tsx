@@ -36,7 +36,7 @@ export default function Wishlist() {
           <p className="text-sm text-muted-gray max-w-xl">Visualiza tus metas de compra. Vault calcula tu capacidad de ahorro y proyecta cuándo podrás adquirir estos artículos.</p>
         </div>
         <Button onClick={() => handleOpen()} className="bg-primary-container text-white hover:brightness-110 shadow-vault">
-          <Plus className="size-4" /> Add Item
+          <Plus className="size-4" /> Agregar Artículo
         </Button>
       </header>
 
@@ -44,8 +44,8 @@ export default function Wishlist() {
         <Card className="bg-surface border-0 shadow-vault">
           <div className="flex flex-col items-center gap-3 py-16 text-muted-gray text-sm">
             <ShoppingCart className="size-8" />
-            <p>Your wishlist is empty</p>
-            <Button variant="secondary" onClick={() => handleOpen()} className="bg-surface-container-high text-on-surface">Add your first item</Button>
+            <p>Tu lista de deseos está vacía</p>
+            <Button variant="secondary" onClick={() => handleOpen()} className="bg-surface-container-high text-on-surface">Agrega tu primer artículo</Button>
           </div>
         </Card>
       ) : (
@@ -58,7 +58,7 @@ export default function Wishlist() {
                   <div className="absolute inset-0 bg-gradient-to-br from-primary-container/20 to-surface-container-lowest" />
                   <div className="absolute top-3 left-3 bg-primary-container/20 backdrop-blur-md px-3 py-1 rounded-full shadow-vault">
                     <span className="text-xs text-primary font-medium flex items-center gap-1">
-                      <Zap className="size-3.5" /> Featured
+                      <Zap className="size-3.5" /> Destacado
                     </span>
                   </div>
                   <div className="absolute inset-0 flex items-center justify-center">
@@ -75,7 +75,7 @@ export default function Wishlist() {
                   </div>
                   <div className="mt-auto">
                     <div className="flex justify-between items-end mb-2">
-                      <span className="text-sm text-muted-gray">Saved: ${item.savedAmount.toLocaleString()}</span>
+                      <span className="text-sm text-muted-gray">Ahorrado: ${item.savedAmount.toLocaleString()}</span>
                     </div>
                     <div className="w-full h-2 bg-surface-container-highest rounded-full overflow-hidden shadow-vault-sm">
                       <div className="h-full bg-primary-container rounded-full shadow-vault-glow relative transition-all duration-700" style={{ width: `${progress}%` }}>
@@ -103,7 +103,7 @@ export default function Wishlist() {
                 </div>
                 <div className="mt-auto pt-3 border-t border-graphite">
                   <div className="flex justify-between text-xs mb-1">
-                    <span className="text-muted-gray">Remaining: ${(item.price - item.savedAmount).toLocaleString()}</span>
+                    <span className="text-muted-gray">Restante: ${(item.price - item.savedAmount).toLocaleString()}</span>
                   </div>
                   <div className="w-full h-1.5 bg-surface-container-highest rounded-full overflow-hidden">
                     <div className="h-full bg-secondary-container rounded-full transition-all duration-700" style={{ width: `${progress}%` }} />
@@ -117,8 +117,8 @@ export default function Wishlist() {
             <div className="size-12 rounded-full bg-surface-container-high flex items-center justify-center text-muted-gray group-hover:text-primary group-hover:bg-primary/10 transition-colors mb-2 shadow-vault">
               <Plus className="size-6" />
             </div>
-            <h3 className="text-[18px] font-medium text-on-surface">Add Item</h3>
-            <p className="text-xs text-muted-gray mt-1 max-w-[200px]">Register a new item for Vault to project</p>
+            <h3 className="text-[18px] font-medium text-on-surface">Agregar Artículo</h3>
+            <p className="text-xs text-muted-gray mt-1 max-w-[200px]">Registra un artículo para que Vault proyecte</p>
           </article>
 
           <article className="md:col-span-4 bg-tertiary-fixed-dim/10 rounded-xl shadow-[rgba(208,188,255,0.15)_0px_0px_0px_1px_inset] p-4 flex flex-col justify-center">
@@ -130,7 +130,7 @@ export default function Wishlist() {
               Si reduces gastos en <span className="text-on-surface font-semibold">"Suscripciones"</span> un 15%, podrías alcanzar tu meta <strong>{wishlist[0]?.name || 'principal'}</strong> más rápido.
             </p>
             <button className="mt-2 text-left text-sm text-tertiary hover:text-white transition-colors flex items-center gap-1">
-              Adjust budget <ArrowRight className="size-4 inline" />
+              Ajustar presupuesto <ArrowRight className="size-4 inline" />
             </button>
           </article>
         </div>
@@ -139,49 +139,49 @@ export default function Wishlist() {
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent className="bg-surface border-graphite max-h-[85vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle className="text-on-surface">{editId ? 'Edit Item' : 'Add to Wishlist'}</DialogTitle>
-            <DialogDescription>What do you want?</DialogDescription>
+            <DialogTitle className="text-on-surface">{editId ? 'Editar Artículo' : 'Agregar a Deseos'}</DialogTitle>
+            <DialogDescription>¿Qué deseas?</DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
             <div className="space-y-2">
-              <Label className="text-medium-gray">Item Name</Label>
-              <Input placeholder="New laptop" value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} className="bg-abyss border-graphite text-on-surface" />
+              <Label className="text-medium-gray">Nombre del Artículo</Label>
+              <Input placeholder="Laptop nueva" value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} className="bg-abyss border-graphite text-on-surface" />
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label className="text-medium-gray">Price</Label>
+                <Label className="text-medium-gray">Precio</Label>
                 <Input type="number" value={form.price} onChange={e => setForm({ ...form, price: e.target.value })} className="bg-abyss border-graphite text-on-surface" />
               </div>
               <div className="space-y-2">
-                <Label className="text-medium-gray">Saved So Far</Label>
+                <Label className="text-medium-gray">Ahorrado Hasta Ahora</Label>
                 <Input type="number" value={form.savedAmount} onChange={e => setForm({ ...form, savedAmount: e.target.value })} className="bg-abyss border-graphite text-on-surface" />
               </div>
             </div>
             <div className="space-y-2">
-              <Label className="text-medium-gray">Priority</Label>
+              <Label className="text-medium-gray">Prioridad</Label>
               <Select value={form.priority} onValueChange={(v: string | null) => setForm({ ...form, priority: v ?? 'medium' })}>
                 <SelectTrigger className="bg-abyss border-graphite text-on-surface">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent className="bg-surface border-graphite">
-                  <SelectItem value="low">Low</SelectItem>
-                  <SelectItem value="medium">Medium</SelectItem>
-                  <SelectItem value="high">High</SelectItem>
+                  <SelectItem value="low">Baja</SelectItem>
+                  <SelectItem value="medium">Media</SelectItem>
+                  <SelectItem value="high">Alta</SelectItem>
                 </SelectContent>
               </Select>
             </div>
             <div className="space-y-2">
-              <Label className="text-medium-gray">URL (optional)</Label>
+              <Label className="text-medium-gray">URL (opcional)</Label>
               <Input placeholder="https://..." value={form.url} onChange={e => setForm({ ...form, url: e.target.value })} className="bg-abyss border-graphite text-on-surface" />
             </div>
             <div className="space-y-2">
-              <Label className="text-medium-gray">Notes (optional)</Label>
+              <Label className="text-medium-gray">Notas (opcional)</Label>
               <Input value={form.notes} onChange={e => setForm({ ...form, notes: e.target.value })} className="bg-abyss border-graphite text-on-surface" />
             </div>
           </div>
           <DialogFooter>
-            <Button variant="ghost" onClick={() => setOpen(false)} className="text-muted-gray">Cancel</Button>
-            <Button onClick={handleSave} className="bg-primary-container text-white hover:brightness-110 shadow-vault">Save</Button>
+            <Button variant="ghost" onClick={() => setOpen(false)} className="text-muted-gray">Cancelar</Button>
+            <Button onClick={handleSave} className="bg-primary-container text-white hover:brightness-110 shadow-vault">Guardar</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

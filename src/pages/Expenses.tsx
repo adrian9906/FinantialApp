@@ -38,11 +38,11 @@ export default function Expenses() {
     <div className="space-y-6 animate-in fade-in duration-500">
       <header className="flex items-center justify-between">
         <div>
-          <h1 className="text-[28px] md:text-[36px] font-semibold text-on-surface tracking-tight">Expenses</h1>
-          <p className="text-sm text-muted-gray">50% of your income — essential needs</p>
+          <h1 className="text-[28px] md:text-[36px] font-semibold text-on-surface tracking-tight">Gastos</h1>
+          <p className="text-sm text-muted-gray">50% de tus ingresos — necesidades esenciales</p>
         </div>
         <Button onClick={() => setOpen(true)} className="bg-primary-container text-white hover:brightness-110 shadow-vault">
-          <Plus className="size-4" /> Add Expense
+          <Plus className="size-4" /> Agregar Gasto
         </Button>
       </header>
 
@@ -50,9 +50,9 @@ export default function Expenses() {
         <div className="absolute top-0 right-0 w-32 h-32 bg-primary opacity-5 rounded-bl-full translate-x-8 -translate-y-8 group-hover:scale-110 transition-transform duration-500" />
         <div className="relative z-10">
           <div className="flex justify-between items-center mb-2">
-            <p className="text-xs text-muted-gray uppercase tracking-wider">Monthly Budget (50%)</p>
+            <p className="text-xs text-muted-gray uppercase tracking-wider">Presupuesto Mensual (50%)</p>
             <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${remaining >= 0 ? 'bg-success/10 text-success' : 'bg-error/10 text-error'}`}>
-              {remaining >= 0 ? `$${remaining.toLocaleString()} left` : `$${Math.abs(remaining).toLocaleString()} over`}
+              {remaining >= 0 ? `$${remaining.toLocaleString()} disponible` : `$${Math.abs(remaining).toLocaleString()} excedido`}
             </span>
           </div>
           <h2 className="text-[28px] font-semibold text-on-surface mb-3">
@@ -68,16 +68,16 @@ export default function Expenses() {
         <Card className="bg-surface border-0 shadow-vault">
           <div className="flex flex-col items-center gap-3 py-16 text-muted-gray text-sm">
             <ArrowUpRight className="size-8" />
-            <p>No expenses recorded</p>
-            <Button variant="secondary" onClick={() => setOpen(true)} className="bg-surface-container-high hover:bg-surface-container-higher text-on-surface">Add expense</Button>
+            <p>Sin gastos registrados</p>
+            <Button variant="secondary" onClick={() => setOpen(true)} className="bg-surface-container-high hover:bg-surface-container-higher text-on-surface">Agregar gasto</Button>
           </div>
         </Card>
       ) : (
         <div className="bg-surface rounded-xl shadow-vault overflow-hidden">
           <div className="hidden md:grid grid-cols-[1fr_100px_80px] gap-4 p-4 border-b border-graphite bg-surface-container-lowest text-xs text-muted-gray uppercase tracking-wider font-semibold">
-            <span>Description</span>
-            <span className="text-right">Amount</span>
-            <span className="text-right">Action</span>
+            <span>Descripción</span>
+            <span className="text-right">Monto</span>
+            <span className="text-right">Acción</span>
           </div>
           <div className="divide-y divide-graphite">
             {expenseList.map((t) => (
@@ -101,32 +101,32 @@ export default function Expenses() {
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent className="bg-surface border-graphite">
           <DialogHeader>
-            <DialogTitle className="text-on-surface">Add Expense</DialogTitle>
-            <DialogDescription>Record a new expense</DialogDescription>
+            <DialogTitle className="text-on-surface">Agregar Gasto</DialogTitle>
+            <DialogDescription>Registrar un nuevo gasto</DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
             <div className="space-y-2">
-              <Label htmlFor="amount" className="text-medium-gray">Amount</Label>
+              <Label htmlFor="amount" className="text-medium-gray">Monto</Label>
               <Input id="amount" type="number" placeholder="200" value={form.amount}
                 onChange={(e) => setForm({ ...form, amount: e.target.value })}
                 className="bg-abyss border-graphite text-on-surface" />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="desc" className="text-medium-gray">Description</Label>
-              <Input id="desc" placeholder="Grocery shopping" value={form.description}
+              <Label htmlFor="desc" className="text-medium-gray">Descripción</Label>
+              <Input id="desc" placeholder="Compra de supermercado" value={form.description}
                 onChange={(e) => setForm({ ...form, description: e.target.value })}
                 className="bg-abyss border-graphite text-on-surface" />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="date" className="text-medium-gray">Date</Label>
+              <Label htmlFor="date" className="text-medium-gray">Fecha</Label>
               <Input id="date" type="date" value={form.date}
                 onChange={(e) => setForm({ ...form, date: e.target.value })}
                 className="bg-abyss border-graphite text-on-surface" />
             </div>
           </div>
           <DialogFooter>
-            <Button variant="ghost" onClick={() => setOpen(false)} className="text-muted-gray">Cancel</Button>
-            <Button onClick={handleSave} className="bg-primary-container text-white hover:brightness-110 shadow-vault">Save</Button>
+            <Button variant="ghost" onClick={() => setOpen(false)} className="text-muted-gray">Cancelar</Button>
+            <Button onClick={handleSave} className="bg-primary-container text-white hover:brightness-110 shadow-vault">Guardar</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

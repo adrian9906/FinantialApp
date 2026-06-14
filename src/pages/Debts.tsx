@@ -33,11 +33,11 @@ export default function Debts() {
     <div className="space-y-6 animate-in fade-in duration-500">
       <header className="flex items-center justify-between">
         <div>
-          <h1 className="text-[28px] md:text-[36px] font-semibold text-on-surface tracking-tight">Debts</h1>
-          <p className="text-sm text-muted-gray">Active Liabilities</p>
+          <h1 className="text-[28px] md:text-[36px] font-semibold text-on-surface tracking-tight">Deudas</h1>
+          <p className="text-sm text-muted-gray">Pasivos Activos</p>
         </div>
         <Button onClick={() => handleOpen()} className="bg-error/20 text-error hover:bg-error/30 border border-error/30 shadow-vault">
-          <Plus className="size-4" /> Add Debt
+          <Plus className="size-4" /> Agregar Deuda
         </Button>
       </header>
 
@@ -45,8 +45,8 @@ export default function Debts() {
         <Card className="bg-surface border-0 shadow-vault">
           <div className="flex flex-col items-center gap-3 py-16 text-muted-gray text-sm">
             <Landmark className="size-8" />
-            <p>No debts recorded</p>
-            <Button variant="secondary" onClick={() => handleOpen()} className="bg-surface-container-high text-on-surface">Add a debt</Button>
+            <p>Sin deudas registradas</p>
+            <Button variant="secondary" onClick={() => handleOpen()} className="bg-surface-container-high text-on-surface">Agregar una deuda</Button>
           </div>
         </Card>
       ) : (
@@ -60,8 +60,8 @@ export default function Debts() {
                   <div>
                     <h4 className="text-[18px] font-medium text-on-surface">{d.name}</h4>
                     <p className="text-xs text-muted-gray mt-1">
-                      {d.interestRate > 0 && `${d.interestRate}% APR`}
-                      {d.monthlyPayment > 0 && ` • Min $${d.monthlyPayment}/mo`}
+                      {d.interestRate > 0 && `${d.interestRate}% TAE`}
+                      {d.monthlyPayment > 0 && ` • Mín $${d.monthlyPayment}/mes`}
                     </p>
                   </div>
                   <div className="flex gap-1">
@@ -71,8 +71,8 @@ export default function Debts() {
                 </div>
                 <div>
                   <div className="flex justify-between text-sm mb-1">
-                    <span className="text-medium-gray">Paid: ${d.paidAmount.toLocaleString()}</span>
-                    <span className="text-on-surface font-medium">Left: ${remaining.toLocaleString()}</span>
+                    <span className="text-medium-gray">Pagado: ${d.paidAmount.toLocaleString()}</span>
+                    <span className="text-on-surface font-medium">Restante: ${remaining.toLocaleString()}</span>
                   </div>
                   <div className="w-full bg-surface-container rounded-full h-2.5 shadow-vault-sm overflow-hidden">
                     <div className="bg-tertiary-container h-2.5 rounded-full transition-all duration-700" style={{ width: `${progress}%` }} />
@@ -87,13 +87,13 @@ export default function Debts() {
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent className="bg-surface border-graphite">
           <DialogHeader>
-            <DialogTitle className="text-on-surface">{editId ? 'Edit Debt' : 'Add Debt'}</DialogTitle>
-            <DialogDescription>Enter the debt details</DialogDescription>
+            <DialogTitle className="text-on-surface">{editId ? 'Editar Deuda' : 'Agregar Deuda'}</DialogTitle>
+            <DialogDescription>Ingresa los detalles de la deuda</DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
             <div className="space-y-2">
-              <Label className="text-medium-gray">Name</Label>
-              <Input placeholder="Credit Card" value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} className="bg-abyss border-graphite text-on-surface" />
+              <Label className="text-medium-gray">Nombre</Label>
+              <Input placeholder="Tarjeta de crédito" value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} className="bg-abyss border-graphite text-on-surface" />
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
@@ -101,28 +101,28 @@ export default function Debts() {
                 <Input type="number" value={form.totalAmount} onChange={e => setForm({ ...form, totalAmount: e.target.value })} className="bg-abyss border-graphite text-on-surface" />
               </div>
               <div className="space-y-2">
-                <Label className="text-medium-gray">Paid</Label>
+                <Label className="text-medium-gray">Pagado</Label>
                 <Input type="number" value={form.paidAmount} onChange={e => setForm({ ...form, paidAmount: e.target.value })} className="bg-abyss border-graphite text-on-surface" />
               </div>
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label className="text-medium-gray">APR (%)</Label>
+                <Label className="text-medium-gray">TAE (%)</Label>
                 <Input type="number" step="0.1" value={form.interestRate} onChange={e => setForm({ ...form, interestRate: e.target.value })} className="bg-abyss border-graphite text-on-surface" />
               </div>
               <div className="space-y-2">
-                <Label className="text-medium-gray">Monthly Payment</Label>
+                <Label className="text-medium-gray">Pago Mensual</Label>
                 <Input type="number" value={form.monthlyPayment} onChange={e => setForm({ ...form, monthlyPayment: e.target.value })} className="bg-abyss border-graphite text-on-surface" />
               </div>
             </div>
             <div className="space-y-2">
-              <Label className="text-medium-gray">Due Date</Label>
+              <Label className="text-medium-gray">Fecha de Vencimiento</Label>
               <Input type="date" value={form.dueDate} onChange={e => setForm({ ...form, dueDate: e.target.value })} className="bg-abyss border-graphite text-on-surface" />
             </div>
           </div>
           <DialogFooter>
-            <Button variant="ghost" onClick={() => setOpen(false)} className="text-muted-gray">Cancel</Button>
-            <Button onClick={handleSave} className="bg-primary-container text-white hover:brightness-110 shadow-vault">Save</Button>
+            <Button variant="ghost" onClick={() => setOpen(false)} className="text-muted-gray">Cancelar</Button>
+            <Button onClick={handleSave} className="bg-primary-container text-white hover:brightness-110 shadow-vault">Guardar</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

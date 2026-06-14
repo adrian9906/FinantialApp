@@ -25,3 +25,8 @@ dist-ssr
 AGENTS.md
 Obsidian.md
 diseño/
+/src/generated/prisma
+*.db
+*.db-journal
+.env
+.env.local

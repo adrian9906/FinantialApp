@@ -35,11 +35,11 @@ export default function Reminders() {
     <div className="space-y-6 animate-in fade-in duration-500">
       <header className="flex flex-col sm:flex-row sm:items-end justify-between gap-4">
         <div>
-          <h1 className="text-[28px] md:text-[36px] font-semibold text-on-surface tracking-tight">Reminders</h1>
-          <p className="text-sm text-muted-gray">Never miss a bill or financial task</p>
+          <h1 className="text-[28px] md:text-[36px] font-semibold text-on-surface tracking-tight">Recordatorios</h1>
+          <p className="text-sm text-muted-gray">Nunca pierdas una factura o tarea financiera</p>
         </div>
         <Button onClick={() => setOpen(true)} className="bg-surface text-on-surface hover:bg-surface-container-high shadow-vault border border-graphite">
-          <Plus className="size-4" /> Add Reminder
+          <Plus className="size-4" /> Agregar Recordatorio
         </Button>
       </header>
 
@@ -47,8 +47,8 @@ export default function Reminders() {
         <Card className="bg-surface border-0 shadow-vault">
           <div className="flex flex-col items-center gap-3 py-16 text-muted-gray text-sm">
             <Bell className="size-8" />
-            <p>No reminders set</p>
-            <Button variant="secondary" onClick={() => setOpen(true)} className="bg-surface-container-high text-on-surface">Create a reminder</Button>
+            <p>Sin recordatorios</p>
+            <Button variant="secondary" onClick={() => setOpen(true)} className="bg-surface-container-high text-on-surface">Crear un recordatorio</Button>
           </div>
         </Card>
       ) : (
@@ -56,7 +56,7 @@ export default function Reminders() {
           <div>
             <h2 className="text-xs text-muted-gray uppercase tracking-wider font-semibold mb-3 flex items-center gap-2">
               <span className="size-1.5 rounded-full bg-primary inline-block" />
-              Active ({activeReminders.length})
+              Activos ({activeReminders.length})
             </h2>
             <div className="space-y-2">
               {activeReminders.map((r) => {
@@ -72,8 +72,8 @@ export default function Reminders() {
                         <span className={`text-xs flex items-center gap-1 ${isOverdue ? 'text-error' : isClose ? 'text-warning' : 'text-muted-gray'}`}>
                           <Calendar className="size-3" />
                           {new Date(r.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
-                          {isOverdue && <span className="text-error">(Overdue)</span>}
-                          {isClose && !isOverdue && <span className="text-warning">(Soon)</span>}
+                          {isOverdue && <span className="text-error">(Vencido)</span>}
+                          {isClose && !isOverdue && <span className="text-warning">(Pronto)</span>}
                         </span>
                       </div>
                     </div>
@@ -95,7 +95,7 @@ export default function Reminders() {
             <div>
               <h2 className="text-xs text-muted-gray uppercase tracking-wider font-semibold mb-3 flex items-center gap-2">
                 <span className="size-1.5 rounded-full bg-graphite inline-block" />
-                Completed ({completedReminders.length})
+                Completados ({completedReminders.length})
               </h2>
               <div className="space-y-2">
                 {completedReminders.map((r) => (
@@ -127,26 +127,26 @@ export default function Reminders() {
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent className="bg-surface border-graphite">
           <DialogHeader>
-            <DialogTitle className="text-on-surface">Add Reminder</DialogTitle>
-            <DialogDescription>Set a financial reminder</DialogDescription>
+            <DialogTitle className="text-on-surface">Agregar Recordatorio</DialogTitle>
+            <DialogDescription>Configurar un recordatorio financiero</DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
             <div className="space-y-2">
-              <Label className="text-medium-gray">Title</Label>
-              <Input placeholder="Pay electricity bill" value={form.title} onChange={e => setForm({ ...form, title: e.target.value })} className="bg-abyss border-graphite text-on-surface" />
+              <Label className="text-medium-gray">Título</Label>
+              <Input placeholder="Pagar recibo de luz" value={form.title} onChange={e => setForm({ ...form, title: e.target.value })} className="bg-abyss border-graphite text-on-surface" />
             </div>
             <div className="space-y-2">
-              <Label className="text-medium-gray">Description (optional)</Label>
-              <Textarea placeholder="Due on the 15th" value={form.description} onChange={e => setForm({ ...form, description: e.target.value })} className="bg-abyss border-graphite text-on-surface" />
+              <Label className="text-medium-gray">Descripción (opcional)</Label>
+              <Textarea placeholder="Vence el día 15" value={form.description} onChange={e => setForm({ ...form, description: e.target.value })} className="bg-abyss border-graphite text-on-surface" />
             </div>
             <div className="space-y-2">
-              <Label className="text-medium-gray">Date</Label>
+              <Label className="text-medium-gray">Fecha</Label>
               <Input type="date" value={form.date} onChange={e => setForm({ ...form, date: e.target.value })} className="bg-abyss border-graphite text-on-surface" />
             </div>
           </div>
           <DialogFooter>
-            <Button variant="ghost" onClick={() => setOpen(false)} className="text-muted-gray">Cancel</Button>
-            <Button onClick={handleSave} className="bg-primary-container text-white hover:brightness-110 shadow-vault">Save</Button>
+            <Button variant="ghost" onClick={() => setOpen(false)} className="text-muted-gray">Cancelar</Button>
+            <Button onClick={handleSave} className="bg-primary-container text-white hover:brightness-110 shadow-vault">Guardar</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
