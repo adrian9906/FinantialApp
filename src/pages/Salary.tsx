@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useFinanceStore } from '@/store/financeStore'
 import { Button } from '@/components/ui/button'
+import { Card } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import {
   Dialog,
@@ -11,7 +12,23 @@ import {
   DialogFooter,
 } from '@/components/ui/dialog'
 import { Label } from '@/components/ui/label'
-import { Plus, Pencil, Trash2, Wallet, Receipt } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Plus, Pencil, Trash2, Wallet, Receipt } from 'lucide-react'
+
+const MONTH_LABELS = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic']
+
+function monthValueToDate(value: string) {
+  if (!value) {
+    return new Date()
+  }
+
+  const [year, month] = value.split('-').map(Number)
+
+  if (!year || !month) {
+    return new Date()
+  }
+
+  return new Date(year, month - 1, 1)
+}
 
 export default function Salary() {
   const { salaries, addSalary, updateSalary, removeSalary } = useFinanceStore()
@@ -19,6 +36,7 @@ export default function Salary() {
   const [editId, setEditId] = useState<string | null>(null)
   const [amount, setAmount] = useState('')
   const [month, setMonth] = useState('')
+  const [calendarYear, setCalendarYear] = useState(new Date().getFullYear())
 
   const latestSalary = salaries.length > 0
     ? salaries.reduce((max, salary) => new Date(salary.month) > new Date(max.month) ? salary : max)
@@ -28,6 +46,7 @@ export default function Salary() {
     setAmount('')
     setMonth('')
     setEditId(null)
+    setCalendarYear(new Date().getFullYear())
   }
 
   function handleOpen(entry?: typeof salaries[number]) {
@@ -35,6 +54,7 @@ export default function Salary() {
       setEditId(entry.id)
       setAmount(String(entry.amount))
       setMonth(entry.month)
+      setCalendarYear(monthValueToDate(entry.month).getFullYear())
     } else {
       resetForm()
     }
@@ -172,33 +192,86 @@ export default function Salary() {
       </div>
 
       <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="bg-surface border-graphite">
+        <DialogContent className="border-graphite bg-surface sm:max-w-3xl">
           <DialogHeader>
             <DialogTitle className="text-on-surface">{editId ? 'Editar Salario' : 'Agregar Salario'}</DialogTitle>
             <DialogDescription>Ingresa el monto y el mes que debe guardarse en la base de datos.</DialogDescription>
           </DialogHeader>
-          <div className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="amount" className="text-medium-gray">Monto</Label>
-              <Input
-                id="amount"
-                type="number"
-                placeholder="5000"
-                value={amount}
-                onChange={(e) => setAmount(e.target.value)}
-                className="bg-abyss border-graphite text-on-surface focus:border-tertiary-container"
-              />
+          <div className="grid gap-4 lg:grid-cols-[minmax(0,0.92fr)_minmax(0,1.08fr)]">
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="amount" className="text-medium-gray">Monto</Label>
+                <Input
+                  id="amount"
+                  type="number"
+                  placeholder="5000"
+                  value={amount}
+                  onChange={(e) => setAmount(e.target.value)}
+                  className="bg-abyss border-graphite text-on-surface focus:border-tertiary-container"
+                />
+              </div>
+
+              <Card className="border-graphite bg-abyss p-4 shadow-vault-sm">
+                <p className="text-xs uppercase tracking-[0.22em] text-medium-gray">Mes seleccionado</p>
+                <p className="mt-2 text-xl font-semibold text-on-surface">
+                  {month ? `${MONTH_LABELS[monthValueToDate(month).getMonth()]} ${monthValueToDate(month).getFullYear()}` : 'Elige un mes'}
+                </p>
+                <p className="mt-1 text-sm text-muted-gray">
+                  {month ? `Valor guardado: ${month}` : 'Selecciona el periodo que se va a registrar en SQLite.'}
+                </p>
+              </Card>
             </div>
-            <div className="space-y-2">
-              <Label htmlFor="month" className="text-medium-gray">Mes</Label>
-              <Input
-                id="month"
-                type="month"
-                value={month}
-                onChange={(e) => setMonth(e.target.value)}
-                className="bg-abyss border-graphite text-on-surface focus:border-tertiary-container"
-              />
-            </div>
+
+            <Card className="border-graphite bg-abyss p-4 shadow-vault-sm">
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <p className="text-sm font-medium text-on-surface">Calendario de meses</p>
+                  <p className="text-xs text-muted-gray">Usa el anio y toca el mes que corresponda.</p>
+                </div>
+                <div className="flex items-center gap-1">
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    className="text-muted-gray hover:text-on-surface"
+                    onClick={() => setCalendarYear((year) => year - 1)}
+                  >
+                    <ChevronLeft className="size-4" />
+                  </Button>
+                  <div className="min-w-16 text-center text-sm font-semibold text-on-surface">{calendarYear}</div>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    className="text-muted-gray hover:text-on-surface"
+                    onClick={() => setCalendarYear((year) => year + 1)}
+                  >
+                    <ChevronRight className="size-4" />
+                  </Button>
+                </div>
+              </div>
+
+              <div className="mt-4 grid grid-cols-3 gap-2">
+                {MONTH_LABELS.map((label, index) => {
+                  const value = `${calendarYear}-${String(index + 1).padStart(2, '0')}`
+                  const isSelected = month === value
+
+                  return (
+                    <Button
+                      key={value}
+                      type="button"
+                      variant={isSelected ? 'default' : 'outline'}
+                      className={isSelected
+                        ? 'border-primary-container bg-primary-container text-white hover:brightness-110'
+                        : 'border-graphite bg-surface text-muted-gray hover:bg-surface-container hover:text-on-surface'}
+                      onClick={() => setMonth(value)}
+                    >
+                      {label}
+                    </Button>
+                  )
+                })}
+              </div>
+            </Card>
           </div>
           <DialogFooter>
             <Button variant="ghost" onClick={() => setOpen(false)} className="text-muted-gray">Cancelar</Button>

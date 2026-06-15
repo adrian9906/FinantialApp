@@ -4,6 +4,7 @@ import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { DatePickerField } from '@/components/ui/date-picker-field'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog'
 import { Plus, Trash2, Heart, Pencil } from 'lucide-react'
 import { useMonthlyOverview } from '@/lib/useMonthlyOverview'
@@ -122,7 +123,7 @@ export default function Wants() {
       )}
 
       <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="bg-surface border-graphite">
+        <DialogContent className="border-graphite bg-surface sm:max-w-3xl">
           <DialogHeader>
             <DialogTitle className="text-on-surface">{editId ? 'Editar gusto' : 'Agregar gusto'}</DialogTitle>
             <DialogDescription>Registra un gasto discrecional.</DialogDescription>
@@ -136,10 +137,12 @@ export default function Wants() {
               <Label className="text-medium-gray">Descripción</Label>
               <Input placeholder="Cena fuera" value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} className="bg-abyss border-graphite text-on-surface" />
             </div>
-            <div className="space-y-2">
-              <Label className="text-medium-gray">Fecha</Label>
-              <Input type="date" value={form.date} onChange={(e) => setForm({ ...form, date: e.target.value })} className="bg-abyss border-graphite text-on-surface" />
-            </div>
+            <DatePickerField
+              label="Fecha"
+              value={form.date}
+              onChange={(value) => setForm({ ...form, date: value })}
+              description="Marca el dia exacto del gusto o gasto discrecional."
+            />
           </div>
           <DialogFooter>
             <Button variant="ghost" onClick={() => { resetForm(); setOpen(false) }} className="text-muted-gray">Cancelar</Button>

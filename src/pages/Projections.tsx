@@ -133,7 +133,7 @@ export default function Projections() {
       )}
 
       <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="bg-surface border-graphite">
+        <DialogContent className="border-graphite bg-surface sm:max-w-2xl">
           <DialogHeader>
             <DialogTitle className="text-on-surface">{editId ? 'Editar proyección' : 'Agregar proyección'}</DialogTitle>
             <DialogDescription>Define el salario meta que quieres alcanzar.</DialogDescription>
@@ -143,6 +143,19 @@ export default function Projections() {
               <Label className="text-medium-gray">Salario meta</Label>
               <Input type="number" value={targetSalary} onChange={(e) => setTargetSalary(e.target.value)} className="bg-abyss border-graphite text-on-surface" />
             </div>
+            <Card className="border-graphite bg-abyss p-4 shadow-vault-sm">
+              <p className="text-xs uppercase tracking-[0.22em] text-medium-gray">Vista previa</p>
+              <p className="mt-2 text-lg font-semibold text-on-surface">
+                {targetSalary ? `$${Number(targetSalary).toLocaleString()}` : 'Define una meta'}
+              </p>
+              <p className="mt-1 text-sm text-muted-gray">
+                {targetSalary && latestSalary
+                  ? Number(targetSalary) - latestSalary.amount > 0
+                    ? `Te faltan $${(Number(targetSalary) - latestSalary.amount).toLocaleString()} para alcanzarla.`
+                    : `Ya superaste esta meta por $${Math.abs(Number(targetSalary) - latestSalary.amount).toLocaleString()}.`
+                  : 'Usa esta tarjeta para validar el impacto antes de guardar.'}
+              </p>
+            </Card>
           </div>
           <DialogFooter>
             <Button variant="ghost" onClick={() => { resetForm(); setOpen(false) }} className="text-muted-gray">Cancelar</Button>

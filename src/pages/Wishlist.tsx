@@ -147,7 +147,7 @@ export default function Wishlist() {
       )}
 
       <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="bg-surface border-graphite max-h-[85vh] overflow-y-auto">
+        <DialogContent className="max-h-[85vh] overflow-y-auto border-graphite bg-surface sm:max-w-3xl">
           <DialogHeader>
             <DialogTitle className="text-on-surface">{editId ? 'Editar artículo' : 'Agregar deseo'}</DialogTitle>
             <DialogDescription>Completa solo los campos soportados por el schema actual.</DialogDescription>
@@ -184,6 +184,18 @@ export default function Wishlist() {
               <Label className="text-medium-gray">URL (opcional)</Label>
               <Input placeholder="https://..." value={form.url} onChange={(e) => setForm({ ...form, url: e.target.value })} className="bg-abyss border-graphite text-on-surface" />
             </div>
+            <Card className="border-graphite bg-abyss p-4 shadow-vault-sm">
+              <p className="text-xs uppercase tracking-[0.22em] text-medium-gray">Resumen del deseo</p>
+              <p className="mt-2 text-lg font-semibold text-on-surface">{form.name || 'Articulo sin nombre'}</p>
+              <p className="mt-1 text-sm text-muted-gray">
+                {form.price
+                  ? `Meta: $${Number(form.price).toLocaleString()}`
+                  : 'Agrega precio y progreso para ver mejor la meta de compra.'}
+              </p>
+              <p className="mt-1 text-sm text-muted-gray">
+                {form.savedAmount ? `Ahorrado: $${Number(form.savedAmount).toLocaleString()}` : 'Aun no hay ahorro asociado.'}
+              </p>
+            </Card>
           </div>
           <DialogFooter>
             <Button variant="ghost" onClick={() => { resetForm(); setOpen(false) }} className="text-muted-gray">Cancelar</Button>

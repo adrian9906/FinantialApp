@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog'
+import { DatePickerField } from '@/components/ui/date-picker-field'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Badge } from '@/components/ui/badge'
 import { Plus, Pencil, Trash2, Calendar, Wallet, CalendarDays, Timer } from 'lucide-react'
@@ -155,7 +156,7 @@ export default function Events() {
       )}
 
       <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="bg-surface border-graphite">
+        <DialogContent className="border-graphite bg-surface sm:max-w-4xl">
           <DialogHeader>
             <DialogTitle className="text-on-surface">{editId ? 'Editar evento' : 'Agregar evento'}</DialogTitle>
             <DialogDescription>Esta pantalla usa solo `nombre`, `cantidad`, `fecha` e `isNotificacion`.</DialogDescription>
@@ -167,8 +168,12 @@ export default function Events() {
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label className="text-medium-gray">Fecha</Label>
-                <Input type="date" value={form.date} onChange={(e) => setForm({ ...form, date: e.target.value })} className="bg-abyss border-graphite text-on-surface" />
+                <DatePickerField
+                  label="Fecha"
+                  value={form.date}
+                  onChange={(value) => setForm({ ...form, date: value })}
+                  description="Selecciona el dia del evento o compromiso futuro."
+                />
               </div>
               <div className="space-y-2">
                 <Label className="text-medium-gray">Monto</Label>
