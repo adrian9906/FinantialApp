@@ -253,24 +253,22 @@ export default function Expenses() {
       })
   }, [transactions])
 
-  const groupedExpenses = useMemo(() => {
-    return Object.entries(CATEGORY_META).map(([key, meta]) => {
-      const items = expenseItems
-        .filter((item) => item.category === key)
-        .sort((a, b) => a.itemName.localeCompare(b.itemName))
+  const groupedExpenses = Object.entries(CATEGORY_META).map(([key, meta]) => {
+    const items = expenseItems
+      .filter((item) => item.category === key)
+      .sort((a, b) => a.itemName.localeCompare(b.itemName))
 
-      const total = items.reduce((sum, item) => sum + item.amount, 0)
-      const completed = items.filter((item) => item.status === 'checked').length
+    const total = items.reduce((sum, item) => sum + item.amount, 0)
+    const completed = items.filter((item) => item.status === 'checked').length
 
-      return {
-        key: key as ExpenseCategory,
-        meta,
-        items,
-        total,
-        completed,
-      }
-    })
-  }, [expenseItems])
+    return {
+      key: key as ExpenseCategory,
+      meta,
+      items,
+      total,
+      completed,
+    }
+  })
 
   const expenseCount = expenseItems.length
   const checkedCount = expenseItems.filter((item) => item.status === 'checked').length
@@ -414,11 +412,10 @@ export default function Expenses() {
                         return (
                           <div
                             key={item.id}
-                            className={`relative overflow-hidden rounded-2xl border p-4 transition-all duration-300 ${
-                              isChecked
+                            className={`relative overflow-hidden rounded-2xl border p-4 transition-all duration-300 ${isChecked
                                 ? 'border-primary/30 bg-abyss/90 opacity-80'
                                 : 'border-graphite bg-abyss hover:border-outline-variant'
-                            }`}
+                              }`}
                           >
                             {isChecked ? <HandDrawnStrike color={meta.stroke} /> : null}
 
@@ -497,7 +494,7 @@ export default function Expenses() {
                 <Label className="text-medium-gray">Categoria</Label>
                 <Select value={form.category} onValueChange={(value) => { setFormError(null); setForm((current) => ({ ...current, category: value as ExpenseCategory })) }}>
                   <SelectTrigger className="bg-abyss border-graphite text-on-surface">
-                    <SelectValue />
+                    <SelectValue>{CATEGORY_META[form.category].label}</SelectValue>
                   </SelectTrigger>
                   <SelectContent className="border-graphite bg-surface">
                     {Object.entries(CATEGORY_META).map(([key, meta]) => (

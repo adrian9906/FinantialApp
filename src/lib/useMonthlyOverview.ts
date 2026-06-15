@@ -1,6 +1,7 @@
 import { useFinanceStore } from '@/store/financeStore'
 import { useMemo } from 'react'
 import { getEffectiveExpenseTotal } from '@/lib/expense-utils'
+import { getEffectiveWantTotal } from '@/lib/want-utils'
 
 export function useMonthlyOverview() {
   const { salaries, transactions } = useFinanceStore()
@@ -8,9 +9,7 @@ export function useMonthlyOverview() {
   return useMemo(() => {
     const totalSalary = salaries.reduce((sum, s) => sum + s.amount, 0)
     const totalExpenses = getEffectiveExpenseTotal(transactions)
-    const totalWants = transactions
-      .filter((t) => t.type === 'want')
-      .reduce((sum, t) => sum + t.amount, 0)
+    const totalWants = getEffectiveWantTotal(transactions)
     const totalSavings = transactions
       .filter((t) => t.type === 'saving')
       .reduce((sum, t) => sum + t.amount, 0)
