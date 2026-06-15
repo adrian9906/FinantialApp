@@ -6,7 +6,6 @@ import {
   Heart,
   PiggyBank,
   Landmark,
-  Target,
   ShoppingCart,
   Calendar,
   TrendingUp,
@@ -19,6 +18,7 @@ import {
 } from 'lucide-react'
 import { useState } from 'react'
 import { cn } from '@/lib/utils'
+import { Button } from '@/components/ui/button'
 
 const navItems = [
   { to: '/', icon: LayoutDashboard, label: 'Dashboard' },
@@ -27,7 +27,6 @@ const navItems = [
   { to: '/wants', icon: Heart, label: 'Gustos' },
   { to: '/savings', icon: PiggyBank, label: 'Ahorros' },
   { to: '/debts', icon: Landmark, label: 'Deudas' },
-  { to: '/goals', icon: Target, label: 'Metas' },
   { to: '/wishlist', icon: ShoppingCart, label: 'Deseos' },
   { to: '/events', icon: Calendar, label: 'Eventos' },
   { to: '/projections', icon: TrendingUp, label: 'Proyecciones' },
@@ -39,13 +38,15 @@ export function Sidebar() {
 
   return (
     <>
-      <button
-        className="fixed top-4 left-4 z-50 lg:hidden text-on-surface hover:text-primary transition-colors"
+      <Button
+        variant="ghost"
+        size="icon"
+        className="fixed top-4 left-4 z-50 lg:hidden text-on-surface hover:text-primary"
         onClick={() => setOpen(!open)}
-        aria-label="Abrir menú"
+        aria-label="Abrir menu"
       >
-        {open ? <X className="size-5" /> : <Menu className="size-5" />}
-      </button>
+        {open ? <X data-icon="inline-start" /> : <Menu data-icon="inline-start" />}
+      </Button>
 
       <aside
         className={cn(
@@ -53,26 +54,26 @@ export function Sidebar() {
           open ? 'translate-x-0' : '-translate-x-full'
         )}
       >
-        <div className="flex items-center gap-3 px-5 py-5 mb-2">
-          <div className="size-10 rounded-full bg-primary-container flex items-center justify-center shadow-vault">
-            <span className="text-white text-sm font-bold">V</span>
+        <div className="mb-2 flex items-center gap-3 px-5 py-5">
+          <div className="flex size-10 items-center justify-center rounded-full bg-primary-container shadow-vault">
+            <span className="text-sm font-bold text-white">V</span>
           </div>
           <div>
-            <h1 className="text-[18px] font-semibold text-on-surface leading-tight tracking-tight">
+            <h1 className="text-[18px] font-semibold leading-tight tracking-tight text-on-surface">
               Vault 50/25/25
             </h1>
-            <p className="text-[12px] text-muted-gray">Bóveda Cristalina</p>
+            <p className="text-[12px] text-muted-gray">Boveda Cristalina</p>
           </div>
         </div>
 
-        <div className="px-3 mb-4">
-          <button className="w-full flex items-center justify-center gap-2 py-2.5 px-4 rounded-lg bg-primary-container text-white text-sm font-medium shadow-vault hover:brightness-110 transition-all active:scale-[0.98]">
-            <Plus className="size-4" />
-            Agregar Transacción
-          </button>
+        <div className="mb-4 px-3">
+          <Button className="w-full bg-primary-container text-white shadow-vault hover:brightness-110">
+            <Plus data-icon="inline-start" />
+            Agregar Transaccion
+          </Button>
         </div>
 
-        <nav className="flex-1 flex flex-col gap-1 px-3">
+        <nav className="flex flex-1 flex-col gap-1 px-3">
           {navItems.map((item) => (
             <NavLink
               key={item.to}
@@ -81,7 +82,7 @@ export function Sidebar() {
               onClick={() => setOpen(false)}
               className={({ isActive }) =>
                 cn(
-                  'flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-all duration-150',
+                  'flex items-center gap-3 rounded-lg px-3 py-2 text-sm transition-all duration-150',
                   isActive
                     ? 'bg-secondary-container text-on-secondary-container font-bold scale-[0.97] shadow-vault'
                     : 'text-muted-gray hover:bg-surface-container-high hover:text-on-surface'
@@ -94,14 +95,14 @@ export function Sidebar() {
           ))}
         </nav>
 
-        <div className="mt-auto flex flex-col gap-1 border-t border-graphite pt-3 px-3 pb-4">
-          <a className="flex items-center gap-3 px-3 py-2 text-sm text-muted-gray hover:bg-surface-container-high hover:text-on-surface rounded-lg transition-all" href="#">
+        <div className="mt-auto flex flex-col gap-1 border-t border-graphite px-3 pb-4 pt-3">
+          <a className="flex items-center gap-3 rounded-lg px-3 py-2 text-sm text-muted-gray transition-all hover:bg-surface-container-high hover:text-on-surface" href="#">
             <LifeBuoy className="size-[18px]" />
             Soporte
           </a>
-          <a className="flex items-center gap-3 px-3 py-2 text-sm text-muted-gray hover:bg-surface-container-high hover:text-on-surface rounded-lg transition-all" href="#">
+          <a className="flex items-center gap-3 rounded-lg px-3 py-2 text-sm text-muted-gray transition-all hover:bg-surface-container-high hover:text-on-surface" href="#">
             <LogOut className="size-[18px]" />
-            Cerrar sesión
+            Cerrar sesion
           </a>
         </div>
       </aside>
@@ -120,7 +121,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
   return (
     <div className="flex min-h-dvh bg-surface-dim">
       <Sidebar />
-      <main className="flex-1 lg:pl-64 min-h-dvh">
+      <main className="min-h-dvh flex-1 lg:pl-64">
         <div className="mx-auto w-full max-w-[1120px] px-4 py-6 sm:px-6 lg:px-8 lg:py-8">
           {children}
         </div>

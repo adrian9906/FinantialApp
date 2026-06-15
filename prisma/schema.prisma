@@ -1,10 +1,9 @@
 generator client {
-  provider = "prisma-client"
-  output   = "../src/generated/prisma"
+  provider = "prisma-client-js"
 }
 
 datasource db {
-  provider = "postgresql"
+  provider = "sqlite"
 }
 
 model Usuario {
@@ -19,6 +18,7 @@ model Usuario {
   ahorros        Ahorro[]
   gastos         Gasto[]
   gustos         Gusto[]
+  deudas         Deuda[]
   eventos        Evento[]
   deseos         Deseo[]
   proyecciones   Proyeccion[]
@@ -77,6 +77,21 @@ model Gusto {
   @@map("gustos")
 }
 
+model Deuda {
+  id               String   @id @default(uuid())
+  cantidad         Float
+  historial        String
+  fechaInicio      DateTime
+  fechaTerminacion DateTime
+  interes          Float?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+  usuarioId        String
+  usuario          Usuario  @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+
+  @@map("deudas")
+}
+
 model Item {
   id        String   @id @default(uuid())
   nombre    String
@@ -108,30 +123,30 @@ model Evento {
 }
 
 model Deseo {
-  id        String   @id @default(uuid())
+  id        String      @id @default(uuid())
   cantidad  Float
-  fecha     DateTime @default(now())
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  fecha     DateTime    @default(now())
+  createdAt DateTime    @default(now())
+  updatedAt DateTime    @updatedAt
   usuarioId String
-  usuario   Usuario  @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+  usuario   Usuario     @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
   items     DeseoItem[]
 
   @@map("deseos")
 }
 
 model DeseoItem {
-  id                 String   @id @default(uuid())
+  id                 String    @id @default(uuid())
   nombre             String
   precio             Float
   foto               String?
-  prioridad          String   @default("media")
-  fecha              DateTime @default(now())
+  prioridad          String    @default("media")
+  fecha              DateTime  @default(now())
   posibleCompraFecha DateTime?
-  createdAt          DateTime @default(now())
-  updatedAt          DateTime @updatedAt
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
   deseoId            String
-  deseo              Deseo    @relation(fields: [deseoId], references: [id], onDelete: Cascade)
+  deseo              Deseo     @relation(fields: [deseoId], references: [id], onDelete: Cascade)
 
   @@map("deseos_items")
 }

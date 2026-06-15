@@ -21,28 +21,42 @@ export default function Salary() {
   const [month, setMonth] = useState('')
 
   const latestSalary = salaries.length > 0
-    ? salaries.reduce((max, s) => new Date(s.month) > new Date(max.month) ? s : max)
+    ? salaries.reduce((max, salary) => new Date(salary.month) > new Date(max.month) ? salary : max)
     : null
 
   function resetForm() {
-    setAmount(''); setMonth(''); setEditId(null)
+    setAmount('')
+    setMonth('')
+    setEditId(null)
   }
 
-  function handleOpen(entry?: typeof salaries[0]) {
+  function handleOpen(entry?: typeof salaries[number]) {
     if (entry) {
-      setEditId(entry.id); setAmount(String(entry.amount)); setMonth(entry.month)
-    } else { resetForm() }
+      setEditId(entry.id)
+      setAmount(String(entry.amount))
+      setMonth(entry.month)
+    } else {
+      resetForm()
+    }
     setOpen(true)
   }
 
-  function handleSave() {
+  async function handleSave() {
     if (!amount || !month) return
-    if (editId) {
-      updateSalary(editId, { amount: Number(amount), month })
-    } else {
-      addSalary({ id: '', amount: Number(amount), month, received: true })
+
+    const payload = {
+      amount: Number(amount),
+      month,
     }
-    resetForm(); setOpen(false)
+
+    if (editId) {
+      await updateSalary(editId, payload)
+    } else {
+      await addSalary(payload)
+    }
+
+    resetForm()
+    setOpen(false)
   }
 
   const half = latestSalary ? latestSalary.amount * 0.5 : 0
@@ -55,7 +69,7 @@ export default function Salary() {
           Matriz de Ingresos
         </h1>
         <p className="text-sm text-muted-gray max-w-2xl">
-          Distribuye tu capital entre obligaciones fijas, gastos variables y ahorro estructurado.
+          Cada salario se guarda en SQLite y alimenta el reparto 50/25/25 del resto de la app.
         </p>
       </header>
 
@@ -78,12 +92,7 @@ export default function Salary() {
                 <label className="text-xs text-medium-gray uppercase tracking-widest">Salario Neto</label>
                 <div className="relative flex items-center">
                   <span className="absolute left-3 text-muted-gray text-lg">$</span>
-                  <input
-                    className="w-full bg-abyss border border-graphite rounded-lg py-2.5 pl-8 pr-3 text-on-surface text-lg font-medium focus:border-tertiary-container focus:ring-1 focus:ring-tertiary-container transition-all outline-none"
-                    type="text"
-                    value={latestSalary.amount.toLocaleString()}
-                    readOnly
-                  />
+                  <Input className="bg-abyss border-graphite pl-8 text-lg font-medium text-on-surface" type="text" value={latestSalary.amount.toLocaleString()} readOnly />
                 </div>
                 <p className="text-xs text-muted-gray mt-1">{latestSalary.month}</p>
               </div>
@@ -117,7 +126,7 @@ export default function Salary() {
               <Wallet className="size-8" />
               <p>No hay salario registrado</p>
               <Button variant="secondary" size="sm" onClick={() => handleOpen()}>
-                <Plus className="size-4" /> Agregar Salario
+                <Plus className="size-4" /> Agregar salario
               </Button>
             </div>
           )}
@@ -143,19 +152,17 @@ export default function Salary() {
                       <Wallet className="size-4" />
                     </div>
                     <div>
-                      <p className="text-base font-medium text-on-surface">
-                        ${entry.amount.toLocaleString()}
-                      </p>
+                      <p className="text-base font-medium text-on-surface">${entry.amount.toLocaleString()}</p>
                       <p className="text-xs text-muted-gray">{entry.month}</p>
                     </div>
                   </div>
                   <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                    <button className="p-1.5 text-muted-gray hover:text-primary transition-colors" onClick={() => handleOpen(entry)}>
-                      <Pencil className="size-4" />
-                    </button>
-                    <button className="p-1.5 text-muted-gray hover:text-error transition-colors" onClick={() => removeSalary(entry.id)}>
-                      <Trash2 className="size-4" />
-                    </button>
+                    <Button variant="ghost" size="icon" className="text-muted-gray hover:text-primary" onClick={() => handleOpen(entry)}>
+                      <Pencil data-icon="inline-start" />
+                    </Button>
+                    <Button variant="ghost" size="icon" className="text-muted-gray hover:text-error" onClick={() => void removeSalary(entry.id)}>
+                      <Trash2 data-icon="inline-start" />
+                    </Button>
                   </div>
                 </div>
               ))}
@@ -168,25 +175,34 @@ export default function Salary() {
         <DialogContent className="bg-surface border-graphite">
           <DialogHeader>
             <DialogTitle className="text-on-surface">{editId ? 'Editar Salario' : 'Agregar Salario'}</DialogTitle>
-            <DialogDescription>Ingresa los detalles de tu ingreso mensual</DialogDescription>
+            <DialogDescription>Ingresa el monto y el mes que debe guardarse en la base de datos.</DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
             <div className="space-y-2">
               <Label htmlFor="amount" className="text-medium-gray">Monto</Label>
-              <Input id="amount" type="number" placeholder="5000" value={amount}
+              <Input
+                id="amount"
+                type="number"
+                placeholder="5000"
+                value={amount}
                 onChange={(e) => setAmount(e.target.value)}
-                className="bg-abyss border-graphite text-on-surface focus:border-tertiary-container" />
+                className="bg-abyss border-graphite text-on-surface focus:border-tertiary-container"
+              />
             </div>
             <div className="space-y-2">
               <Label htmlFor="month" className="text-medium-gray">Mes</Label>
-              <Input id="month" type="month" value={month}
+              <Input
+                id="month"
+                type="month"
+                value={month}
                 onChange={(e) => setMonth(e.target.value)}
-                className="bg-abyss border-graphite text-on-surface focus:border-tertiary-container" />
+                className="bg-abyss border-graphite text-on-surface focus:border-tertiary-container"
+              />
             </div>
           </div>
           <DialogFooter>
             <Button variant="ghost" onClick={() => setOpen(false)} className="text-muted-gray">Cancelar</Button>
-            <Button onClick={handleSave} className="bg-primary-container text-white hover:brightness-110 shadow-vault">Guardar</Button>
+            <Button onClick={() => void handleSave()} className="bg-primary-container text-white hover:brightness-110 shadow-vault">Guardar</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

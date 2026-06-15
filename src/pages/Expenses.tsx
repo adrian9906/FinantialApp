@@ -12,25 +12,54 @@ import {
   DialogDescription,
   DialogFooter,
 } from '@/components/ui/dialog'
-import { Plus, Trash2, ArrowUpRight } from 'lucide-react'
+import { Plus, Trash2, ArrowUpRight, Pencil } from 'lucide-react'
 import { useMonthlyOverview } from '@/lib/useMonthlyOverview'
+import { Badge } from '@/components/ui/badge'
 
 export default function Expenses() {
-  const { transactions, addTransaction, removeTransaction } = useFinanceStore()
+  const { transactions, addTransaction, updateTransaction, removeTransaction } = useFinanceStore()
   const overview = useMonthlyOverview()
   const [open, setOpen] = useState(false)
+  const [editId, setEditId] = useState<string | null>(null)
   const [form, setForm] = useState({ amount: '', description: '', date: '' })
 
-  function handleSave() {
-    if (!form.amount || !form.description) return
-    addTransaction({
-      id: '', amount: Number(form.amount), type: 'expense',
-      description: form.description, date: form.date || new Date().toISOString().slice(0, 10),
-    })
-    setForm({ amount: '', description: '', date: '' }); setOpen(false)
+  function resetForm() {
+    setForm({ amount: '', description: '', date: '' })
+    setEditId(null)
   }
 
-  const expenseList = transactions.filter((t) => t.type === 'expense')
+  function handleOpen(entry?: (typeof transactions)[number]) {
+    if (entry) {
+      setEditId(entry.id)
+      setForm({
+        amount: String(entry.amount),
+        description: entry.description ?? '',
+        date: entry.date,
+      })
+    } else {
+      resetForm()
+    }
+    setOpen(true)
+  }
+
+  async function handleSave() {
+    if (!form.amount || !form.description) return
+    const data = {
+      amount: Number(form.amount),
+      type: 'expense' as const,
+      description: form.description,
+      date: form.date || new Date().toISOString().slice(0, 10),
+    }
+    if (editId) {
+      await updateTransaction(editId, data)
+    } else {
+      await addTransaction(data)
+    }
+    resetForm()
+    setOpen(false)
+  }
+
+  const expenseList = transactions.filter((transaction) => transaction.type === 'expense')
   const pct = overview.budgetExpenses > 0 ? Math.min(100, Math.round((overview.totalExpenses / overview.budgetExpenses) * 100)) : 0
   const remaining = overview.budgetExpenses - overview.totalExpenses
 
@@ -39,10 +68,10 @@ export default function Expenses() {
       <header className="flex items-center justify-between">
         <div>
           <h1 className="text-[28px] md:text-[36px] font-semibold text-on-surface tracking-tight">Gastos</h1>
-          <p className="text-sm text-muted-gray">50% de tus ingresos — necesidades esenciales</p>
+          <p className="text-sm text-muted-gray">Cada gasto crea un `Gasto` y su `Item` asociado en Prisma.</p>
         </div>
-        <Button onClick={() => setOpen(true)} className="bg-primary-container text-white hover:brightness-110 shadow-vault">
-          <Plus className="size-4" /> Agregar Gasto
+        <Button onClick={() => handleOpen()} className="bg-primary-container text-white hover:brightness-110 shadow-vault">
+          <Plus className="size-4" /> Agregar gasto
         </Button>
       </header>
 
@@ -50,10 +79,10 @@ export default function Expenses() {
         <div className="absolute top-0 right-0 w-32 h-32 bg-primary opacity-5 rounded-bl-full translate-x-8 -translate-y-8 group-hover:scale-110 transition-transform duration-500" />
         <div className="relative z-10">
           <div className="flex justify-between items-center mb-2">
-            <p className="text-xs text-muted-gray uppercase tracking-wider">Presupuesto Mensual (50%)</p>
-            <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${remaining >= 0 ? 'bg-success/10 text-success' : 'bg-error/10 text-error'}`}>
+            <p className="text-xs text-muted-gray uppercase tracking-wider">Presupuesto mensual (50%)</p>
+            <Badge variant="secondary" className={remaining >= 0 ? 'bg-success/10 text-success' : 'bg-error/10 text-error'}>
               {remaining >= 0 ? `$${remaining.toLocaleString()} disponible` : `$${Math.abs(remaining).toLocaleString()} excedido`}
-            </span>
+            </Badge>
           </div>
           <h2 className="text-[28px] font-semibold text-on-surface mb-3">
             ${overview.totalExpenses.toLocaleString()} <span className="text-base font-normal text-muted-gray">/ ${overview.budgetExpenses.toLocaleString()}</span>
@@ -69,7 +98,9 @@ export default function Expenses() {
           <div className="flex flex-col items-center gap-3 py-16 text-muted-gray text-sm">
             <ArrowUpRight className="size-8" />
             <p>Sin gastos registrados</p>
-            <Button variant="secondary" onClick={() => setOpen(true)} className="bg-surface-container-high hover:bg-surface-container-higher text-on-surface">Agregar gasto</Button>
+            <Button variant="secondary" onClick={() => handleOpen()} className="bg-surface-container-high hover:bg-surface-container-higher text-on-surface">
+              Agregar gasto
+            </Button>
           </div>
         </Card>
       ) : (
@@ -80,17 +111,22 @@ export default function Expenses() {
             <span className="text-right">Acción</span>
           </div>
           <div className="divide-y divide-graphite">
-            {expenseList.map((t) => (
-              <div key={t.id} className="grid grid-cols-[1fr_100px_80px] gap-4 p-4 hover:bg-surface-container-low transition-colors items-center group">
+            {expenseList.map((transaction) => (
+              <div key={transaction.id} className="grid grid-cols-[1fr_100px_80px] gap-4 p-4 hover:bg-surface-container-low transition-colors items-center group">
                 <div>
-                  <p className="text-sm font-medium text-on-surface">{t.description}</p>
-                  <p className="text-xs text-muted-gray">{t.date}</p>
+                  <p className="text-sm font-medium text-on-surface">{transaction.description ?? 'Gasto'}</p>
+                  <p className="text-xs text-muted-gray">{transaction.date}</p>
                 </div>
-                <span className="text-sm font-medium text-error text-right">-${t.amount.toLocaleString()}</span>
+                <span className="text-sm font-medium text-error text-right">-${transaction.amount.toLocaleString()}</span>
                 <div className="text-right opacity-0 group-hover:opacity-100 transition-opacity">
-                  <button className="p-1.5 text-muted-gray hover:text-error transition-colors" onClick={() => removeTransaction(t.id)}>
-                    <Trash2 className="size-4" />
-                  </button>
+                  <div className="flex justify-end gap-1">
+                    <Button variant="ghost" size="icon" className="text-muted-gray hover:text-primary" onClick={() => handleOpen(transaction)}>
+                      <Pencil data-icon="inline-start" />
+                    </Button>
+                    <Button variant="ghost" size="icon" className="text-muted-gray hover:text-error" onClick={() => void removeTransaction(transaction.id)}>
+                      <Trash2 data-icon="inline-start" />
+                    </Button>
+                  </div>
                 </div>
               </div>
             ))}
@@ -101,32 +137,45 @@ export default function Expenses() {
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent className="bg-surface border-graphite">
           <DialogHeader>
-            <DialogTitle className="text-on-surface">Agregar Gasto</DialogTitle>
-            <DialogDescription>Registrar un nuevo gasto</DialogDescription>
+            <DialogTitle className="text-on-surface">{editId ? 'Editar gasto' : 'Agregar gasto'}</DialogTitle>
+            <DialogDescription>Registra una necesidad esencial.</DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
             <div className="space-y-2">
               <Label htmlFor="amount" className="text-medium-gray">Monto</Label>
-              <Input id="amount" type="number" placeholder="200" value={form.amount}
+              <Input
+                id="amount"
+                type="number"
+                placeholder="200"
+                value={form.amount}
                 onChange={(e) => setForm({ ...form, amount: e.target.value })}
-                className="bg-abyss border-graphite text-on-surface" />
+                className="bg-abyss border-graphite text-on-surface"
+              />
             </div>
             <div className="space-y-2">
               <Label htmlFor="desc" className="text-medium-gray">Descripción</Label>
-              <Input id="desc" placeholder="Compra de supermercado" value={form.description}
+              <Input
+                id="desc"
+                placeholder="Compra de supermercado"
+                value={form.description}
                 onChange={(e) => setForm({ ...form, description: e.target.value })}
-                className="bg-abyss border-graphite text-on-surface" />
+                className="bg-abyss border-graphite text-on-surface"
+              />
             </div>
             <div className="space-y-2">
               <Label htmlFor="date" className="text-medium-gray">Fecha</Label>
-              <Input id="date" type="date" value={form.date}
+              <Input
+                id="date"
+                type="date"
+                value={form.date}
                 onChange={(e) => setForm({ ...form, date: e.target.value })}
-                className="bg-abyss border-graphite text-on-surface" />
+                className="bg-abyss border-graphite text-on-surface"
+              />
             </div>
           </div>
           <DialogFooter>
-            <Button variant="ghost" onClick={() => setOpen(false)} className="text-muted-gray">Cancelar</Button>
-            <Button onClick={handleSave} className="bg-primary-container text-white hover:brightness-110 shadow-vault">Guardar</Button>
+            <Button variant="ghost" onClick={() => { resetForm(); setOpen(false) }} className="text-muted-gray">Cancelar</Button>
+            <Button onClick={() => void handleSave()} className="bg-primary-container text-white hover:brightness-110 shadow-vault">Guardar</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

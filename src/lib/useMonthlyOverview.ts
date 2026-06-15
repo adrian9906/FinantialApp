@@ -5,7 +5,7 @@ export function useMonthlyOverview() {
   const { salaries, transactions } = useFinanceStore()
 
   return useMemo(() => {
-    const totalSalary = salaries.reduce((sum, s) => (s.received ? sum + s.amount : sum), 0)
+    const totalSalary = salaries.reduce((sum, s) => sum + s.amount, 0)
     const totalExpenses = transactions
       .filter((t) => t.type === 'expense')
       .reduce((sum, t) => sum + t.amount, 0)

@@ -6,19 +6,40 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog'
-import { Plus, Trash2, Bell, BellOff, Calendar } from 'lucide-react'
+import { Plus, Trash2, Bell, BellOff, Calendar, Pencil } from 'lucide-react'
 
 interface FormState { title: string; description: string; date: string }
 
 export default function Reminders() {
-  const { reminders, addReminder, toggleReminder, removeReminder } = useFinanceStore()
+  const { reminders, addReminder, updateReminder, toggleReminder, removeReminder } = useFinanceStore()
   const [open, setOpen] = useState(false)
+  const [editId, setEditId] = useState<string | null>(null)
   const [form, setForm] = useState<FormState>({ title: '', description: '', date: '' })
+
+  function resetForm() {
+    setForm({ title: '', description: '', date: '' })
+    setEditId(null)
+  }
+
+  function handleOpen(entry?: (typeof reminders)[number]) {
+    if (entry) {
+      setEditId(entry.id)
+      setForm({ title: entry.title, description: entry.description, date: entry.date })
+    } else {
+      resetForm()
+    }
+    setOpen(true)
+  }
 
   function handleSave() {
     if (!form.title || !form.date) return
-    addReminder({ id: '', title: form.title, description: form.description, date: form.date, completed: false })
-    setForm({ title: '', description: '', date: '' }); setOpen(false)
+    const data = { title: form.title, description: form.description, date: form.date }
+    if (editId) {
+      void updateReminder(editId, data)
+    } else {
+      void addReminder({ ...data, completed: false })
+    }
+    resetForm(); setOpen(false)
   }
 
   const activeReminders = reminders.filter((r) => !r.completed)
@@ -38,7 +59,7 @@ export default function Reminders() {
           <h1 className="text-[28px] md:text-[36px] font-semibold text-on-surface tracking-tight">Recordatorios</h1>
           <p className="text-sm text-muted-gray">Nunca pierdas una factura o tarea financiera</p>
         </div>
-        <Button onClick={() => setOpen(true)} className="bg-surface text-on-surface hover:bg-surface-container-high shadow-vault border border-graphite">
+        <Button onClick={() => handleOpen()} className="bg-surface text-on-surface hover:bg-surface-container-high shadow-vault border border-graphite">
           <Plus className="size-4" /> Agregar Recordatorio
         </Button>
       </header>
@@ -48,7 +69,7 @@ export default function Reminders() {
           <div className="flex flex-col items-center gap-3 py-16 text-muted-gray text-sm">
             <Bell className="size-8" />
             <p>Sin recordatorios</p>
-            <Button variant="secondary" onClick={() => setOpen(true)} className="bg-surface-container-high text-on-surface">Crear un recordatorio</Button>
+            <Button variant="secondary" onClick={() => handleOpen()} className="bg-surface-container-high text-on-surface">Crear un recordatorio</Button>
           </div>
         </Card>
       ) : (
@@ -78,12 +99,15 @@ export default function Reminders() {
                       </div>
                     </div>
                     <div className="flex gap-1 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
-                      <button className="p-1.5 text-muted-gray hover:text-primary transition-colors" onClick={() => toggleReminder(r.id)}>
-                        <BellOff className="size-4" />
-                      </button>
-                      <button className="p-1.5 text-muted-gray hover:text-error transition-colors" onClick={() => removeReminder(r.id)}>
-                        <Trash2 className="size-4" />
-                      </button>
+                      <Button variant="ghost" size="icon" className="text-muted-gray hover:text-primary" onClick={() => handleOpen(r)}>
+                        <Pencil data-icon="inline-start" />
+                      </Button>
+                      <Button variant="ghost" size="icon" className="text-muted-gray hover:text-primary" onClick={() => toggleReminder(r.id)}>
+                        <BellOff data-icon="inline-start" />
+                      </Button>
+                      <Button variant="ghost" size="icon" className="text-muted-gray hover:text-error" onClick={() => removeReminder(r.id)}>
+                        <Trash2 data-icon="inline-start" />
+                      </Button>
                     </div>
                   </div>
                 )
@@ -109,12 +133,15 @@ export default function Reminders() {
                       </span>
                     </div>
                     <div className="flex gap-1 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
-                      <button className="p-1.5 text-muted-gray hover:text-primary transition-colors" onClick={() => toggleReminder(r.id)}>
-                        <Bell className="size-4" />
-                      </button>
-                      <button className="p-1.5 text-muted-gray hover:text-error transition-colors" onClick={() => removeReminder(r.id)}>
-                        <Trash2 className="size-4" />
-                      </button>
+                      <Button variant="ghost" size="icon" className="text-muted-gray hover:text-primary" onClick={() => handleOpen(r)}>
+                        <Pencil data-icon="inline-start" />
+                      </Button>
+                      <Button variant="ghost" size="icon" className="text-muted-gray hover:text-primary" onClick={() => toggleReminder(r.id)}>
+                        <Bell data-icon="inline-start" />
+                      </Button>
+                      <Button variant="ghost" size="icon" className="text-muted-gray hover:text-error" onClick={() => removeReminder(r.id)}>
+                        <Trash2 data-icon="inline-start" />
+                      </Button>
                     </div>
                   </div>
                 ))}
@@ -127,8 +154,8 @@ export default function Reminders() {
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent className="bg-surface border-graphite">
           <DialogHeader>
-            <DialogTitle className="text-on-surface">Agregar Recordatorio</DialogTitle>
-            <DialogDescription>Configurar un recordatorio financiero</DialogDescription>
+            <DialogTitle className="text-on-surface">{editId ? 'Editar Recordatorio' : 'Agregar Recordatorio'}</DialogTitle>
+            <DialogDescription>{editId ? 'Actualiza este recordatorio financiero' : 'Configurar un recordatorio financiero'}</DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
             <div className="space-y-2">
@@ -145,7 +172,7 @@ export default function Reminders() {
             </div>
           </div>
           <DialogFooter>
-            <Button variant="ghost" onClick={() => setOpen(false)} className="text-muted-gray">Cancelar</Button>
+            <Button variant="ghost" onClick={() => { resetForm(); setOpen(false) }} className="text-muted-gray">Cancelar</Button>
             <Button onClick={handleSave} className="bg-primary-container text-white hover:brightness-110 shadow-vault">Guardar</Button>
           </DialogFooter>
         </DialogContent>

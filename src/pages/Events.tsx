@@ -5,85 +5,106 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog'
-import { Plus, Pencil, Trash2, Calendar, Wallet, CalendarDays, Timer, Search, BarChart3 } from 'lucide-react'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { Badge } from '@/components/ui/badge'
+import { Plus, Pencil, Trash2, Calendar, Wallet, CalendarDays, Timer } from 'lucide-react'
 
-interface FormState { name: string; date: string; budget: string; spent: string }
+interface FormState {
+  name: string
+  date: string
+  amount: string
+  isNotification: boolean
+}
 
 export default function Events() {
   const { events, addEvent, updateEvent, removeEvent } = useFinanceStore()
-  const [open, setOpen] = useState(false); const [editId, setEditId] = useState<string | null>(null)
-  const [form, setForm] = useState<FormState>({ name: '', date: '', budget: '', spent: '' })
+  const [open, setOpen] = useState(false)
+  const [editId, setEditId] = useState<string | null>(null)
+  const [form, setForm] = useState<FormState>({ name: '', date: '', amount: '', isNotification: false })
 
-  function resetForm() { setForm({ name: '', date: '', budget: '', spent: '' }); setEditId(null) }
-  function handleOpen(entry?: typeof events[0]) {
-    if (entry) { setEditId(entry.id); setForm({ name: entry.name, date: entry.date, budget: String(entry.budget), spent: String(entry.spent) }) }
-    else { resetForm() }
+  function resetForm() {
+    setForm({ name: '', date: '', amount: '', isNotification: false })
+    setEditId(null)
+  }
+
+  function handleOpen(entry?: typeof events[number]) {
+    if (entry) {
+      setEditId(entry.id)
+      setForm({
+        name: entry.name,
+        date: entry.date,
+        amount: String(entry.amount),
+        isNotification: entry.isNotification,
+      })
+    } else {
+      resetForm()
+    }
     setOpen(true)
   }
-  function handleSave() {
-    if (!form.name) return
-    const data = { name: form.name, date: form.date, budget: Number(form.budget) || 0, spent: Number(form.spent) || 0 }
-    if (editId) { updateEvent(editId, data) } else { addEvent(data as any) }
-    resetForm(); setOpen(false)
+
+  async function handleSave() {
+    if (!form.name || !form.date) return
+    const data = {
+      name: form.name,
+      date: form.date,
+      amount: Number(form.amount) || 0,
+      isNotification: form.isNotification,
+    }
+    if (editId) {
+      await updateEvent(editId, data)
+    } else {
+      await addEvent(data)
+    }
+    resetForm()
+    setOpen(false)
   }
 
-  const overview = {
-    totalReserved: events.reduce((s, e) => s + e.budget, 0),
-    activeEvents: events.length,
-    nearestEvent: events.length > 0
-      ? events.filter(e => e.date).sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())[0]
-      : null,
-  }
+  const sortedEvents = [...events].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
+  const totalReserved = sortedEvents.reduce((sum, event) => sum + event.amount, 0)
+  const notificationCount = sortedEvents.filter((event) => event.isNotification).length
+  const nearestEvent = sortedEvents.find((event) => new Date(event.date).getTime() >= new Date().setHours(0, 0, 0, 0)) ?? sortedEvents[0]
 
   return (
     <div className="space-y-6 animate-in fade-in duration-500">
       <header className="flex flex-col sm:flex-row sm:items-end justify-between gap-4">
         <div>
-          <h1 className="text-[28px] md:text-[36px] font-semibold text-on-surface tracking-tight">Presupuestos de Eventos</h1>
-          <p className="text-sm text-muted-gray">Administra fondos y sigue gastos para hitos futuros.</p>
+          <h1 className="text-[28px] md:text-[36px] font-semibold text-on-surface tracking-tight">Eventos</h1>
+          <p className="text-sm text-muted-gray">Planifica montos, fechas y si quieres marcar el evento como notificación.</p>
         </div>
         <Button onClick={() => handleOpen()} className="bg-surface text-on-surface hover:bg-surface-container-high shadow-vault border border-graphite">
-          <Plus className="size-4" /> Nuevo Evento
+          <Plus className="size-4" /> Nuevo evento
         </Button>
       </header>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <div className="bg-surface rounded-xl p-5 shadow-vault flex flex-col justify-between min-h-[120px]">
           <div className="flex items-center justify-between text-muted-gray mb-2">
-            <span className="text-base font-medium">Total Reservado</span>
+            <span className="text-base font-medium">Monto Total</span>
             <Wallet className="size-5 text-primary" />
           </div>
-          <div>
-            <div className="text-[28px] font-semibold text-on-surface">${overview.totalReserved.toLocaleString()}</div>
-          </div>
+          <div className="text-[28px] font-semibold text-on-surface">${totalReserved.toLocaleString()}</div>
         </div>
         <div className="bg-surface rounded-xl p-5 shadow-vault flex flex-col justify-between min-h-[120px]">
           <div className="flex items-center justify-between text-muted-gray mb-2">
-            <span className="text-base font-medium">Eventos Activos</span>
+            <span className="text-base font-medium">Eventos con aviso</span>
             <CalendarDays className="size-5 text-primary" />
           </div>
-          <div>
-            <div className="text-[28px] font-semibold text-on-surface">{overview.activeEvents}</div>
-          </div>
+          <div className="text-[28px] font-semibold text-on-surface">{notificationCount}</div>
         </div>
         <div className="bg-surface rounded-xl p-5 shadow-vault flex flex-col justify-between min-h-[120px] relative overflow-hidden">
           <div className="absolute right-0 top-0 w-32 h-32 bg-primary-container opacity-10 rounded-full blur-2xl -mr-10 -mt-10 pointer-events-none" />
           <div className="flex items-center justify-between text-muted-gray mb-2 relative z-10">
-            <span className="text-base font-medium">Evento Más Cercano</span>
+            <span className="text-base font-medium">Próximo evento</span>
             <Timer className="size-5 text-warning" />
           </div>
           <div className="relative z-10">
-            <div className="text-lg font-semibold text-on-surface truncate">{overview.nearestEvent?.name || 'N/A'}</div>
-            {overview.nearestEvent?.date && (
-              <div className="text-xs text-muted-gray mt-1">
-                {Math.ceil((new Date(overview.nearestEvent.date).getTime() - Date.now()) / (1000 * 60 * 60 * 24))} días restantes
-              </div>
-            )}
+            <div className="text-lg font-semibold text-on-surface truncate">{nearestEvent?.name ?? 'N/A'}</div>
+            <div className="text-xs text-muted-gray mt-1">{nearestEvent ? new Date(nearestEvent.date).toLocaleDateString() : 'Sin agenda'}</div>
           </div>
         </div>
       </div>
 
-      {events.length === 0 ? (
+      {sortedEvents.length === 0 ? (
         <Card className="bg-surface border-0 shadow-vault">
           <div className="flex flex-col items-center gap-3 py-16 text-muted-gray text-sm">
             <Calendar className="size-8" />
@@ -92,162 +113,84 @@ export default function Events() {
           </div>
         </Card>
       ) : (
-        <>
-          <div className="bg-surface rounded-xl shadow-vault overflow-hidden">
-            <div className="flex items-center justify-between p-4 border-b border-graphite bg-surface-container-low">
-              <div className="relative w-full max-w-xs">
-                <Search className="size-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-gray" />
-                <input className="w-full bg-abyss border border-graphite text-on-surface text-sm rounded-lg pl-9 pr-3 py-1.5 focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-colors placeholder:text-muted-gray"
-                  placeholder="Filtrar eventos..." type="text" />
-              </div>
-            </div>
-
-            <div className="hidden md:grid grid-cols-[2fr_1fr_1fr_2fr_0.5fr] gap-4 p-4 border-b border-graphite bg-surface-container-lowest text-xs text-muted-gray uppercase tracking-wider font-semibold">
-              <span>Evento y Fecha</span><span className="text-right">Presupuesto</span><span className="text-right">Financiado</span><span>Progreso</span><span className="text-right">Acciones</span>
-            </div>
-
-            <div className="divide-y divide-graphite">
-              {events.map((e) => {
-                const progress = e.budget > 0 ? Math.min(100, Math.round((e.spent / e.budget) * 100)) : 0
-                return (
-                  <div key={e.id} className="grid grid-cols-1 md:grid-cols-[2fr_1fr_1fr_2fr_0.5fr] gap-2 md:gap-4 p-4 hover:bg-surface-container-low transition-colors items-start md:items-center group">
-                    <div className="flex items-center gap-3">
-                      <div className="size-10 rounded-lg bg-surface-bright flex items-center justify-center border border-graphite shadow-vault-sm">
-                        <CalendarDays className="size-5 text-primary" />
-                      </div>
-                      <div className="min-w-0">
-                        <h3 className="text-sm font-medium text-on-surface truncate">{e.name}</h3>
-                        {e.date && <p className="text-xs text-muted-gray flex items-center gap-1">{e.date}</p>}
-                      </div>
-                    </div>
-                    <div className="flex justify-between md:block md:text-right">
-                      <span className="md:hidden text-xs text-muted-gray">Objetivo:</span>
-                      <span className="text-sm text-on-surface">${e.budget.toLocaleString()}</span>
-                    </div>
-                    <div className="flex justify-between md:block md:text-right">
-                      <span className="md:hidden text-xs text-muted-gray">Financiado:</span>
-                      <span className="text-sm text-on-surface">${e.spent.toLocaleString()}</span>
-                    </div>
-                    <div className="w-full flex flex-col gap-1">
-                      <div className="flex justify-between text-xs">
-                        <span className="text-primary">{progress}%</span>
-                        <span className="text-muted-gray">Restante: ${Math.max(0, e.budget - e.spent).toLocaleString()}</span>
-                      </div>
-                      <div className="w-full h-1.5 bg-surface-container-highest rounded-full overflow-hidden">
-                        <div className="h-full bg-primary rounded-full transition-all duration-700" style={{ width: `${progress}%` }} />
-                      </div>
-                    </div>
-                    <div className="flex justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                      <button className="p-1 text-muted-gray hover:text-primary" onClick={() => handleOpen(e)}><Pencil className="size-4" /></button>
-                      <button className="p-1 text-muted-gray hover:text-error" onClick={() => removeEvent(e.id)}><Trash2 className="size-4" /></button>
-                    </div>
-                  </div>
-                )
-              })}
-            </div>
+        <div className="bg-surface rounded-xl shadow-vault overflow-hidden">
+          <div className="hidden md:grid grid-cols-[2fr_1fr_1fr_1fr_0.5fr] gap-4 p-4 border-b border-graphite bg-surface-container-lowest text-xs text-muted-gray uppercase tracking-wider font-semibold">
+            <span>Evento</span>
+            <span>Fecha</span>
+            <span className="text-right">Monto</span>
+            <span className="text-center">Notificación</span>
+            <span className="text-right">Acciones</span>
           </div>
-
-          {events.length > 0 && (
-            <div className="flex flex-col gap-4">
-              <h3 className="text-lg font-semibold text-on-surface flex items-center gap-2">
-                <BarChart3 className="size-5 text-primary" />
-                Desglose de Gastos: {overview.nearestEvent?.name || events[0]?.name}
-              </h3>
-              <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-                <div className="lg:col-span-2 bg-surface rounded-xl p-4 shadow-vault">
-                  <div className="flex items-center justify-between mb-3 pb-2 border-b border-graphite">
-                    <span className="text-sm text-muted-gray font-medium">Fondos Asignados</span>
+          <div className="divide-y divide-graphite">
+            {sortedEvents.map((event) => (
+              <div key={event.id} className="grid grid-cols-1 md:grid-cols-[2fr_1fr_1fr_1fr_0.5fr] gap-3 md:gap-4 p-4 hover:bg-surface-container-low transition-colors items-center group">
+                <div className="flex items-center gap-3">
+                  <div className="size-10 rounded-lg bg-surface-bright flex items-center justify-center border border-graphite shadow-vault-sm">
+                    <CalendarDays className="size-5 text-primary" />
                   </div>
-                  <div className="flex flex-col gap-2">
-                    <div className="flex items-center justify-between p-3 rounded-lg bg-surface-container-low hover:bg-surface-container-high transition-colors">
-                      <div className="flex items-center gap-3">
-                        <div className="w-2 h-8 bg-secondary rounded-sm" />
-                        <div><div className="text-sm text-on-surface">Presupuesto Asignado</div><div className="text-xs text-muted-gray">Presupuesto total del evento</div></div>
-                      </div>
-                      <div className="text-right">
-                        <div className="text-sm text-on-surface">${events[0]?.budget.toLocaleString() || 0}</div>
-                      </div>
-                    </div>
-                    <div className="flex items-center justify-between p-3 rounded-lg bg-surface-container-low hover:bg-surface-container-high transition-colors">
-                      <div className="flex items-center gap-3">
-                        <div className="w-2 h-8 bg-tertiary rounded-sm" />
-                        <div><div className="text-sm text-on-surface">Gastado Hasta Ahora</div><div className="text-xs text-muted-gray">Gastos actuales</div></div>
-                      </div>
-                      <div className="text-right">
-                        <div className="text-sm text-on-surface">${events[0]?.spent.toLocaleString() || 0}</div>
-                        <div className="text-xs text-success">Parcialmente gastado</div>
-                      </div>
-                    </div>
-                    <div className="flex items-center justify-between p-3 rounded-lg bg-surface-container-low hover:bg-surface-container-high transition-colors">
-                      <div className="flex items-center gap-3">
-                        <div className="w-2 h-8 bg-primary-container rounded-sm" />
-                        <div><div className="text-sm text-on-surface">Restante</div><div className="text-xs text-muted-gray">Fondos no asignados</div></div>
-                      </div>
-                      <div className="text-right">
-                        <div className="text-sm text-on-surface">${Math.max(0, (events[0]?.budget || 0) - (events[0]?.spent || 0)).toLocaleString()}</div>
-                        <div className="text-xs text-muted-gray">No gastado</div>
-                      </div>
-                    </div>
+                  <div>
+                    <h3 className="text-sm font-medium text-on-surface">{event.name}</h3>
+                    <p className="text-xs text-muted-gray md:hidden">{event.date}</p>
                   </div>
                 </div>
-                <div className="bg-abyss border border-graphite rounded-xl p-4 flex flex-col justify-center items-center text-center relative overflow-hidden">
-                  <div className="absolute inset-0 opacity-5"
-                    style={{
-                      backgroundImage: 'repeating-linear-gradient(45deg, #3f3f3f 25%, transparent 25%, transparent 75%, #3f3f3f 75%, #3f3f3f), repeating-linear-gradient(45deg, #3f3f3f 25%, #131313 25%, #131313 75%, #3f3f3f 75%, #3f3f3f)',
-                      backgroundPosition: '0 0, 10px 10px',
-                      backgroundSize: '20px 20px',
-                    }} />
-                  <div className="relative z-10 w-full flex flex-col items-center">
-                    <div className="size-24 rounded-full border-4 border-surface-container-high flex items-center justify-center mb-3 relative">
-                      <svg className="absolute inset-0 w-full h-full -rotate-90" viewBox="0 0 100 100">
-                        <circle cx="50" cy="50" fill="none" r="46" stroke="#201f1f" strokeWidth="8" />
-                        <circle cx="50" cy="50" fill="none" r="46" stroke="#d2bbff" strokeDasharray="289" strokeDashoffset="104" strokeLinecap="round" strokeWidth="8" />
-                      </svg>
-                      <span className="text-lg font-semibold text-on-surface">
-                        {events[0] && events[0].budget > 0 ? Math.round((events[0].spent / events[0].budget) * 100) : 0}%
-                      </span>
-                    </div>
-                    <h4 className="text-base font-medium text-on-surface mb-1">Encaminado</h4>
-                    <p className="text-xs text-muted-gray px-4">
-                      Ahorra aprox. <strong className="text-primary">${events[0] && events[0].budget > events[0].spent ? Math.ceil((events[0].budget - events[0].spent) / 3) : 0}/mes</strong> para alcanzar la meta.
-                    </p>
-                  </div>
+                <div className="hidden md:block text-sm text-muted-gray">{event.date}</div>
+                <div className="text-sm text-on-surface md:text-right">${event.amount.toLocaleString()}</div>
+                <div className="text-sm text-center">
+                  <Badge variant="secondary" className={event.isNotification ? 'bg-primary/15 text-primary' : 'bg-surface-container-high text-muted-gray'}>
+                    {event.isNotification ? 'Sí' : 'No'}
+                  </Badge>
+                </div>
+                <div className="flex justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                  <Button variant="ghost" size="icon" className="text-muted-gray hover:text-primary" onClick={() => handleOpen(event)}>
+                    <Pencil data-icon="inline-start" />
+                  </Button>
+                  <Button variant="ghost" size="icon" className="text-muted-gray hover:text-error" onClick={() => void removeEvent(event.id)}>
+                    <Trash2 data-icon="inline-start" />
+                  </Button>
                 </div>
               </div>
-            </div>
-          )}
-        </>
+            ))}
+          </div>
+        </div>
       )}
 
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent className="bg-surface border-graphite">
           <DialogHeader>
-            <DialogTitle className="text-on-surface">{editId ? 'Editar Evento' : 'Agregar Evento'}</DialogTitle>
-            <DialogDescription>Planifica el presupuesto de tu evento</DialogDescription>
+            <DialogTitle className="text-on-surface">{editId ? 'Editar evento' : 'Agregar evento'}</DialogTitle>
+            <DialogDescription>Esta pantalla usa solo `nombre`, `cantidad`, `fecha` e `isNotificacion`.</DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
             <div className="space-y-2">
-              <Label className="text-medium-gray">Nombre del Evento</Label>
-              <Input placeholder="Vacaciones" value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} className="bg-abyss border-graphite text-on-surface" />
+              <Label className="text-medium-gray">Nombre del evento</Label>
+              <Input placeholder="Vacaciones" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} className="bg-abyss border-graphite text-on-surface" />
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label className="text-medium-gray">Fecha</Label>
-                <Input type="date" value={form.date} onChange={e => setForm({ ...form, date: e.target.value })} className="bg-abyss border-graphite text-on-surface" />
+                <Input type="date" value={form.date} onChange={(e) => setForm({ ...form, date: e.target.value })} className="bg-abyss border-graphite text-on-surface" />
               </div>
               <div className="space-y-2">
-                <Label className="text-medium-gray">Presupuesto</Label>
-                <Input type="number" value={form.budget} onChange={e => setForm({ ...form, budget: e.target.value })} className="bg-abyss border-graphite text-on-surface" />
+                <Label className="text-medium-gray">Monto</Label>
+                <Input type="number" value={form.amount} onChange={(e) => setForm({ ...form, amount: e.target.value })} className="bg-abyss border-graphite text-on-surface" />
               </div>
             </div>
             <div className="space-y-2">
-              <Label className="text-medium-gray">Ya Gastado</Label>
-              <Input type="number" value={form.spent} onChange={e => setForm({ ...form, spent: e.target.value })} className="bg-abyss border-graphite text-on-surface" />
+              <Label className="text-medium-gray">Notificación</Label>
+              <Select value={form.isNotification ? 'yes' : 'no'} onValueChange={(value) => setForm({ ...form, isNotification: value === 'yes' })}>
+                <SelectTrigger className="bg-abyss border-graphite text-on-surface">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent className="bg-surface border-graphite">
+                  <SelectItem value="yes">Con notificación</SelectItem>
+                  <SelectItem value="no">Sin notificación</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
           </div>
           <DialogFooter>
             <Button variant="ghost" onClick={() => setOpen(false)} className="text-muted-gray">Cancelar</Button>
-            <Button onClick={handleSave} className="bg-primary-container text-white hover:brightness-110 shadow-vault">Guardar</Button>
+            <Button onClick={() => void handleSave()} className="bg-primary-container text-white hover:brightness-110 shadow-vault">Guardar</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

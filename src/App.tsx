@@ -8,33 +8,45 @@ import Expenses from '@/pages/Expenses'
 import Wants from '@/pages/Wants'
 import Savings from '@/pages/Savings'
 import Debts from '@/pages/Debts'
-import Goals from '@/pages/Goals'
 import Wishlist from '@/pages/Wishlist'
 import Events from '@/pages/Events'
 import Projections from '@/pages/Projections'
 import Reminders from '@/pages/Reminders'
+import { useEffect } from 'react'
+import { useFinanceStore } from '@/store/financeStore'
 
 const queryClient = new QueryClient()
+
+function AppRoutes() {
+  const hydrate = useFinanceStore((state) => state.hydrate)
+
+  useEffect(() => {
+    void hydrate()
+  }, [hydrate])
+
+  return (
+    <AppLayout>
+      <Routes>
+        <Route path="/" element={<Dashboard />} />
+        <Route path="/salary" element={<Salary />} />
+        <Route path="/expenses" element={<Expenses />} />
+        <Route path="/wants" element={<Wants />} />
+        <Route path="/savings" element={<Savings />} />
+        <Route path="/debts" element={<Debts />} />
+        <Route path="/wishlist" element={<Wishlist />} />
+        <Route path="/events" element={<Events />} />
+        <Route path="/projections" element={<Projections />} />
+        <Route path="/reminders" element={<Reminders />} />
+      </Routes>
+    </AppLayout>
+  )
+}
 
 export default function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <BrowserRouter>
-        <AppLayout>
-          <Routes>
-            <Route path="/" element={<Dashboard />} />
-            <Route path="/salary" element={<Salary />} />
-            <Route path="/expenses" element={<Expenses />} />
-            <Route path="/wants" element={<Wants />} />
-            <Route path="/savings" element={<Savings />} />
-            <Route path="/debts" element={<Debts />} />
-            <Route path="/goals" element={<Goals />} />
-            <Route path="/wishlist" element={<Wishlist />} />
-            <Route path="/events" element={<Events />} />
-            <Route path="/projections" element={<Projections />} />
-            <Route path="/reminders" element={<Reminders />} />
-          </Routes>
-        </AppLayout>
+        <AppRoutes />
       </BrowserRouter>
       <Toaster
         theme="dark"
