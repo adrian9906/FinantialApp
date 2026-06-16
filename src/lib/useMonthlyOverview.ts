@@ -15,8 +15,9 @@ export function useMonthlyOverview() {
       .reduce((sum, t) => sum + t.amount, 0)
 
     const budgetExpenses = totalSalary * 0.5
-    const budgetWants = totalSalary * 0.25
     const budgetSavings = totalSalary * 0.25
+    const savingsRollover = Math.max(0, budgetSavings - totalSavings)
+    const budgetWants = totalSalary * 0.25 + savingsRollover
 
     return {
       totalSalary,
@@ -26,6 +27,7 @@ export function useMonthlyOverview() {
       budgetExpenses,
       budgetWants,
       budgetSavings,
+      savingsRollover,
       remainingExpenses: budgetExpenses - totalExpenses,
       remainingWants: budgetWants - totalWants,
       remainingSavings: budgetSavings - totalSavings,

@@ -30,7 +30,7 @@ type WishlistItem = {
   price: number
   priority: 'low' | 'medium' | 'high'
   savedAmount: number
-  url?: string
+  image?: string
 }
 
 type AppEvent = {
@@ -168,7 +168,7 @@ function serializeWishlist(entry: {
     price: item?.precio ?? 0,
     priority: normalizePriority(item?.prioridad),
     savedAmount: entry.cantidad,
-    url: item?.foto ?? undefined,
+    image: item?.foto ?? undefined,
   }
 }
 
@@ -496,7 +496,7 @@ async function saveWishlist(body: JsonRecord, id?: string) {
   const price = Number(body.price ?? 0)
   const savedAmount = Number(body.savedAmount ?? 0)
   const priority = normalizePriority(body.priority)
-  const url = body.url ? String(body.url) : null
+  const image = body.image ? String(body.image) : body.url ? String(body.url) : null
 
   if (!name) {
     throw new Error('El nombre del deseo es obligatorio.')
@@ -524,7 +524,7 @@ async function saveWishlist(body: JsonRecord, id?: string) {
                   nombre: name,
                   precio: price,
                   prioridad: priority,
-                  foto: url,
+                  foto: image,
                 },
               },
             }
@@ -533,7 +533,7 @@ async function saveWishlist(body: JsonRecord, id?: string) {
                 nombre: name,
                 precio: price,
                 prioridad: priority,
-                foto: url,
+                foto: image,
               },
             },
       },
@@ -552,7 +552,7 @@ async function saveWishlist(body: JsonRecord, id?: string) {
           nombre: name,
           precio: price,
           prioridad: priority,
-          foto: url,
+          foto: image,
         },
       },
     },

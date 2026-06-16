@@ -16,10 +16,12 @@ export default function Savings() {
   const [open, setOpen] = useState(false)
   const [editId, setEditId] = useState<string | null>(null)
   const [form, setForm] = useState({ amount: '', date: '' })
+  const [formError, setFormError] = useState<string | null>(null)
 
   function resetForm() {
     setForm({ amount: '', date: '' })
     setEditId(null)
+    setFormError(null)
   }
 
   function handleOpen(entry?: (typeof transactions)[number]) {
@@ -27,15 +29,31 @@ export default function Savings() {
       setEditId(entry.id)
       setForm({ amount: String(entry.amount), date: entry.date })
     } else {
-      resetForm()
+      setEditId(null)
+      setForm({ amount: String(Math.max(0, remaining)), date: '' })
     }
+    setFormError(null)
     setOpen(true)
   }
 
   async function handleSave() {
     if (!form.amount) return
+    const amount = Number(form.amount)
+
+    if (editId) {
+      const currentAmount = transactions.find((t) => t.id === editId)?.amount ?? 0
+      const availableForEdit = Math.max(0, remaining + currentAmount)
+      if (amount > availableForEdit) {
+        setFormError(`Solo puedes ajustar hasta $${availableForEdit.toLocaleString()}.`)
+        return
+      }
+    } else if (amount > remaining) {
+      setFormError(`Solo puedes ahorrar hasta $${remaining.toLocaleString()}.`)
+      return
+    }
+
     const data = {
-      amount: Number(form.amount),
+      amount,
       type: 'saving' as const,
       date: form.date || new Date().toISOString().slice(0, 10),
     }
@@ -51,6 +69,7 @@ export default function Savings() {
   const savingsList = transactions.filter((transaction) => transaction.type === 'saving')
   const pct = overview.budgetSavings > 0 ? Math.min(100, Math.round((overview.totalSavings / overview.budgetSavings) * 100)) : 0
   const remaining = overview.budgetSavings - overview.totalSavings
+  const budgetFull = remaining <= 0
 
   return (
     <div className="space-y-6 animate-in fade-in duration-500">
@@ -59,7 +78,7 @@ export default function Savings() {
           <h1 className="text-[28px] md:text-[36px] font-semibold text-on-surface tracking-tight">Ahorros</h1>
           <p className="text-sm text-muted-gray">Esta vista opera directo sobre el modelo `Ahorro`.</p>
         </div>
-        <Button onClick={() => handleOpen()} className="bg-tertiary-container text-white hover:brightness-110 shadow-vault">
+        <Button onClick={() => handleOpen()} disabled={budgetFull} className="bg-tertiary-container text-white hover:brightness-110 shadow-vault disabled:opacity-40 disabled:cursor-not-allowed">
           <Plus className="size-4" /> Agregar ahorro
         </Button>
       </header>
@@ -87,7 +106,7 @@ export default function Savings() {
           <div className="flex flex-col items-center gap-3 py-16 text-muted-gray text-sm">
             <PiggyBank className="size-8" />
             <p>Sin ahorros registrados</p>
-            <Button variant="secondary" onClick={() => handleOpen()} className="bg-surface-container-high text-on-surface">Registrar ahorro</Button>
+            <Button variant="secondary" onClick={() => handleOpen()} disabled={budgetFull} className="bg-surface-container-high text-on-surface disabled:opacity-40 disabled:cursor-not-allowed">Registrar ahorro</Button>
           </div>
         </Card>
       ) : (
@@ -130,14 +149,18 @@ export default function Savings() {
           <div className="space-y-4">
             <div className="space-y-2">
               <Label className="text-medium-gray">Monto</Label>
-              <Input type="number" placeholder="500" value={form.amount} onChange={(e) => setForm({ ...form, amount: e.target.value })} className="bg-abyss border-graphite text-on-surface" />
+              <Input type="number" placeholder="500" value={form.amount} onChange={(e) => { setFormError(null); setForm({ ...form, amount: e.target.value }) }} className="bg-abyss border-graphite text-on-surface" />
+              {!editId && remaining > 0 && (
+                <p className="text-xs text-muted-gray">Disponible para ahorrar: ${Math.max(0, remaining).toLocaleString()}</p>
+              )}
             </div>
             <DatePickerField
               label="Fecha"
               value={form.date}
-              onChange={(value) => setForm({ ...form, date: value })}
+              onChange={(value) => { setFormError(null); setForm({ ...form, date: value }) }}
               description="Elige cuando entro realmente ese aporte al ahorro."
             />
+            {formError ? <p className="text-sm text-error">{formError}</p> : null}
           </div>
           <DialogFooter>
             <Button variant="ghost" onClick={() => { resetForm(); setOpen(false) }} className="text-muted-gray">Cancelar</Button>

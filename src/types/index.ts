@@ -27,7 +27,7 @@ export interface WishlistItem {
   price: number
   priority: 'low' | 'medium' | 'high'
   savedAmount: number
-  url?: string
+  image?: string
 }
 
 export interface AppEvent {
