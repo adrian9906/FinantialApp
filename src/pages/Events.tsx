@@ -196,18 +196,18 @@ export default function Events() {
       <Tabs
         value={viewMode}
         onValueChange={(value) => setViewMode(value as 'list' | 'calendar')}
-        className="overflow-hidden rounded-2xl bg-surface shadow-vault"
+        className="flex min-h-[860px] flex-col overflow-hidden rounded-2xl bg-surface shadow-vault"
       >
-        <div className="sticky top-0 z-10 border-b border-graphite bg-surface/95 px-5 py-4 backdrop-blur">
+        <div className="sticky top-0 z-10  px-5 py-4 backdrop-blur">
           <TabsList className="grid w-full max-w-sm grid-cols-2 bg-abyss">
             <TabsTrigger value="calendar">Calendario</TabsTrigger>
             <TabsTrigger value="list">Lista</TabsTrigger>
           </TabsList>
         </div>
 
-        <div className="min-h-[860px] p-5">
-          <TabsContent value="calendar" className="mt-0 space-y-4">
-            <div className="rounded-2xl bg-surface p-5">
+        <div className="flex-1 p-5">
+          <TabsContent value="calendar" className="mt-0 h-full data-[state=active]:flex data-[state=active]:flex-col">
+            <div className="flex h-full flex-col rounded-2xl bg-surface">
               <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
                 <div>
                   <p className="text-xs uppercase tracking-[0.22em] text-medium-gray">Vista calendario</p>
@@ -248,7 +248,7 @@ export default function Events() {
                 ))}
               </div>
 
-              <div className="mt-3 grid grid-cols-7 gap-2">
+              <div className="mt-3 grid flex-1 grid-cols-7 gap-2">
                 {monthMatrix.map((date) => {
                   const dateKey = toDateKey(date)
                   const dayEvents = eventMap[dateKey] ?? []
@@ -301,9 +301,9 @@ export default function Events() {
             </div>
           </TabsContent>
 
-          <TabsContent value="list" className="mt-0 space-y-4">
+          <TabsContent value="list" className="mt-0 h-full data-[state=active]:flex data-[state=active]:flex-col">
             {sortedEvents.length === 0 ? (
-              <div className="bg-surface border-none shadow-none justify-center p-50">
+              <div className="flex h-full items-center justify-center rounded-2xl bg-surface px-6 py-16">
                 <div className="flex flex-col items-center gap-3 py-16 text-sm text-muted-gray">
                   <Calendar className="size-8" />
                   <p>Sin eventos planeados</p>
@@ -313,7 +313,7 @@ export default function Events() {
                 </div>
               </div>
             ) : (
-              <div className="overflow-hidden rounded-xl bg-surface shadow-vault">
+              <div className="h-full overflow-hidden rounded-xl bg-surface shadow-vault">
                 <div className="hidden grid-cols-[2fr_1fr_1fr_1fr_0.5fr] gap-4 border-b border-graphite bg-surface-container-lowest p-4 text-xs font-semibold uppercase tracking-wider text-muted-gray md:grid">
                   <span>Evento</span>
                   <span>Fecha</span>
@@ -321,7 +321,7 @@ export default function Events() {
                   <span className="text-center">Notificacion</span>
                   <span className="text-right">Acciones</span>
                 </div>
-                <div className="divide-y divide-graphite">
+                <div className="h-full divide-y divide-graphite overflow-auto">
                   {sortedEvents.map((event) => (
                     <div key={event.id} className="group grid grid-cols-1 items-center gap-3 p-4 transition-colors hover:bg-surface-container-low md:grid-cols-[2fr_1fr_1fr_1fr_0.5fr] md:gap-4">
                       <div className="flex items-center gap-3">

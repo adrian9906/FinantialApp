@@ -65,14 +65,6 @@ export function Sidebar() {
             <p className="text-[12px] text-muted-gray">Boveda Cristalina</p>
           </div>
         </div>
-
-        <div className="mb-4 px-3">
-          <Button className="w-full bg-primary-container text-white shadow-vault hover:brightness-110">
-            <Plus data-icon="inline-start" />
-            Agregar Transaccion
-          </Button>
-        </div>
-
         <nav className="flex flex-1 flex-col gap-1 px-3">
           {navItems.map((item) => (
             <NavLink
@@ -122,7 +114,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
     <div className="flex min-h-dvh bg-surface-dim">
       <Sidebar />
       <main className="min-h-dvh flex-1 lg:pl-64">
-        <div className="mx-auto w-full max-w-[1120px] px-4 py-6 sm:px-6 lg:px-8 lg:py-8">
+        <div className="mx-auto w-full max-w-[90%] px-4 py-6 sm:px-6 lg:px-8 lg:py-8">
           {children}
         </div>
       </main>

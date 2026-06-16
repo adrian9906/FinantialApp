@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { ArrowUpRight, Dumbbell, HeartPulse, House, Package, Pencil, Plus, ShoppingBasket, Trash2, type LucideIcon } from 'lucide-react'
 import { useFinanceStore } from '@/store/financeStore'
 import { buildExpenseDescription, getPlannedExpenseTotal, parseExpenseDescription, type ExpenseCategory } from '@/lib/expense-utils'
@@ -237,21 +237,19 @@ export default function Expenses() {
     setOpen(false)
   }
 
-  const expenseItems = useMemo<ExpenseViewItem[]>(() => {
-    return transactions
-      .filter((transaction) => transaction.type === 'expense')
-      .map((transaction) => {
-        const parsed = parseExpenseDescription(transaction.description)
-        return {
-          id: transaction.id,
-          amount: transaction.amount,
-          date: transaction.date,
-          itemName: parsed.itemName,
-          category: parsed.category,
-          status: parsed.status,
-        }
-      })
-  }, [transactions])
+  const expenseItems: ExpenseViewItem[] = transactions
+    .filter((transaction) => transaction.type === 'expense')
+    .map((transaction) => {
+      const parsed = parseExpenseDescription(transaction.description)
+      return {
+        id: transaction.id,
+        amount: transaction.amount,
+        date: transaction.date,
+        itemName: parsed.itemName,
+        category: parsed.category,
+        status: parsed.status,
+      }
+    })
 
   const groupedExpenses = Object.entries(CATEGORY_META).map(([key, meta]) => {
     const items = expenseItems
@@ -413,8 +411,8 @@ export default function Expenses() {
                           <div
                             key={item.id}
                             className={`relative overflow-hidden rounded-2xl border p-4 transition-all duration-300 ${isChecked
-                                ? 'border-primary/30 bg-abyss/90 opacity-80'
-                                : 'border-graphite bg-abyss hover:border-outline-variant'
+                              ? 'border-primary/30 bg-abyss/90 opacity-80'
+                              : 'border-graphite bg-abyss hover:border-outline-variant'
                               }`}
                           >
                             {isChecked ? <HandDrawnStrike color={meta.stroke} /> : null}

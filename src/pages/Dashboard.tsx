@@ -53,7 +53,7 @@ export default function Dashboard() {
   } satisfies ChartConfig
 
   return (
-    <div className="space-y-6 animate-in fade-in duration-500">
+    <div className="space-y-6 animate-in fade-in duration-500 mx-auto mt-10">
       <header className="flex flex-col md:flex-row justify-between items-start md:items-end gap-4">
         <div>
           <h1 className="text-[28px] md:text-[36px] font-semibold text-on-surface tracking-tight">
@@ -120,71 +120,71 @@ export default function Dashboard() {
         </div>
 
         <div className="xl:col-span-8 grid grid-cols-1 md:grid-cols-3 gap-4">
-        <div className="bg-surface p-6 rounded-xl shadow-vault flex flex-col justify-between relative overflow-hidden group">
-          <div className="absolute top-0 right-0 w-32 h-32 bg-primary opacity-5 rounded-bl-full translate-x-8 -translate-y-8 group-hover:scale-110 transition-transform duration-500" />
-          <div className="flex justify-between items-start mb-6 relative z-10">
-            <div className="size-10 rounded-lg bg-surface-container-high flex items-center justify-center shadow-vault">
-              <Building2 className="size-5 text-primary" />
+          <div className="bg-surface p-6 rounded-xl shadow-vault flex flex-col justify-between relative overflow-hidden group">
+            <div className="absolute top-0 right-0 w-32 h-32 bg-primary opacity-5 rounded-bl-full translate-x-8 -translate-y-8 group-hover:scale-110 transition-transform duration-500" />
+            <div className="flex justify-between items-start mb-6 relative z-10">
+              <div className="size-10 rounded-lg bg-surface-container-high flex items-center justify-center shadow-vault">
+                <Building2 className="size-5 text-primary" />
+              </div>
+              <span className="bg-tertiary-container/20 text-tertiary rounded-full px-3 py-0.5 text-xs">
+                Objetivo: ${overview.budgetExpenses.toLocaleString()}
+              </span>
             </div>
-            <span className="bg-tertiary-container/20 text-tertiary rounded-full px-3 py-0.5 text-xs">
-              Objetivo: ${overview.budgetExpenses.toLocaleString()}
-            </span>
-          </div>
-          <div className="relative z-10">
-            <p className="text-xs text-muted-gray uppercase tracking-wider mb-1">Gastos Esenciales</p>
-            <h3 className="text-[28px] font-semibold text-on-surface mb-2">
-              ${overview.totalExpenses.toLocaleString()}
-            </h3>
-            <div className="w-full h-1.5 bg-surface-container-highest rounded-full overflow-hidden">
-              <div className="h-full bg-primary rounded-full transition-all duration-1000" style={{ width: `${expensesPercentage}%` }} />
+            <div className="relative z-10">
+              <p className="text-xs text-muted-gray uppercase tracking-wider mb-1">Gastos Esenciales</p>
+              <h3 className="text-[28px] font-semibold text-on-surface mb-2">
+                ${overview.totalExpenses.toLocaleString()}
+              </h3>
+              <div className="w-full h-1.5 bg-surface-container-highest rounded-full overflow-hidden">
+                <div className="h-full bg-primary rounded-full transition-all duration-1000" style={{ width: `${expensesPercentage}%` }} />
+              </div>
+              <p className="text-xs text-muted-gray mt-2 text-right">{expensesPercentage}% consumido</p>
             </div>
-            <p className="text-xs text-muted-gray mt-2 text-right">{expensesPercentage}% consumido</p>
           </div>
-        </div>
 
-        <div className="bg-surface p-6 rounded-xl shadow-vault flex flex-col justify-between relative overflow-hidden group">
-          <div className="absolute top-0 right-0 w-32 h-32 bg-secondary opacity-5 rounded-bl-full translate-x-8 -translate-y-8 group-hover:scale-110 transition-transform duration-500" />
-          <div className="flex justify-between items-start mb-6 relative z-10">
-            <div className="size-10 rounded-lg bg-surface-container-high flex items-center justify-center shadow-vault">
-              <Coffee className="size-5 text-secondary" />
+          <div className="bg-surface p-6 rounded-xl shadow-vault flex flex-col justify-between relative overflow-hidden group">
+            <div className="absolute top-0 right-0 w-32 h-32 bg-secondary opacity-5 rounded-bl-full translate-x-8 -translate-y-8 group-hover:scale-110 transition-transform duration-500" />
+            <div className="flex justify-between items-start mb-6 relative z-10">
+              <div className="size-10 rounded-lg bg-surface-container-high flex items-center justify-center shadow-vault">
+                <Coffee className="size-5 text-secondary" />
+              </div>
+              <span className="bg-secondary-container/20 text-secondary rounded-full px-3 py-0.5 text-xs">
+                Objetivo: ${overview.budgetWants.toLocaleString()}
+              </span>
             </div>
-            <span className="bg-secondary-container/20 text-secondary rounded-full px-3 py-0.5 text-xs">
-              Objetivo: ${overview.budgetWants.toLocaleString()}
-            </span>
-          </div>
-          <div className="relative z-10">
-            <p className="text-xs text-muted-gray uppercase tracking-wider mb-1">Gustos</p>
-            <h3 className="text-[28px] font-semibold text-on-surface mb-2">
-              ${overview.totalWants.toLocaleString()}
-            </h3>
-            <div className="w-full h-1.5 bg-surface-container-highest rounded-full overflow-hidden">
-              <div className="h-full bg-secondary rounded-full transition-all duration-1000" style={{ width: `${wantsPercentage}%` }} />
+            <div className="relative z-10">
+              <p className="text-xs text-muted-gray uppercase tracking-wider mb-1">Gustos</p>
+              <h3 className="text-[28px] font-semibold text-on-surface mb-2">
+                ${overview.totalWants.toLocaleString()}
+              </h3>
+              <div className="w-full h-1.5 bg-surface-container-highest rounded-full overflow-hidden">
+                <div className="h-full bg-secondary rounded-full transition-all duration-1000" style={{ width: `${wantsPercentage}%` }} />
+              </div>
+              <p className="text-xs text-muted-gray mt-2 text-right">{wantsPercentage}% consumido</p>
             </div>
-            <p className="text-xs text-muted-gray mt-2 text-right">{wantsPercentage}% consumido</p>
           </div>
-        </div>
 
-        <div className="bg-surface p-6 rounded-xl shadow-vault flex flex-col justify-between relative overflow-hidden group">
-          <div className="absolute top-0 right-0 w-32 h-32 bg-tertiary-container opacity-5 rounded-bl-full translate-x-8 -translate-y-8 group-hover:scale-110 transition-transform duration-500" />
-          <div className="flex justify-between items-start mb-6 relative z-10">
-            <div className="size-10 rounded-lg bg-surface-container-high flex items-center justify-center shadow-vault">
-              <PiggyBank className="size-5 text-tertiary-container" />
+          <div className="bg-surface p-6 rounded-xl shadow-vault flex flex-col justify-between relative overflow-hidden group">
+            <div className="absolute top-0 right-0 w-32 h-32 bg-tertiary-container opacity-5 rounded-bl-full translate-x-8 -translate-y-8 group-hover:scale-110 transition-transform duration-500" />
+            <div className="flex justify-between items-start mb-6 relative z-10">
+              <div className="size-10 rounded-lg bg-surface-container-high flex items-center justify-center shadow-vault">
+                <PiggyBank className="size-5 text-tertiary-container" />
+              </div>
+              <span className="bg-tertiary-container/20 text-tertiary rounded-full px-3 py-0.5 text-xs">
+                Objetivo: ${overview.budgetSavings.toLocaleString()}
+              </span>
             </div>
-            <span className="bg-tertiary-container/20 text-tertiary rounded-full px-3 py-0.5 text-xs">
-              Objetivo: ${overview.budgetSavings.toLocaleString()}
-            </span>
-          </div>
-          <div className="relative z-10">
-            <p className="text-xs text-muted-gray uppercase tracking-wider mb-1">Ahorros</p>
-            <h3 className="text-[28px] font-semibold text-on-surface mb-2">
-              ${overview.totalSavings.toLocaleString()}
-            </h3>
-            <div className="w-full h-1.5 bg-surface-container-highest rounded-full overflow-hidden">
-              <div className="h-full bg-tertiary-container rounded-full transition-all duration-1000" style={{ width: `${savingsPercentage}%` }} />
+            <div className="relative z-10">
+              <p className="text-xs text-muted-gray uppercase tracking-wider mb-1">Ahorros</p>
+              <h3 className="text-[28px] font-semibold text-on-surface mb-2">
+                ${overview.totalSavings.toLocaleString()}
+              </h3>
+              <div className="w-full h-1.5 bg-surface-container-highest rounded-full overflow-hidden">
+                <div className="h-full bg-tertiary-container rounded-full transition-all duration-1000" style={{ width: `${savingsPercentage}%` }} />
+              </div>
+              <p className="text-xs text-muted-gray mt-2 text-right">{savingsPercentage}% reservado</p>
             </div>
-            <p className="text-xs text-muted-gray mt-2 text-right">{savingsPercentage}% reservado</p>
           </div>
-        </div>
         </div>
       </section>
 

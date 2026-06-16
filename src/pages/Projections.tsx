@@ -50,9 +50,8 @@ export default function Projections() {
       <header className="flex flex-col sm:flex-row sm:items-end justify-between gap-4">
         <div>
           <h1 className="text-[28px] md:text-[36px] font-semibold text-on-surface tracking-tight">Proyecciones</h1>
-          <p className="text-sm text-muted-gray">CRUD directo del modelo `Proyeccion` usando `salarioMeta`.</p>
         </div>
-        <Button onClick={() => handleOpen()} className="bg-primary-container text-white hover:brightness-110 shadow-vault">
+        <Button onClick={() => handleOpen()} className="bg-primary-container text-white hover:bg-primary-container/80 shadow-vault">
           <PlusCircle className="size-4" /> Nueva proyección
         </Button>
       </header>
@@ -89,7 +88,7 @@ export default function Projections() {
           <div className="flex flex-col items-center gap-3 py-16 text-muted-gray text-sm">
             <TrendingUp className="size-8" />
             <p>Sin proyecciones guardadas</p>
-            <Button variant="secondary" className="bg-surface-container-high text-on-surface" onClick={() => handleOpen()}>
+            <Button variant="secondary" className="bg-surface-container-high text-on-surface hover:bg-surface-container-high/80" onClick={() => handleOpen()}>
               Crear una proyección
             </Button>
           </div>

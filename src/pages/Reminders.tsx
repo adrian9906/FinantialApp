@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useFinanceStore } from '@/store/financeStore'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -10,6 +10,14 @@ import { DatePickerField } from '@/components/ui/date-picker-field'
 import { Plus, Trash2, Bell, BellOff, Calendar, Pencil } from 'lucide-react'
 
 interface FormState { title: string; description: string; date: string }
+
+const DAY_IN_MS = 1000 * 60 * 60 * 24
+
+function getStartOfTodayMs() {
+  const current = new Date()
+  current.setHours(0, 0, 0, 0)
+  return current.getTime()
+}
 
 export default function Reminders() {
   const { reminders, addReminder, updateReminder, toggleReminder, removeReminder } = useFinanceStore()
@@ -46,8 +54,26 @@ export default function Reminders() {
   const activeReminders = reminders.filter((r) => !r.completed)
   const completedReminders = reminders.filter((r) => r.completed)
 
+  const [todayMs, setTodayMs] = useState<number | null>(null)
+
+  useEffect(() => {
+    const todayFunc = () => {
+      setTodayMs(getStartOfTodayMs())
+      const id = setInterval(() => setTodayMs(getStartOfTodayMs()), 60_000)
+      return () => clearInterval(id)
+    }
+    todayFunc()
+  }, [])
+
+  function getReminderDiff(date: string) {
+    const dateMs = Date.parse(date)
+    if (todayMs === null) return null
+    return Math.ceil((dateMs - todayMs) / DAY_IN_MS)
+  }
+
   function getBorderClass(date: string) {
-    const diff = Math.ceil((new Date(date).getTime() - Date.now()) / (1000 * 60 * 60 * 24))
+    const diff = getReminderDiff(date)
+    if (diff === null) return 'border-l-primary'
     if (diff < 0) return 'border-l-error'
     if (diff <= 3) return 'border-l-warning'
     return 'border-l-primary'
@@ -70,7 +96,9 @@ export default function Reminders() {
           <div className="flex flex-col items-center gap-3 py-16 text-muted-gray text-sm">
             <Bell className="size-8" />
             <p>Sin recordatorios</p>
-            <Button variant="secondary" onClick={() => handleOpen()} className="bg-surface-container-high text-on-surface">Crear un recordatorio</Button>
+            <Button variant="secondary" onClick={() => handleOpen()} className="bg-surface-container-high text-on-surface hover:bg-surface-container-high/80">
+              Crear un recordatorio
+            </Button>
           </div>
         </Card>
       ) : (
@@ -82,7 +110,7 @@ export default function Reminders() {
             </h2>
             <div className="space-y-2">
               {activeReminders.map((r) => {
-                const diff = Math.ceil((new Date(r.date).getTime() - Date.now()) / (1000 * 60 * 60 * 24))
+                const diff = getReminderDiff(r.date) ?? 0
                 const isOverdue = diff < 0
                 const isClose = diff >= 0 && diff <= 3
                 return (
