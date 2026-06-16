@@ -157,7 +157,10 @@ function SparkBurst({ color }: { color: string }) {
 }
 
 export default function Wants() {
-  const { transactions, addTransaction, updateTransaction, removeTransaction } = useFinanceStore()
+  const transactions = useFinanceStore((state) => state.transactions)
+  const addTransaction = useFinanceStore((state) => state.addTransaction)
+  const updateTransaction = useFinanceStore((state) => state.updateTransaction)
+  const removeTransaction = useFinanceStore((state) => state.removeTransaction)
   const overview = useMonthlyOverview()
   const [open, setOpen] = useState(false)
   const [editId, setEditId] = useState<string | null>(null)
@@ -318,7 +321,7 @@ export default function Wants() {
             Convierte los gustos en una lista organizada por categorias. Cada producto sigue guardandose en Prisma como una transaccion de gusto.
           </p>
         </div>
-        <Button onClick={() => handleOpen()} className="bg-secondary text-secondary-foreground shadow-vault hover:brightness-110">
+        <Button onClick={() => handleOpen()} className="bg-primary-container text-white shadow-vault hover:bg-primary-container/80">
           <Plus className="size-4" /> Agregar gusto
         </Button>
       </header>
@@ -415,8 +418,8 @@ export default function Wants() {
                           <div
                             key={item.id}
                             className={`relative overflow-hidden rounded-2xl border p-4 transition-all duration-300 ${isChecked
-                                ? 'border-secondary/30 bg-abyss/90 opacity-80'
-                                : 'border-graphite bg-abyss hover:border-outline-variant'
+                              ? 'border-secondary/30 bg-abyss/90 opacity-80'
+                              : 'border-graphite bg-abyss hover:border-outline-variant'
                               }`}
                           >
                             {isChecked ? <HandDrawnStrike color={meta.stroke} /> : null}

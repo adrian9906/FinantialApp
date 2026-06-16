@@ -6,12 +6,16 @@ import { ChartContainer, ChartLegend, ChartLegendContent, ChartTooltip, ChartToo
 import { useNavigate } from 'react-router-dom'
 import { Plus, Wallet, Bell, Calendar, Building2, Coffee, PiggyBank, ChevronRight, Landmark, Sparkles } from 'lucide-react'
 import { useMonthlyOverview } from '@/lib/useMonthlyOverview'
+import { formatFormulaLabel, usePreferencesStore } from '@/store/preferencesStore'
 import { Bar, BarChart, CartesianGrid, Pie, PieChart, XAxis, YAxis } from 'recharts'
 
 export default function Dashboard() {
   const navigate = useNavigate()
   const overview = useMonthlyOverview()
-  const { reminders, events, debts } = useFinanceStore()
+  const reminders = useFinanceStore((state) => state.reminders)
+  const events = useFinanceStore((state) => state.events)
+  const debts = useFinanceStore((state) => state.debts)
+  const formula = usePreferencesStore((state) => state.formula)
 
   const pendingReminders = reminders.filter((r) => !r.completed)
   const upcomingEvents = events
@@ -198,7 +202,7 @@ export default function Dashboard() {
               </CardDescription>
             </div>
             <Badge variant="secondary" className="bg-surface-container-high text-on-surface">
-              50/25/25
+              {formatFormulaLabel(formula)}
             </Badge>
           </CardHeader>
           <CardContent>

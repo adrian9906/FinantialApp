@@ -43,18 +43,3 @@ export async function getPrisma() {
   prismaPromise ??= createPrismaClient()
   return prismaPromise
 }
-
-export async function getDefaultUserId() {
-  const prisma = await getPrisma()
-  const user = await prisma.usuario.upsert({
-    where: { correo: 'local@vault.app' },
-    update: {},
-    create: {
-      nombre: 'Vault Local',
-      correo: 'local@vault.app',
-      contrasena: 'local-dev',
-    },
-  })
-
-  return user.id
-}

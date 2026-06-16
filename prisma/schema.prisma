@@ -23,6 +23,7 @@ model Usuario {
   deseos         Deseo[]
   proyecciones   Proyeccion[]
   notificaciones Notificacion[]
+  sesiones       Sesion[]
 
   @@map("usuarios")
 }
@@ -174,4 +175,17 @@ model Notificacion {
   usuario     Usuario  @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
 
   @@map("notificaciones")
+}
+
+model Sesion {
+  id         String   @id @default(uuid())
+  tokenHash  String   @unique
+  rememberMe Boolean  @default(false)
+  expiresAt  DateTime
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  usuarioId  String
+  usuario    Usuario  @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+
+  @@map("sesiones")
 }

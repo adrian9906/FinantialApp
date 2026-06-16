@@ -138,7 +138,12 @@ function buildProjection(price: number, savedAmount: number, averageMonthlySavin
 }
 
 export default function Wishlist() {
-  const { wishlist, transactions, salaries, addWishlistItem, updateWishlistItem, removeWishlistItem } = useFinanceStore()
+  const wishlist = useFinanceStore((state) => state.wishlist)
+  const transactions = useFinanceStore((state) => state.transactions)
+  const salaries = useFinanceStore((state) => state.salaries)
+  const addWishlistItem = useFinanceStore((state) => state.addWishlistItem)
+  const updateWishlistItem = useFinanceStore((state) => state.updateWishlistItem)
+  const removeWishlistItem = useFinanceStore((state) => state.removeWishlistItem)
   const overview = useMonthlyOverview()
   const [open, setOpen] = useState(false)
   const [editId, setEditId] = useState<string | null>(null)

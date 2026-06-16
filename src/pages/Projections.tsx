@@ -9,7 +9,11 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, Di
 import { TrendingUp, PlusCircle, Pencil, Trash2, Target } from 'lucide-react'
 
 export default function Projections() {
-  const { projections, salaries, addProjection, updateProjection, removeProjection } = useFinanceStore()
+  const projections = useFinanceStore((state) => state.projections)
+  const salaries = useFinanceStore((state) => state.salaries)
+  const addProjection = useFinanceStore((state) => state.addProjection)
+  const updateProjection = useFinanceStore((state) => state.updateProjection)
+  const removeProjection = useFinanceStore((state) => state.removeProjection)
   const [open, setOpen] = useState(false)
   const [editId, setEditId] = useState<string | null>(null)
   const [targetSalary, setTargetSalary] = useState('')

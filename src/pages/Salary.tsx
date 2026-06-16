@@ -13,6 +13,7 @@ import {
 } from '@/components/ui/dialog'
 import { Label } from '@/components/ui/label'
 import { ChevronLeft, ChevronRight, Plus, Pencil, Trash2, Wallet, Receipt } from 'lucide-react'
+import { formatFormulaLabel, usePreferencesStore } from '@/store/preferencesStore'
 
 const MONTH_LABELS = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic']
 
@@ -31,7 +32,11 @@ function monthValueToDate(value: string) {
 }
 
 export default function Salary() {
-  const { salaries, addSalary, updateSalary, removeSalary } = useFinanceStore()
+  const salaries = useFinanceStore((state) => state.salaries)
+  const addSalary = useFinanceStore((state) => state.addSalary)
+  const updateSalary = useFinanceStore((state) => state.updateSalary)
+  const removeSalary = useFinanceStore((state) => state.removeSalary)
+  const formula = usePreferencesStore((state) => state.formula)
   const [open, setOpen] = useState(false)
   const [editId, setEditId] = useState<string | null>(null)
   const [amount, setAmount] = useState('')
@@ -79,8 +84,9 @@ export default function Salary() {
     setOpen(false)
   }
 
-  const half = latestSalary ? latestSalary.amount * 0.5 : 0
-  const quarter = latestSalary ? latestSalary.amount * 0.25 : 0
+  const budgetExpenses = latestSalary ? latestSalary.amount * (formula.expenses / 100) : 0
+  const budgetWants = latestSalary ? latestSalary.amount * (formula.wants / 100) : 0
+  const budgetSavings = latestSalary ? latestSalary.amount * (formula.savings / 100) : 0
 
   return (
     <div className="space-y-6 animate-in fade-in duration-500">
@@ -89,7 +95,7 @@ export default function Salary() {
           Matriz de Ingresos
         </h1>
         <p className="text-sm text-muted-gray max-w-2xl">
-          Cada salario se guarda en SQLite y alimenta el reparto 50/25/25 del resto de la app.
+          Cada salario se guarda en SQLite y alimenta la formula {formatFormulaLabel(formula)} del resto de la app.
         </p>
       </header>
 
@@ -119,25 +125,25 @@ export default function Salary() {
 
               <div className="flex flex-col gap-2 bg-abyss rounded-lg p-4 shadow-vault-sm">
                 <div className="flex justify-between items-center text-sm">
-                  <span className="text-muted-gray">50% Necesidades</span>
-                  <span className="text-base font-semibold text-primary-fixed">${half.toLocaleString()}</span>
+                  <span className="text-muted-gray">{formula.expenses}% Necesidades</span>
+                  <span className="text-base font-semibold text-primary-fixed">${budgetExpenses.toLocaleString()}</span>
                 </div>
                 <div className="w-full h-1 bg-graphite rounded-full overflow-hidden">
-                  <div className="h-full bg-primary w-1/2 rounded-full" />
+                  <div className="h-full rounded-full bg-primary" style={{ width: `${formula.expenses}%` }} />
                 </div>
                 <div className="flex justify-between items-center text-sm mt-1">
-                  <span className="text-muted-gray">25% Gustos</span>
-                  <span className="text-base font-semibold text-secondary">${quarter.toLocaleString()}</span>
+                  <span className="text-muted-gray">{formula.wants}% Gustos</span>
+                  <span className="text-base font-semibold text-secondary">${budgetWants.toLocaleString()}</span>
                 </div>
                 <div className="w-full h-1 bg-graphite rounded-full overflow-hidden">
-                  <div className="h-full bg-secondary w-1/4 rounded-full" />
+                  <div className="h-full rounded-full bg-secondary" style={{ width: `${formula.wants}%` }} />
                 </div>
                 <div className="flex justify-between items-center text-sm mt-1">
-                  <span className="text-muted-gray">25% Ahorros</span>
-                  <span className="text-base font-semibold text-tertiary-container">${quarter.toLocaleString()}</span>
+                  <span className="text-muted-gray">{formula.savings}% Ahorros</span>
+                  <span className="text-base font-semibold text-tertiary-container">${budgetSavings.toLocaleString()}</span>
                 </div>
                 <div className="w-full h-1 bg-graphite rounded-full overflow-hidden">
-                  <div className="h-full bg-tertiary-container w-1/4 rounded-full" />
+                  <div className="h-full rounded-full bg-tertiary-container" style={{ width: `${formula.savings}%` }} />
                 </div>
               </div>
             </>

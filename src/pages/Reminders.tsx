@@ -20,7 +20,11 @@ function getStartOfTodayMs() {
 }
 
 export default function Reminders() {
-  const { reminders, addReminder, updateReminder, toggleReminder, removeReminder } = useFinanceStore()
+  const reminders = useFinanceStore((state) => state.reminders)
+  const addReminder = useFinanceStore((state) => state.addReminder)
+  const updateReminder = useFinanceStore((state) => state.updateReminder)
+  const toggleReminder = useFinanceStore((state) => state.toggleReminder)
+  const removeReminder = useFinanceStore((state) => state.removeReminder)
   const [open, setOpen] = useState(false)
   const [editId, setEditId] = useState<string | null>(null)
   const [form, setForm] = useState<FormState>({ title: '', description: '', date: '' })
@@ -86,7 +90,7 @@ export default function Reminders() {
           <h1 className="text-[28px] md:text-[36px] font-semibold text-on-surface tracking-tight">Recordatorios</h1>
           <p className="text-sm text-muted-gray">Nunca pierdas una factura o tarea financiera</p>
         </div>
-        <Button onClick={() => handleOpen()} className="bg-surface text-on-surface hover:bg-surface-container-high shadow-vault border border-graphite">
+        <Button onClick={() => handleOpen()} className="bg-primary-container text-on-surface hover:bg-primary-container/80 shadow-vault border border-graphite">
           <Plus className="size-4" /> Agregar Recordatorio
         </Button>
       </header>

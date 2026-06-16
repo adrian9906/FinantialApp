@@ -52,7 +52,10 @@ function buildMonthMatrix(visibleMonth: Date) {
 }
 
 export default function Events() {
-  const { events, addEvent, updateEvent, removeEvent } = useFinanceStore()
+  const events = useFinanceStore((state) => state.events)
+  const addEvent = useFinanceStore((state) => state.addEvent)
+  const updateEvent = useFinanceStore((state) => state.updateEvent)
+  const removeEvent = useFinanceStore((state) => state.removeEvent)
   const overview = useMonthlyOverview()
   const [open, setOpen] = useState(false)
   const [editId, setEditId] = useState<string | null>(null)
@@ -145,7 +148,7 @@ export default function Events() {
             Los eventos salen del dinero que todavia queda en `Gustos`: primero se resta lo ya gastado ahi y despues se reserva lo que planifiques aqui.
           </p>
         </div>
-        <Button onClick={() => handleOpen()} className="border border-graphite bg-surface text-on-surface shadow-vault hover:bg-surface-container-high">
+        <Button onClick={() => handleOpen()} className="border border-graphite bg-primary-container text-white shadow-vault hover:bg-primary-container/80">
           <Plus className="size-4" />
           Nuevo evento
         </Button>

@@ -1,5 +1,6 @@
 import type { IncomingMessage, ServerResponse } from 'node:http'
-import { getDefaultUserId, getPrisma } from './prisma'
+import { clearSession, createSession, getSessionUser, hashPassword, verifyPassword } from './auth'
+import { getPrisma } from './prisma'
 
 type Salary = {
   id: string
@@ -229,9 +230,29 @@ function serializeReminder(entry: {
   }
 }
 
-async function loadBootstrap() {
+function sendUnauthorized(res: ServerResponse) {
+  sendJson(res, 401, { error: 'No autorizado.' })
+}
+
+type AuthenticatedUser = {
+  id: string
+  nombre: string
+  correo: string
+}
+
+async function requireUser(req: IncomingMessage, res: ServerResponse): Promise<AuthenticatedUser | null> {
+  const user = await getSessionUser(req)
+
+  if (!user) {
+    sendUnauthorized(res)
+    return null
+  }
+
+  return user
+}
+
+async function loadBootstrap(userId: string) {
   const prisma = await getPrisma()
-  const userId = await getDefaultUserId()
 
   const [salaries, expenses, wants, savings, debts, wishlist, events, projections, reminders] = await Promise.all([
     prisma.salario.findMany({ where: { usuarioId: userId }, orderBy: { fecha: 'desc' } }),
@@ -277,9 +298,8 @@ async function loadBootstrap() {
   }
 }
 
-async function saveDebt(body: JsonRecord, id?: string) {
+async function saveDebt(userId: string, body: JsonRecord, id?: string) {
   const prisma = await getPrisma()
-  const userId = await getDefaultUserId()
   const payload = {
     cantidad: Number(body.amount ?? 0),
     historial: String(body.history ?? '').trim(),
@@ -308,12 +328,12 @@ async function saveDebt(body: JsonRecord, id?: string) {
 }
 
 async function saveTransaction(
+  userId: string,
   kind: 'expense' | 'want',
   body: JsonRecord,
   id?: string,
 ) {
   const prisma = await getPrisma()
-  const userId = await getDefaultUserId()
   const amount = Number(body.amount ?? 0)
   const description = String(body.description ?? '').trim()
   const date = body.date ? new Date(String(body.date)) : new Date()
@@ -463,9 +483,8 @@ async function deleteTransaction(kind: 'expense' | 'want' | 'saving', id: string
   await prisma.ahorro.delete({ where: { id } })
 }
 
-async function saveSaving(body: JsonRecord, id?: string) {
+async function saveSaving(userId: string, body: JsonRecord, id?: string) {
   const prisma = await getPrisma()
-  const userId = await getDefaultUserId()
   const amount = Number(body.amount ?? 0)
   const date = body.date ? new Date(String(body.date)) : new Date()
 
@@ -489,9 +508,8 @@ async function saveSaving(body: JsonRecord, id?: string) {
   return serializeSaving(entry)
 }
 
-async function saveWishlist(body: JsonRecord, id?: string) {
+async function saveWishlist(userId: string, body: JsonRecord, id?: string) {
   const prisma = await getPrisma()
-  const userId = await getDefaultUserId()
   const name = String(body.name ?? '').trim()
   const price = Number(body.price ?? 0)
   const savedAmount = Number(body.savedAmount ?? 0)
@@ -562,9 +580,8 @@ async function saveWishlist(body: JsonRecord, id?: string) {
   return serializeWishlist(created)
 }
 
-async function saveEvent(body: JsonRecord, id?: string) {
+async function saveEvent(userId: string, body: JsonRecord, id?: string) {
   const prisma = await getPrisma()
-  const userId = await getDefaultUserId()
 
   const payload = {
     nombre: String(body.name ?? '').trim(),
@@ -592,9 +609,8 @@ async function saveEvent(body: JsonRecord, id?: string) {
   return serializeEvent(entry)
 }
 
-async function saveProjection(body: JsonRecord, id?: string) {
+async function saveProjection(userId: string, body: JsonRecord, id?: string) {
   const prisma = await getPrisma()
-  const userId = await getDefaultUserId()
   const payload = {
     salarioMeta: Number(body.targetSalary ?? 0),
   }
@@ -614,9 +630,8 @@ async function saveProjection(body: JsonRecord, id?: string) {
   return serializeProjection(entry)
 }
 
-async function saveReminder(body: JsonRecord, id?: string) {
+async function saveReminder(userId: string, body: JsonRecord, id?: string) {
   const prisma = await getPrisma()
-  const userId = await getDefaultUserId()
   const payload = {
     titulo: String(body.title ?? '').trim(),
     descripcion: body.description ? String(body.description) : null,
@@ -659,20 +674,126 @@ export async function handleApiRequest(req: IncomingMessage, res: ServerResponse
   }
 
   try {
+    if (pathname === '/api/auth/me' && method === 'GET') {
+      const user = await getSessionUser(req)
+
+      if (!user) {
+        sendUnauthorized(res)
+        return true
+      }
+
+      sendJson(res, 200, {
+        user: {
+          id: user.id,
+          name: user.nombre,
+          email: user.correo,
+        },
+      })
+      return true
+    }
+
+    if (pathname === '/api/auth/login' && method === 'POST') {
+      const prisma = await getPrisma()
+      const body = await readJsonBody(req)
+      const email = String(body.email ?? '').trim().toLowerCase()
+      const password = String(body.password ?? '')
+      const rememberMe = Boolean(body.rememberMe)
+
+      const user = await prisma.usuario.findUnique({
+        where: { correo: email },
+      })
+
+      if (!user || !verifyPassword(password, user.contrasena)) {
+        sendJson(res, 401, { error: 'Correo o contraseña incorrectos.' })
+        return true
+      }
+
+      await createSession(res, user.id, rememberMe)
+      sendJson(res, 200, {
+        user: {
+          id: user.id,
+          name: user.nombre,
+          email: user.correo,
+        },
+      })
+      return true
+    }
+
+    if (pathname === '/api/auth/register' && method === 'POST') {
+      const prisma = await getPrisma()
+      const body = await readJsonBody(req)
+      const name = String(body.name ?? '').trim()
+      const email = String(body.email ?? '').trim().toLowerCase()
+      const password = String(body.password ?? '')
+      const rememberMe = Boolean(body.rememberMe)
+
+      if (!name) {
+        sendJson(res, 400, { error: 'El nombre es obligatorio.' })
+        return true
+      }
+
+      if (!email) {
+        sendJson(res, 400, { error: 'El correo es obligatorio.' })
+        return true
+      }
+
+      if (password.length < 6) {
+        sendJson(res, 400, { error: 'La contrasena debe tener al menos 6 caracteres.' })
+        return true
+      }
+
+      const existingUser = await prisma.usuario.findUnique({
+        where: { correo: email },
+      })
+
+      if (existingUser) {
+        sendJson(res, 409, { error: 'Ya existe una cuenta con ese correo.' })
+        return true
+      }
+
+      const user = await prisma.usuario.create({
+        data: {
+          nombre: name,
+          correo: email,
+          contrasena: hashPassword(password),
+        },
+      })
+
+      await createSession(res, user.id, rememberMe)
+      sendJson(res, 201, {
+        user: {
+          id: user.id,
+          name: user.nombre,
+          email: user.correo,
+        },
+      })
+      return true
+    }
+
+    if (pathname === '/api/auth/logout' && method === 'POST') {
+      await clearSession(req, res)
+      sendJson(res, 200, { ok: true })
+      return true
+    }
+
+    const authenticatedUser = await requireUser(req, res)
+    if (!authenticatedUser) {
+      return true
+    }
+
     if (pathname === '/api/bootstrap' && method === 'GET') {
-      sendJson(res, 200, await loadBootstrap())
+      sendJson(res, 200, await loadBootstrap(authenticatedUser.id))
       return true
     }
 
     if (pathname === '/api/salaries' && method === 'POST') {
       const prisma = await getPrisma()
-      const userId = await getDefaultUserId()
       const body = await readJsonBody(req)
       const created = await prisma.salario.create({
         data: {
           salario: Number(body.amount ?? 0),
           fecha: toMonthDate(String(body.month ?? toMonthString(new Date()))),
-          usuarioId: userId,
+          usuarioId: authenticatedUser.id,
         },
       })
       sendJson(res, 201, serializeSalary(created))
@@ -705,7 +826,7 @@ export async function handleApiRequest(req: IncomingMessage, res: ServerResponse
     }
 
     if (pathname === '/api/expenses' && method === 'POST') {
-      sendJson(res, 201, await saveTransaction('expense', await readJsonBody(req)))
+      sendJson(res, 201, await saveTransaction(authenticatedUser.id, 'expense', await readJsonBody(req)))
       return true
     }
 
@@ -713,7 +834,7 @@ export async function handleApiRequest(req: IncomingMessage, res: ServerResponse
     if (expenseMatch) {
       const id = expenseMatch[1]
       if (method === 'PUT') {
-        sendJson(res, 200, await saveTransaction('expense', await readJsonBody(req), id))
+        sendJson(res, 200, await saveTransaction(authenticatedUser.id, 'expense', await readJsonBody(req), id))
         return true
       }
       if (method === 'DELETE') {
@@ -724,7 +845,7 @@ export async function handleApiRequest(req: IncomingMessage, res: ServerResponse
     }
 
     if (pathname === '/api/wants' && method === 'POST') {
-      sendJson(res, 201, await saveTransaction('want', await readJsonBody(req)))
+      sendJson(res, 201, await saveTransaction(authenticatedUser.id, 'want', await readJsonBody(req)))
       return true
     }
 
@@ -732,7 +853,7 @@ export async function handleApiRequest(req: IncomingMessage, res: ServerResponse
     if (wantMatch) {
       const id = wantMatch[1]
       if (method === 'PUT') {
-        sendJson(res, 200, await saveTransaction('want', await readJsonBody(req), id))
+        sendJson(res, 200, await saveTransaction(authenticatedUser.id, 'want', await readJsonBody(req), id))
         return true
       }
       if (method === 'DELETE') {
@@ -743,7 +864,7 @@ export async function handleApiRequest(req: IncomingMessage, res: ServerResponse
     }
 
     if (pathname === '/api/savings' && method === 'POST') {
-      sendJson(res, 201, await saveSaving(await readJsonBody(req)))
+      sendJson(res, 201, await saveSaving(authenticatedUser.id, await readJsonBody(req)))
       return true
     }
 
@@ -751,7 +872,7 @@ export async function handleApiRequest(req: IncomingMessage, res: ServerResponse
     if (savingMatch) {
       const id = savingMatch[1]
       if (method === 'PUT') {
-        sendJson(res, 200, await saveSaving(await readJsonBody(req), id))
+        sendJson(res, 200, await saveSaving(authenticatedUser.id, await readJsonBody(req), id))
         return true
       }
       if (method === 'DELETE') {
@@ -762,7 +883,7 @@ export async function handleApiRequest(req: IncomingMessage, res: ServerResponse
     }
 
     if (pathname === '/api/wishlist' && method === 'POST') {
-      sendJson(res, 201, await saveWishlist(await readJsonBody(req)))
+      sendJson(res, 201, await saveWishlist(authenticatedUser.id, await readJsonBody(req)))
       return true
     }
 
@@ -771,7 +892,7 @@ export async function handleApiRequest(req: IncomingMessage, res: ServerResponse
       const id = wishlistMatch[1]
       const prisma = await getPrisma()
       if (method === 'PUT') {
-        sendJson(res, 200, await saveWishlist(await readJsonBody(req), id))
+        sendJson(res, 200, await saveWishlist(authenticatedUser.id, await readJsonBody(req), id))
         return true
       }
       if (method === 'DELETE') {
@@ -782,7 +903,7 @@ export async function handleApiRequest(req: IncomingMessage, res: ServerResponse
     }
 
     if (pathname === '/api/debts' && method === 'POST') {
-      sendJson(res, 201, await saveDebt(await readJsonBody(req)))
+      sendJson(res, 201, await saveDebt(authenticatedUser.id, await readJsonBody(req)))
       return true
     }
 
@@ -791,7 +912,7 @@ export async function handleApiRequest(req: IncomingMessage, res: ServerResponse
       const id = debtMatch[1]
       const prisma = await getPrisma()
       if (method === 'PUT') {
-        sendJson(res, 200, await saveDebt(await readJsonBody(req), id))
+        sendJson(res, 200, await saveDebt(authenticatedUser.id, await readJsonBody(req), id))
         return true
       }
       if (method === 'DELETE') {
@@ -802,7 +923,7 @@ export async function handleApiRequest(req: IncomingMessage, res: ServerResponse
     }
 
     if (pathname === '/api/events' && method === 'POST') {
-      sendJson(res, 201, await saveEvent(await readJsonBody(req)))
+      sendJson(res, 201, await saveEvent(authenticatedUser.id, await readJsonBody(req)))
       return true
     }
 
@@ -811,7 +932,7 @@ export async function handleApiRequest(req: IncomingMessage, res: ServerResponse
       const id = eventMatch[1]
       const prisma = await getPrisma()
       if (method === 'PUT') {
-        sendJson(res, 200, await saveEvent(await readJsonBody(req), id))
+        sendJson(res, 200, await saveEvent(authenticatedUser.id, await readJsonBody(req), id))
         return true
       }
       if (method === 'DELETE') {
@@ -822,7 +943,7 @@ export async function handleApiRequest(req: IncomingMessage, res: ServerResponse
     }
 
     if (pathname === '/api/projections' && method === 'POST') {
-      sendJson(res, 201, await saveProjection(await readJsonBody(req)))
+      sendJson(res, 201, await saveProjection(authenticatedUser.id, await readJsonBody(req)))
       return true
     }
 
@@ -831,7 +952,7 @@ export async function handleApiRequest(req: IncomingMessage, res: ServerResponse
       const id = projectionMatch[1]
       const prisma = await getPrisma()
       if (method === 'PUT') {
-        sendJson(res, 200, await saveProjection(await readJsonBody(req), id))
+        sendJson(res, 200, await saveProjection(authenticatedUser.id, await readJsonBody(req), id))
         return true
       }
       if (method === 'DELETE') {
@@ -842,7 +963,7 @@ export async function handleApiRequest(req: IncomingMessage, res: ServerResponse
     }
 
     if (pathname === '/api/reminders' && method === 'POST') {
-      sendJson(res, 201, await saveReminder(await readJsonBody(req)))
+      sendJson(res, 201, await saveReminder(authenticatedUser.id, await readJsonBody(req)))
       return true
     }
 
@@ -866,7 +987,7 @@ export async function handleApiRequest(req: IncomingMessage, res: ServerResponse
       const id = reminderMatch[1]
       const prisma = await getPrisma()
       if (method === 'PUT') {
-        sendJson(res, 200, await saveReminder(await readJsonBody(req), id))
+        sendJson(res, 200, await saveReminder(authenticatedUser.id, await readJsonBody(req), id))
         return true
       }
       if (method === 'DELETE') {

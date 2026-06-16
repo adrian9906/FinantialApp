@@ -1,4 +1,4 @@
-import { BrowserRouter, Routes, Route } from 'react-router-dom'
+import { BrowserRouter, Navigate, Route, Routes, useLocation } from 'react-router-dom'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { AppLayout } from '@/components/layout/AppLayout'
 import { Toaster } from 'sonner'
@@ -12,17 +12,71 @@ import Wishlist from '@/pages/Wishlist'
 import Events from '@/pages/Events'
 import Projections from '@/pages/Projections'
 import Reminders from '@/pages/Reminders'
+import Settings from '@/pages/Settings'
 import { useEffect } from 'react'
 import { useFinanceStore } from '@/store/financeStore'
+import { useAuthStore } from '@/store/authStore'
+import { usePreferencesStore } from '@/store/preferencesStore'
+import Login from '@/pages/Login'
 
 const queryClient = new QueryClient()
 
-function AppRoutes() {
-  const hydrate = useFinanceStore((state) => state.hydrate)
+function AppPreferencesEffects() {
+  const appearance = usePreferencesStore((state) => state.appearance)
+  const theme = usePreferencesStore((state) => state.theme)
+  const background = usePreferencesStore((state) => state.background)
 
   useEffect(() => {
-    void hydrate()
-  }, [hydrate])
+    const root = document.documentElement
+    root.classList.toggle('dark', appearance === 'dark')
+    root.dataset.appAppearance = appearance
+    root.dataset.appTheme = theme
+    root.dataset.appBackground = background
+  }, [appearance, background, theme])
+
+  return null
+}
+
+function ProtectedApp() {
+  const location = useLocation()
+  const authMode = useAuthStore((state) => state.authMode)
+  const isChecking = useAuthStore((state) => state.isChecking)
+  const hasChecked = useAuthStore((state) => state.hasChecked)
+  const checkSession = useAuthStore((state) => state.checkSession)
+  const hydrate = useFinanceStore((state) => state.hydrate)
+  const reset = useFinanceStore((state) => state.reset)
+
+  useEffect(() => {
+    if (!hasChecked) {
+      void checkSession()
+    }
+  }, [checkSession, hasChecked])
+
+  useEffect(() => {
+    if (authMode === 'authenticated' || authMode === 'guest') {
+      void hydrate()
+      return
+    }
+
+    reset()
+  }, [authMode, hydrate, reset])
+
+  if (isChecking && !hasChecked) {
+    return (
+      <div
+        className="flex min-h-dvh items-center justify-center"
+        style={{ background: 'var(--app-shell-background)', backgroundSize: 'var(--app-shell-background-size, auto)' }}
+      >
+        <div className="rounded-2xl border border-graphite bg-surface px-6 py-5 text-sm text-muted-gray shadow-vault">
+          Verificando acceso...
+        </div>
+      </div>
+    )
+  }
+
+  if (authMode === 'anonymous') {
+    return <Navigate to="/login" replace state={{ from: location }} />
+  }
 
   return (
     <AppLayout>
@@ -37,14 +91,25 @@ function AppRoutes() {
         <Route path="/events" element={<Events />} />
         <Route path="/projections" element={<Projections />} />
         <Route path="/reminders" element={<Reminders />} />
+        <Route path="/settings" element={<Settings />} />
       </Routes>
     </AppLayout>
+  )
+}
+
+function AppRoutes() {
+  return (
+    <Routes>
+      <Route path="/login" element={<Login />} />
+      <Route path="/*" element={<ProtectedApp />} />
+    </Routes>
   )
 }
 
 export default function App() {
   return (
     <QueryClientProvider client={queryClient}>
+      <AppPreferencesEffects />
       <BrowserRouter>
         <AppRoutes />
       </BrowserRouter>

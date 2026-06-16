@@ -157,7 +157,10 @@ function SparkBurst({ color }: { color: string }) {
 }
 
 export default function Expenses() {
-  const { transactions, addTransaction, updateTransaction, removeTransaction } = useFinanceStore()
+  const transactions = useFinanceStore((state) => state.transactions)
+  const addTransaction = useFinanceStore((state) => state.addTransaction)
+  const updateTransaction = useFinanceStore((state) => state.updateTransaction)
+  const removeTransaction = useFinanceStore((state) => state.removeTransaction)
   const overview = useMonthlyOverview()
   const [open, setOpen] = useState(false)
   const [editId, setEditId] = useState<string | null>(null)
@@ -314,7 +317,7 @@ export default function Expenses() {
             Convierte los gastos esenciales en una lista de compras organizada por categorias. Cada producto sigue guardandose en Prisma como una transaccion de gasto.
           </p>
         </div>
-        <Button onClick={() => handleOpen()} className="bg-primary-container text-white shadow-vault hover:brightness-110">
+        <Button onClick={() => handleOpen()} className="bg-primary-container text-white shadow-vault hover:bg-primary-container/80">
           <Plus className="size-4" /> Agregar producto
         </Button>
       </header>

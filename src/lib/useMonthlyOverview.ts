@@ -1,10 +1,13 @@
 import { useFinanceStore } from '@/store/financeStore'
+import { usePreferencesStore } from '@/store/preferencesStore'
 import { useMemo } from 'react'
 import { getEffectiveExpenseTotal } from '@/lib/expense-utils'
 import { getEffectiveWantTotal } from '@/lib/want-utils'
 
 export function useMonthlyOverview() {
-  const { salaries, transactions } = useFinanceStore()
+  const salaries = useFinanceStore((state) => state.salaries)
+  const transactions = useFinanceStore((state) => state.transactions)
+  const formula = usePreferencesStore((state) => state.formula)
 
   return useMemo(() => {
     const totalSalary = salaries.reduce((sum, s) => sum + s.amount, 0)
@@ -14,10 +17,11 @@ export function useMonthlyOverview() {
       .filter((t) => t.type === 'saving')
       .reduce((sum, t) => sum + t.amount, 0)
 
-    const budgetExpenses = totalSalary * 0.5
-    const budgetSavings = totalSalary * 0.25
-    const savingsRollover = Math.max(0, budgetSavings - totalSavings)
-    const budgetWants = totalSalary * 0.25 + savingsRollover
+    const budgetExpenses = totalSalary * (formula.expenses / 100)
+    const budgetSavings = totalSalary * (formula.savings / 100)
+    const baseWants = totalSalary * (formula.wants / 100)
+    const savingsRollover = formula.rolloverSavings ? Math.max(0, budgetSavings - totalSavings) : 0
+    const budgetWants = baseWants + savingsRollover
 
     return {
       totalSalary,
@@ -32,5 +36,5 @@ export function useMonthlyOverview() {
       remainingWants: budgetWants - totalWants,
       remainingSavings: budgetSavings - totalSavings,
     }
-  }, [salaries, transactions])
+  }, [formula, salaries, transactions])
 }

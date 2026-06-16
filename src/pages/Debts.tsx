@@ -10,7 +10,10 @@ import { DatePickerField } from '@/components/ui/date-picker-field'
 import { Plus, Pencil, Trash2, Landmark, CalendarClock, Percent } from 'lucide-react'
 
 export default function Debts() {
-  const { debts, addDebt, updateDebt, removeDebt } = useFinanceStore()
+  const debts = useFinanceStore((state) => state.debts)
+  const addDebt = useFinanceStore((state) => state.addDebt)
+  const updateDebt = useFinanceStore((state) => state.updateDebt)
+  const removeDebt = useFinanceStore((state) => state.removeDebt)
   const [open, setOpen] = useState(false)
   const [editId, setEditId] = useState<string | null>(null)
   const [form, setForm] = useState({
@@ -82,7 +85,7 @@ export default function Debts() {
           <h1 className="text-[28px] font-semibold tracking-tight text-on-surface md:text-[36px]">Deudas</h1>
           <p className="text-sm text-muted-gray">CRUD respaldado por Prisma para las deudas asociadas al usuario.</p>
         </div>
-        <Button onClick={() => handleOpen()} className="bg-primary-container text-white shadow-vault hover:brightness-110">
+        <Button onClick={() => handleOpen()} className="bg-primary-container text-white shadow-vault hover:bg-primary-container/80">
           <Plus className="size-4" /> Nueva deuda
         </Button>
       </header>
