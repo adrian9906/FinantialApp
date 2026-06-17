@@ -494,17 +494,13 @@
 
 :root[data-app-background='grid'] {
   --body-background:
-    linear-gradient(rgba(255, 255, 255, 0.03) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(255, 255, 255, 0.03) 1px, transparent 1px),
     radial-gradient(circle at top, rgba(124, 58, 237, 0.16), transparent 26%),
     linear-gradient(180deg, color-mix(in srgb, var(--surface-dim) 95%, black) 0%, var(--background) 100%);
   --app-shell-background:
-    linear-gradient(rgba(255, 255, 255, 0.018) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(255, 255, 255, 0.018) 1px, transparent 1px),
     radial-gradient(circle at top right, color-mix(in srgb, var(--primary-container) 20%, transparent), transparent 32%),
     linear-gradient(180deg, color-mix(in srgb, var(--surface-dim) 94%, black) 0%, var(--background) 100%);
-  --body-background-size: 26px 26px, 26px 26px, auto, auto;
-  --app-shell-background-size: 26px 26px, 26px 26px, auto, auto;
+  --body-background-size: auto;
+  --app-shell-background-size: auto;
 }
 
 :root[data-app-background='nebula'] {

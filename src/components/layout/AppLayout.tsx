@@ -20,6 +20,7 @@ import {
   UserPlus,
 } from 'lucide-react'
 import { useState } from 'react'
+import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import {
@@ -31,6 +32,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
+import { HexagonBackground } from '@/components/animate-ui/components/backgrounds/hexagon'
 import { useAuthStore } from '@/store/authStore'
 import { useFinanceStore } from '@/store/financeStore'
 import { formatFormulaLabel, usePreferencesStore } from '@/store/preferencesStore'
@@ -48,6 +50,10 @@ const navItems = [
   { to: '/reminders', icon: Bell, label: 'Recordatorios' },
   { to: '/settings', icon: Settings2, label: 'Settings' },
 ]
+
+function handleSupportClick() {
+  toast.info('El acceso a soporte estara disponible pronto.')
+}
 
 export function Sidebar() {
   const [open, setOpen] = useState(false)
@@ -156,15 +162,21 @@ export function Sidebar() {
             </DropdownMenuContent>
           </DropdownMenu>
 
-          <a className="flex items-center gap-3 rounded-lg px-3 py-2 text-sm text-muted-gray transition-all hover:bg-surface-container-high hover:text-on-surface" href="#">
+          <button
+            type="button"
+            onClick={handleSupportClick}
+            className="flex items-center gap-3 rounded-lg px-3 py-2 text-sm text-muted-gray transition-all hover:bg-surface-container-high hover:text-on-surface"
+          >
             <LifeBuoy className="size-[18px]" />
             Soporte
-          </a>
+          </button>
         </div>
       </aside>
 
       {open && (
-        <div
+        <button
+          type="button"
+          aria-label="Cerrar menu lateral"
           className="fixed inset-0 z-30 bg-black/50 lg:hidden"
           onClick={() => setOpen(false)}
         />
@@ -175,20 +187,35 @@ export function Sidebar() {
 
 export function AppLayout({ children }: { children: React.ReactNode }) {
   const authMode = useAuthStore((state) => state.authMode)
+  const background = usePreferencesStore((state) => state.background)
 
   return (
     <div
-      className="flex min-h-dvh"
+      className="relative flex min-h-dvh overflow-hidden"
       style={{ background: 'var(--app-shell-background)', backgroundSize: 'var(--app-shell-background-size, auto)' }}
     >
+      {background === 'grid' ? (
+        <div className="absolute inset-0 z-0">
+          <HexagonBackground
+            className="absolute inset-0 min-h-full bg-transparent dark:bg-transparent"
+            hexagonSize={60}
+            hexagonMargin={4}
+            hexagonProps={{
+              className:
+                'before:opacity-55 dark:before:bg-white/12 before:bg-slate-900/12 after:dark:bg-[color:var(--surface-dim)] after:bg-[color:var(--background)]',
+            }}
+          />
+        </div>
+      ) : null}
+
       <Sidebar />
-      <main className="min-h-dvh flex-1 lg:pl-64">
-        <div className="mx-auto w-full max-w-[90%] px-4 py-6 sm:px-6 lg:px-8 lg:py-8">
+      <main className="pointer-events-none relative z-10 min-h-dvh flex-1 lg:pl-64">
+        <div className="pointer-events-auto mx-auto w-full max-w-[90%] px-4 py-6 sm:px-6 lg:px-8 lg:py-8">
           {authMode === 'guest' && (
-            <div className="mb-6 flex flex-col gap-3 rounded-2xl border border-amber-500/30 bg-amber-500/10 px-4 py-4 text-sm text-amber-100 shadow-vault sm:flex-row sm:items-center sm:justify-between">
+            <div className="mb-6 flex flex-col gap-3 rounded-2xl border border-amber-500/30 bg-[color:color-mix(in_srgb,var(--warning)_14%,var(--surface))] px-4 py-4 text-sm text-on-surface shadow-vault sm:flex-row sm:items-center sm:justify-between">
               <div className="space-y-1">
-                <p className="font-semibold text-amber-50">Estas usando Plata App como invitado.</p>
-                <p className="text-amber-100/80">
+                <p className="font-semibold text-on-surface">Estas usando Plata App como invitado.</p>
+                <p className="text-[color:color-mix(in_srgb,var(--on-surface)_78%,var(--warning))]">
                   Tus datos se guardan solo en este navegador. Si quieres guardarlos en tu cuenta, inicia sesion o crea una cuenta.
                 </p>
               </div>
@@ -196,7 +223,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
               <div className="flex flex-wrap gap-3">
                 <NavLink
                   to="/login?mode=login"
-                  className="inline-flex h-10 items-center justify-center rounded-lg border border-amber-200/30 px-4 text-sm font-medium text-amber-50 transition-colors hover:bg-amber-200/10"
+                  className="inline-flex h-10 items-center justify-center rounded-lg border border-amber-500/35 bg-transparent px-4 text-sm font-medium text-on-surface transition-colors hover:bg-amber-200/15"
                 >
                   Iniciar sesion
                 </NavLink>
