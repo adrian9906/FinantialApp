@@ -6,6 +6,13 @@ const port = Number(process.env.PORT ?? 3001)
 const host = process.env.HOST?.trim() || '0.0.0.0'
 
 const server = createServer(async (req, res) => {
+  if (req.url === '/healthz') {
+    res.statusCode = 200
+    res.setHeader('Content-Type', 'application/json; charset=utf-8')
+    res.end(JSON.stringify({ ok: true }))
+    return
+  }
+
   const handled = await handleApiRequest(req, res)
   if (handled) return
 

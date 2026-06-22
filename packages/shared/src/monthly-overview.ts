@@ -1,7 +1,7 @@
-import type { AllocationFormula } from './preferences'
-import type { Salary, Transaction } from './types'
-import { getEffectiveExpenseTotal } from './expense-utils'
-import { getEffectiveWantTotal } from './want-utils'
+import type { AllocationFormula } from './preferences.js'
+import type { Salary, Transaction } from './types.js'
+import { getEffectiveExpenseTotal } from './expense-utils.js'
+import { getEffectiveWantTotal } from './want-utils.js'
 
 export function getMonthlyOverview(
   salaries: Salary[],

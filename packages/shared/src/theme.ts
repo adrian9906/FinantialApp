@@ -1,4 +1,4 @@
-import type { AppAppearance, AppBackground, AppTheme } from './preferences'
+import type { AppAppearance, AppBackground, AppTheme } from './preferences.js'
 
 export const appearanceOptions: Array<{ id: AppAppearance; label: string; description: string }> = [
   {
