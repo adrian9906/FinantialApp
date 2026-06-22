@@ -26,7 +26,13 @@ AGENTS.md
 Obsidian.md
 diseño/
 /src/generated/prisma
+/apps/web/src/generated/prisma
 *.db
 *.db-journal
 .env
 .env.local
+apps/*/.env
+apps/*/.env.local
+apps/*/.expo
+apps/*/dist
+apps/*/node_modules

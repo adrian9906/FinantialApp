@@ -1,0 +1,20 @@
+{
+  "expo": {
+    "name": "Plata App",
+    "slug": "plata-app",
+    "scheme": "plata-app",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "automatic",
+    "assetBundlePatterns": [
+      "**/*"
+    ],
+    "plugins": [
+      "expo-router",
+      "expo-sqlite"
+    ],
+    "android": {
+      "package": "com.anonymous.plataapp"
+    }
+  }
+}
