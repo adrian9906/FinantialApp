@@ -1,4 +1,4 @@
-import type { Transaction } from './types.js'
+import type { Transaction } from './types'
 
 export type WantCategory = 'outings' | 'shopping' | 'gaming' | 'subscriptions' | 'selfcare'
 export type WantStatus = 'pending' | 'checked'

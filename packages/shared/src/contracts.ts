@@ -1,4 +1,4 @@
-import type { AppEvent, AuthUser, Debt, Projection, Reminder, Salary, Transaction, WishlistItem } from './types.js'
+import type { AppEvent, AuthUser, Debt, Projection, Reminder, Salary, Transaction, WishlistItem } from './types'
 
 export type AuthMode = 'anonymous' | 'guest' | 'authenticated'
 
