@@ -1,5 +1,5 @@
-import { useState } from 'react'
-import { Redirect, router } from 'expo-router'
+import { useEffect, useState } from 'react'
+import { Redirect, router, useLocalSearchParams } from 'expo-router'
 import { Eye, EyeOff } from 'lucide-react-native'
 import { KeyboardAvoidingView, Platform, Pressable, ScrollView, View } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
@@ -19,6 +19,7 @@ const EyeIcon = Eye as any
 const EyeOffIcon = EyeOff as any
 
 export default function LoginScreen() {
+  const params = useLocalSearchParams<{ mode?: string }>()
   const authMode = useAuthStore((state) => state.authMode)
   const isChecking = useAuthStore((state) => state.isChecking)
   const login = useAuthStore((state) => state.login)
@@ -44,6 +45,17 @@ export default function LoginScreen() {
     confirmPassword: '',
     rememberMe: true,
   })
+
+  useEffect(() => {
+    if (params.mode === 'register') {
+      setView('register')
+      return
+    }
+
+    if (params.mode === 'login') {
+      setView('login')
+    }
+  }, [params.mode])
 
   if (!isChecking && authMode !== 'anonymous') {
     return <Redirect href="/(app)/dashboard" />
