@@ -95,7 +95,7 @@ export default function RemindersScreen() {
       title="Recordatorios"
       subtitle="Nunca pierdas una factura o tarea financiera."
       actions={
-        <Button variant="outline" className="self-start" onPress={() => handleOpen()}>
+        <Button variant="default" className="self-start" onPress={() => handleOpen()}>
           <PlusIcon size={16} color={palette.text} />
           <Text>Agregar recordatorio</Text>
         </Button>

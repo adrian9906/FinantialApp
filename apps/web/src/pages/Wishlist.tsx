@@ -264,7 +264,7 @@ export default function Wishlist() {
 
           <Button onClick={() => handleOpen()} className="bg-primary-container text-white hover:bg-primary-container/80 shadow-vault">
             <Plus className="size-4" />
-            Agregar articulo
+            Agregar artículo
           </Button>
         </div>
       </header>

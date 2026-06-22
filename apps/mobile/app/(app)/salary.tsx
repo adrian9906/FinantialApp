@@ -117,7 +117,7 @@ export default function SalaryScreen() {
       title="Salario"
       subtitle="Registro mensual, distribucion por formula e historial alineado con la estructura de la web."
       actions={
-        <Button variant="outline" className="self-start" onPress={() => handleOpen()}>
+        <Button variant="default" className="self-start" onPress={() => handleOpen()}>
           <PlusIcon size={16} color={palette.text} />
           <Text>{salaries.length > 0 ? 'Actualizar' : 'Agregar salario'}</Text>
         </Button>

@@ -110,7 +110,7 @@ export default function SavingsScreen() {
       title="Ahorros"
       subtitle="Entradas de ahorro reales, vinculadas al overview mensual y al presupuesto disponible."
       actions={
-        <Button variant="outline" className="self-start" onPress={() => handleOpen()} disabled={budgetFull}>
+        <Button variant="default" className="self-start" onPress={() => handleOpen()} disabled={budgetFull}>
           <PlusIcon size={16} color={palette.text} />
           <Text>Agregar ahorro</Text>
         </Button>

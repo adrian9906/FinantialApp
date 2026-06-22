@@ -445,16 +445,25 @@ export default function DashboardScreen() {
         </Card>
       ) : null}
 
-      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing.md }}>
+      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing.md, marginBottom: spacing.xxl }}>
         <Card className="min-w-[250px] flex-1">
-          <CardHeader className="flex-row items-center justify-between">
-            <View>
+          <CardHeader className="flex-col gap-3 px-6">
+            <View style={{ width: '100%' }}>
               <CardTitle>Proximos recordatorios</CardTitle>
-              <CardDescription>No pierdas facturas ni tareas pendientes.</CardDescription>
+              <CardDescription>
+                No pierdas facturas ni tareas pendientes.
+              </CardDescription>
             </View>
-            <Button variant="ghost" size="sm" onPress={() => router.push('/(app)/reminders')}>
-              <Text>Ver todos</Text>
-            </Button>
+
+            <View style={{ width: '100%', alignItems: 'flex-end' }}>
+              <Button
+                variant="default"
+                size="sm"
+                onPress={() => router.push('/(app)/reminders')}
+              >
+                <Text numberOfLines={1}>Ver todos</Text>
+              </Button>
+            </View>
           </CardHeader>
           <CardContent className="gap-3">
             {pendingReminders.length === 0 ? (
@@ -494,7 +503,7 @@ export default function DashboardScreen() {
               <CardTitle>Agenda y deudas</CardTitle>
               <CardDescription>Un vistazo rapido a lo proximo.</CardDescription>
             </View>
-            <Button variant="ghost" size="sm" onPress={() => router.push('/(app)/debts')}>
+            <Button variant="default" size="sm" onPress={() => router.push('/(app)/debts')}>
               <Text>Ver deudas</Text>
             </Button>
           </CardHeader>

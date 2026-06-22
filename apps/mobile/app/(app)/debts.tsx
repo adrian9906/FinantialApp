@@ -86,7 +86,7 @@ export default function DebtsScreen() {
       title="Deudas"
       subtitle="Control de monto, historial, interes y fechas para cada deuda registrada."
       actions={
-        <Button variant="outline" className="self-start" onPress={() => handleOpen()}>
+        <Button variant="default" className="self-start" onPress={() => handleOpen()}>
           <PlusIcon size={16} color={palette.text} />
           <Text>Nueva deuda</Text>
         </Button>

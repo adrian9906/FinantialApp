@@ -103,9 +103,9 @@ export default function WishlistScreen() {
       title="Deseos"
       subtitle="Lista de productos con foto, prioridad y fecha posible de compra segun tu ahorro."
       actions={
-        <Button variant="outline" className="self-start" onPress={() => handleOpen()}>
+        <Button variant="default" className="self-start" onPress={() => handleOpen()}>
           <PlusIcon size={16} color={palette.text} />
-          <Text>Agregar articulo</Text>
+          <Text>Agregar artículo</Text>
         </Button>
       }
     >

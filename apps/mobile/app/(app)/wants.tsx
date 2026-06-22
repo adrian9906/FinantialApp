@@ -139,7 +139,7 @@ export default function WantsScreen() {
       title="Gustos"
       subtitle="Tus caprichos y experiencias, organizados por categoria y respetando el presupuesto libre."
       actions={
-        <Button variant="outline" className="self-start" onPress={() => handleOpen()}>
+        <Button variant="default" className="self-start" onPress={() => handleOpen()}>
           <PlusIcon size={16} color={palette.text} />
           <Text>Agregar gusto</Text>
         </Button>

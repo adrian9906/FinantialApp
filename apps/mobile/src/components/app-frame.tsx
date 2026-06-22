@@ -1,7 +1,7 @@
 import type { PropsWithChildren, ReactNode } from 'react'
 import { useState } from 'react'
 import { router } from 'expo-router'
-import { Menu } from 'lucide-react-native'
+import { Menu, X } from 'lucide-react-native'
 import { Pressable, ScrollView, Text, View } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 
@@ -13,6 +13,7 @@ import { resolvePalette } from '../theme/palette'
 import { radius, spacing } from '../theme/tokens'
 
 const MenuIcon = Menu as any
+const CloseIcon = X as any
 
 export function AppFrame({
   title,
@@ -47,19 +48,38 @@ export function AppFrame({
             style={{
               flexDirection: 'row',
               alignItems: 'center',
-              justifyContent: 'space-between',
               gap: spacing.md,
             }}
           >
-            <View
+            <Pressable
+              onPress={() => setSidebarOpen((current) => !current)}
               style={{
                 alignSelf: 'flex-start',
                 borderRadius: radius.full,
                 borderWidth: 1,
                 borderColor: palette.border,
                 backgroundColor: palette.surface,
-                paddingHorizontal: spacing.lg,
+                paddingHorizontal: spacing.md,
                 paddingVertical: spacing.sm,
+
+              }}
+            >
+              {sidebarOpen ? <CloseIcon size={18} color={palette.text} /> : <MenuIcon size={18} color={palette.text} />}
+            </Pressable>
+
+            <View
+              style={{
+                flex: 0.5,
+                borderRadius: radius.full,
+                borderWidth: 1,
+                borderColor: palette.border,
+                backgroundColor: palette.surface,
+                paddingHorizontal: spacing.xs,
+                paddingVertical: spacing.sm,
+                justifyContent: 'flex-start',
+                alignItems: 'flex-start',
+                marginLeft: spacing.md,   // Menos espacio a la izquierda
+                marginRight: spacing.xxl, // Más espacio a la derecha
               }}
             >
               <Text
@@ -69,26 +89,12 @@ export function AppFrame({
                   fontWeight: '700',
                   letterSpacing: 1.2,
                   textTransform: 'uppercase',
+                  alignSelf: 'center',
                 }}
               >
                 Plata App
               </Text>
             </View>
-
-            <Pressable
-              onPress={() => setSidebarOpen(true)}
-              style={{
-                alignSelf: 'flex-start',
-                borderRadius: radius.full,
-                borderWidth: 1,
-                borderColor: palette.border,
-                backgroundColor: palette.surface,
-                paddingHorizontal: spacing.md,
-                paddingVertical: spacing.sm,
-              }}
-            >
-              <MenuIcon size={18} color={palette.text} />
-            </Pressable>
           </View>
 
           {authMode === 'guest' ? (

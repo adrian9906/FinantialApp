@@ -71,7 +71,7 @@ export default function ProjectionsScreen() {
       title="Proyecciones"
       subtitle="Metas salariales, diferencia frente al salario actual y estado de avance."
       actions={
-        <Button variant="outline" className="self-start" onPress={() => handleOpen()}>
+        <Button variant="default" className="self-start" onPress={() => handleOpen()}>
           <PlusCircleIcon size={16} color={palette.text} />
           <Text>Nueva proyeccion</Text>
         </Button>

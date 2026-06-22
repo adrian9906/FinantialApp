@@ -131,7 +131,7 @@ export default function EventsScreen() {
       title="Eventos"
       subtitle="Los eventos salen del dinero libre de Gustos y pueden verse como calendario o lista."
       actions={
-        <Button variant="outline" className="self-start" onPress={() => handleOpen()}>
+        <Button variant="default" className="self-start" onPress={() => handleOpen()}>
           <PlusIcon size={16} color={palette.text} />
           <Text>Nuevo evento</Text>
         </Button>
