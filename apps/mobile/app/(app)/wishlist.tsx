@@ -9,6 +9,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../..
 import { Dialog } from '../../src/components/ui/dialog'
 import { Input } from '../../src/components/ui/input'
 import { Text } from '../../src/components/ui/text'
+import { ImageUploadField } from '../../src/components/wishlist/image-upload-field'
 import { useFinanceStore } from '../../src/store/finance-store'
 import { usePreferencesStore } from '../../src/store/preferences-store'
 import { resolvePalette } from '../../src/theme/palette'
@@ -126,7 +127,7 @@ export default function WishlistScreen() {
 
       <Card>
         <CardHeader>
-          <View style={{ flexDirection: 'row', justifyContent: 'space-between', gap: spacing.md, alignItems: 'center' }}>
+          <View style={{ flexDirection: 'column', justifyContent: 'space-between', gap: spacing.md, alignItems: 'flex-start' }}>
             <View>
               <CardTitle>Vista de deseos</CardTitle>
               <CardDescription>Cambia entre tarjetas y lista.</CardDescription>
@@ -244,7 +245,10 @@ export default function WishlistScreen() {
         <View style={{ gap: spacing.md }}>
           <Input value={form.name} onChangeText={(value) => setForm((current) => ({ ...current, name: value }))} placeholder="Nombre del articulo" />
           <Input keyboardType="numeric" value={form.price} onChangeText={(value) => setForm((current) => ({ ...current, price: value }))} placeholder="Precio" />
-          <Input value={form.image} onChangeText={(value) => setForm((current) => ({ ...current, image: value }))} placeholder="URL de la imagen" />
+          <View style={{ gap: spacing.sm }}>
+            <Text style={{ color: palette.textMuted, fontSize: 13 }}>Foto del producto</Text>
+            <ImageUploadField value={form.image || undefined} onChange={(image) => setForm((current) => ({ ...current, image: image ?? '' }))} />
+          </View>
           <View style={{ flexDirection: 'row', gap: spacing.sm }}>
             {(['low', 'medium', 'high'] as const).map((priority) => (
               <Button key={priority} variant={form.priority === priority ? 'default' : 'outline'} className="flex-1" onPress={() => setForm((current) => ({ ...current, priority }))}>
