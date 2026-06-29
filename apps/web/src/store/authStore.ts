@@ -33,6 +33,14 @@ function persistGuestMode(enabled: boolean) {
   window.localStorage.removeItem(GUEST_AUTH_STORAGE_KEY)
 }
 
+function setStoredToken(token: string) {
+  window.localStorage.setItem('plata-session-token', token)
+}
+
+function removeStoredToken() {
+  window.localStorage.removeItem('plata-session-token')
+}
+
 function setAuthenticatedUser(set: (partial: Partial<AuthStore>) => void, user: AuthUser) {
   persistGuestMode(false)
   set({
@@ -67,6 +75,7 @@ export const useAuthStore = create<AuthStore>()((set) => ({
       }
     }
 
+    removeStoredToken()
     persistGuestMode(false)
     set({
       authMode: 'anonymous',
@@ -76,19 +85,21 @@ export const useAuthStore = create<AuthStore>()((set) => ({
     })
   },
   login: async (payload) => {
-    const response = await requestJson<{ user: AuthUser }>('/auth/login', {
+    const response = await requestJson<{ user: AuthUser; sessionToken: string }>('/auth/login', {
       method: 'POST',
       body: JSON.stringify(payload),
     })
 
+    setStoredToken(response.sessionToken)
     setAuthenticatedUser(set, response.user)
   },
   register: async (payload) => {
-    const response = await requestJson<{ user: AuthUser }>('/auth/register', {
+    const response = await requestJson<{ user: AuthUser; sessionToken: string }>('/auth/register', {
       method: 'POST',
       body: JSON.stringify(payload),
     })
 
+    setStoredToken(response.sessionToken)
     setAuthenticatedUser(set, response.user)
   },
   continueAsGuest: () => {
@@ -109,6 +120,7 @@ export const useAuthStore = create<AuthStore>()((set) => ({
       })
     }
 
+    removeStoredToken()
     persistGuestMode(false)
     set({
       authMode: 'anonymous',
