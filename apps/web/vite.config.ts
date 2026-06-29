@@ -2,30 +2,20 @@ import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
 import path from 'path'
-import { handleApiRequest } from '../api/src/api'
 
-function prismaApiPlugin() {
-  return {
-    name: 'prisma-api',
-    configureServer(server: import('vite').ViteDevServer) {
-      server.middlewares.use((req, res, next) => {
-        void handleApiRequest(req, res).then((handled) => {
-          if (!handled) next()
-        })
-      })
-    },
-    configurePreviewServer(server: import('vite').PreviewServer) {
-      server.middlewares.use((req, res, next) => {
-        void handleApiRequest(req, res).then((handled) => {
-          if (!handled) next()
-        })
-      })
-    },
-  }
-}
+const defaultApiTarget = 'https://finantialapp.onrender.com'
 
 export default defineConfig({
-  plugins: [react(), tailwindcss(), prismaApiPlugin()],
+  plugins: [react(), tailwindcss()],
+  server: {
+    proxy: {
+      '/api': {
+        target: process.env.VITE_API_BASE_URL?.trim() || defaultApiTarget,
+        changeOrigin: true,
+        secure: true,
+      },
+    },
+  },
   resolve: {
     alias: {
       '@': path.resolve(__dirname, './src'),

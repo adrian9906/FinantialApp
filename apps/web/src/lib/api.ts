@@ -1,4 +1,5 @@
-const rawApiBaseUrl = import.meta.env.VITE_API_BASE_URL?.trim() ?? ''
+const defaultApiBaseUrl = 'https://finantialapp.onrender.com'
+const rawApiBaseUrl = import.meta.env.VITE_API_BASE_URL?.trim() || defaultApiBaseUrl
 
 function normalizeBaseUrl(baseUrl: string) {
   if (!baseUrl) return ''
@@ -8,10 +9,6 @@ function normalizeBaseUrl(baseUrl: string) {
 export function getApiUrl(path: string) {
   const normalizedPath = path.startsWith('/') ? path : `/${path}`
   const baseUrl = normalizeBaseUrl(rawApiBaseUrl)
-
-  if (!baseUrl) {
-    return `/api${normalizedPath}`
-  }
 
   return `${baseUrl}/api${normalizedPath}`
 }
