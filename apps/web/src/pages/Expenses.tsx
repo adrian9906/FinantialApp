@@ -166,6 +166,7 @@ export default function Expenses() {
   const [editId, setEditId] = useState<string | null>(null)
   const [sparkBursts, setSparkBursts] = useState<Record<string, number>>({})
   const [formError, setFormError] = useState<string | null>(null)
+  const [isSaving, setIsSaving] = useState(false)
   const [form, setForm] = useState<ExpenseFormState>({
     amount: '',
     itemName: '',
@@ -201,7 +202,7 @@ export default function Expenses() {
   }
 
   async function handleSave() {
-    if (!form.amount || !form.itemName) return
+    if (!form.amount || !form.itemName || isSaving) return
 
     const nextAmount = Number(form.amount)
     if (!Number.isFinite(nextAmount) || nextAmount <= 0) {
@@ -230,14 +231,20 @@ export default function Expenses() {
       date: form.date || new Date().toISOString().slice(0, 10),
     }
 
-    if (editId) {
-      await updateTransaction(editId, data)
-    } else {
-      await addTransaction(data)
-    }
+    setIsSaving(true)
 
-    resetForm()
-    setOpen(false)
+    try {
+      if (editId) {
+        await updateTransaction(editId, data)
+      } else {
+        await addTransaction(data)
+      }
+
+      resetForm()
+      setOpen(false)
+    } finally {
+      setIsSaving(false)
+    }
   }
 
   const expenseItems: ExpenseViewItem[] = transactions
@@ -483,7 +490,7 @@ export default function Expenses() {
         </div>
       )}
 
-      <Dialog open={open} onOpenChange={setOpen}>
+      <Dialog open={open} onOpenChange={(nextOpen) => { if (!isSaving) setOpen(nextOpen) }}>
         <DialogContent className="border-graphite bg-surface sm:max-w-4xl">
           <DialogHeader>
             <DialogTitle className="text-on-surface">{editId ? 'Editar producto' : 'Agregar producto'}</DialogTitle>
@@ -562,10 +569,11 @@ export default function Expenses() {
             {formError ? <p className="text-sm text-error">{formError}</p> : null}
           </div>
           <DialogFooter>
-            <Button variant="ghost" onClick={() => { resetForm(); setOpen(false) }} className="text-muted-gray">Cancelar</Button>
+            <Button variant="ghost" disabled={isSaving} onClick={() => { resetForm(); setOpen(false) }} className="text-muted-gray">Cancelar</Button>
             <Button
+              loading={isSaving}
               onClick={() => void handleSave()}
-              disabled={!form.amount || !form.itemName}
+              disabled={isSaving || !form.amount || !form.itemName}
               className="bg-primary-container text-white shadow-vault hover:brightness-110"
             >
               Guardar

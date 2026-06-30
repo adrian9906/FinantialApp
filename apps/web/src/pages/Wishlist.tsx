@@ -148,6 +148,7 @@ export default function Wishlist() {
   const [open, setOpen] = useState(false)
   const [editId, setEditId] = useState<string | null>(null)
   const [viewMode, setViewMode] = useState<ViewMode>('cards')
+  const [isSaving, setIsSaving] = useState(false)
   const [form, setForm] = useState<FormState>({
     name: '',
     price: '',
@@ -209,7 +210,7 @@ export default function Wishlist() {
   }
 
   async function handleSave() {
-    if (!form.name || !form.price) return
+    if (!form.name || !form.price || isSaving) return
 
     const data = {
       name: form.name.trim(),
@@ -219,14 +220,19 @@ export default function Wishlist() {
       image: form.image,
     }
 
-    if (editId) {
-      await updateWishlistItem(editId, data)
-    } else {
-      await addWishlistItem(data)
-    }
+    setIsSaving(true)
+    try {
+      if (editId) {
+        await updateWishlistItem(editId, data)
+      } else {
+        await addWishlistItem(data)
+      }
 
-    resetForm()
-    setOpen(false)
+      resetForm()
+      setOpen(false)
+    } finally {
+      setIsSaving(false)
+    }
   }
   return (
     <div className="space-y-6 animate-in fade-in duration-500">
@@ -434,7 +440,7 @@ export default function Wishlist() {
         </div>
       )}
 
-      <Dialog open={open} onOpenChange={setOpen}>
+      <Dialog open={open} onOpenChange={(nextOpen) => { if (!isSaving) setOpen(nextOpen) }}>
         <DialogContent className="max-h-[85vh] overflow-y-auto border-graphite bg-surface sm:max-w-3xl">
           <DialogHeader>
             <DialogTitle className="text-on-surface">{editId ? 'Editar articulo' : 'Agregar deseo'}</DialogTitle>
@@ -508,6 +514,7 @@ export default function Wishlist() {
           <DialogFooter>
             <Button
               variant="ghost"
+              disabled={isSaving}
               onClick={() => {
                 resetForm()
                 setOpen(false)
@@ -516,7 +523,7 @@ export default function Wishlist() {
             >
               Cancelar
             </Button>
-            <Button onClick={() => void handleSave()} className="bg-primary-container text-white hover:brightness-110 shadow-vault">
+            <Button loading={isSaving} onClick={() => void handleSave()} className="bg-primary-container text-white hover:brightness-110 shadow-vault">
               Guardar
             </Button>
           </DialogFooter>

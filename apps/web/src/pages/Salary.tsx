@@ -42,6 +42,7 @@ export default function Salary() {
   const [amount, setAmount] = useState('')
   const [month, setMonth] = useState('')
   const [calendarYear, setCalendarYear] = useState(new Date().getFullYear())
+  const [isSaving, setIsSaving] = useState(false)
 
   const latestSalary = salaries.length > 0
     ? salaries.reduce((max, salary) => new Date(salary.month) > new Date(max.month) ? salary : max)
@@ -67,21 +68,27 @@ export default function Salary() {
   }
 
   async function handleSave() {
-    if (!amount || !month) return
+    if (!amount || !month || isSaving) return
 
     const payload = {
       amount: Number(amount),
       month,
     }
 
-    if (editId) {
-      await updateSalary(editId, payload)
-    } else {
-      await addSalary(payload)
-    }
+    setIsSaving(true)
 
-    resetForm()
-    setOpen(false)
+    try {
+      if (editId) {
+        await updateSalary(editId, payload)
+      } else {
+        await addSalary(payload)
+      }
+
+      resetForm()
+      setOpen(false)
+    } finally {
+      setIsSaving(false)
+    }
   }
 
   const budgetExpenses = latestSalary ? latestSalary.amount * (formula.expenses / 100) : 0
@@ -197,7 +204,7 @@ export default function Salary() {
         </section>
       </div>
 
-      <Dialog open={open} onOpenChange={setOpen}>
+      <Dialog open={open} onOpenChange={(nextOpen) => { if (!isSaving) setOpen(nextOpen) }}>
         <DialogContent className="border-graphite bg-surface sm:max-w-3xl">
           <DialogHeader>
             <DialogTitle className="text-on-surface">{editId ? 'Editar Salario' : 'Agregar Salario'}</DialogTitle>
@@ -280,8 +287,8 @@ export default function Salary() {
             </Card>
           </div>
           <DialogFooter>
-            <Button variant="ghost" onClick={() => setOpen(false)} className="text-muted-gray">Cancelar</Button>
-            <Button onClick={() => void handleSave()} className="bg-primary-container text-white hover:brightness-110 shadow-vault">Guardar</Button>
+            <Button variant="ghost" disabled={isSaving} onClick={() => setOpen(false)} className="text-muted-gray">Cancelar</Button>
+            <Button loading={isSaving} onClick={() => void handleSave()} className="bg-primary-container text-white hover:brightness-110 shadow-vault">Guardar</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

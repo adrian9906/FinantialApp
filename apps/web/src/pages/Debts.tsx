@@ -36,6 +36,8 @@ export default function Debts() {
   const [paymentAmount, setPaymentAmount] = useState('')
   const [formError, setFormError] = useState<string | null>(null)
   const [paymentError, setPaymentError] = useState<string | null>(null)
+  const [isSaving, setIsSaving] = useState(false)
+  const [isPaying, setIsPaying] = useState(false)
   const [form, setForm] = useState<DebtFormState>({
     amount: '',
     history: '',
@@ -103,7 +105,7 @@ export default function Debts() {
   }
 
   async function handleSave() {
-    if (!form.amount || !form.history || !form.startDate || !form.endDate) return
+    if (!form.amount || !form.history || !form.startDate || !form.endDate || isSaving) return
 
     const amount = Number(form.amount)
     const initialPayment = Math.max(0, Number(form.initialPayment || 0))
@@ -126,21 +128,27 @@ export default function Debts() {
       interest: form.interest === '' ? undefined : Number(form.interest),
     }
 
-    if (editId) {
-      await updateDebt(editId, payload)
-    } else {
-      await addDebt({
-        ...payload,
-        initialPayment,
-      })
-    }
+    setIsSaving(true)
 
-    resetForm()
-    setOpen(false)
+    try {
+      if (editId) {
+        await updateDebt(editId, payload)
+      } else {
+        await addDebt({
+          ...payload,
+          initialPayment,
+        })
+      }
+
+      resetForm()
+      setOpen(false)
+    } finally {
+      setIsSaving(false)
+    }
   }
 
   async function handlePayDebt() {
-    if (!paymentDebt) return
+    if (!paymentDebt || isPaying) return
 
     const nextPayment = Number(paymentAmount)
     if (!Number.isFinite(nextPayment) || nextPayment <= 0) {
@@ -153,9 +161,15 @@ export default function Debts() {
       return
     }
 
-    await payDebt(paymentDebt.id, nextPayment)
-    resetPaymentFlow()
-    setPaymentOpen(false)
+    setIsPaying(true)
+
+    try {
+      await payDebt(paymentDebt.id, nextPayment)
+      resetPaymentFlow()
+      setPaymentOpen(false)
+    } finally {
+      setIsPaying(false)
+    }
   }
 
   async function handleSettleDebt(entry: typeof debts[number]) {
@@ -329,7 +343,7 @@ export default function Debts() {
         </div>
       )}
 
-      <Dialog open={open} onOpenChange={setOpen}>
+      <Dialog open={open} onOpenChange={(nextOpen) => { if (!isSaving) setOpen(nextOpen) }}>
         <DialogContent className="border-graphite bg-surface sm:max-w-4xl">
           <DialogHeader>
             <DialogTitle className="text-on-surface">{editId ? 'Editar deuda' : 'Agregar deuda'}</DialogTitle>
@@ -401,13 +415,13 @@ export default function Debts() {
             {formError ? <p className="text-sm text-error">{formError}</p> : null}
           </div>
           <DialogFooter>
-            <Button variant="ghost" onClick={() => { resetForm(); setOpen(false) }} className="text-muted-gray">Cancelar</Button>
-            <Button onClick={() => void handleSave()} className="bg-primary-container text-white shadow-vault hover:brightness-110">Guardar</Button>
+            <Button variant="ghost" disabled={isSaving} onClick={() => { resetForm(); setOpen(false) }} className="text-muted-gray">Cancelar</Button>
+            <Button loading={isSaving} onClick={() => void handleSave()} className="bg-primary-container text-white shadow-vault hover:brightness-110">Guardar</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
-      <Dialog open={paymentOpen} onOpenChange={setPaymentOpen}>
+      <Dialog open={paymentOpen} onOpenChange={(nextOpen) => { if (!isPaying) setPaymentOpen(nextOpen) }}>
         <DialogContent className="border-graphite bg-surface sm:max-w-2xl">
           <DialogHeader>
             <DialogTitle className="text-on-surface">Pagar deuda</DialogTitle>
@@ -451,10 +465,10 @@ export default function Debts() {
             {paymentError ? <p className="text-sm text-error">{paymentError}</p> : null}
           </div>
           <DialogFooter>
-            <Button variant="ghost" onClick={() => { resetPaymentFlow(); setPaymentOpen(false) }} className="text-muted-gray">
+            <Button variant="ghost" disabled={isPaying} onClick={() => { resetPaymentFlow(); setPaymentOpen(false) }} className="text-muted-gray">
               Cancelar
             </Button>
-            <Button onClick={() => void handlePayDebt()} className="bg-primary-container text-white shadow-vault hover:brightness-110">
+            <Button loading={isPaying} onClick={() => void handlePayDebt()} className="bg-primary-container text-white shadow-vault hover:brightness-110">
               Registrar pago
             </Button>
           </DialogFooter>

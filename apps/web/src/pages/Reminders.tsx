@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { useFinanceStore } from '@/store/financeStore'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -28,6 +28,7 @@ export default function Reminders() {
   const [open, setOpen] = useState(false)
   const [editId, setEditId] = useState<string | null>(null)
   const [form, setForm] = useState<FormState>({ title: '', description: '', date: '' })
+  const [isSaving, setIsSaving] = useState(false)
 
   function resetForm() {
     setForm({ title: '', description: '', date: '' })
@@ -44,15 +45,21 @@ export default function Reminders() {
     setOpen(true)
   }
 
-  function handleSave() {
-    if (!form.title || !form.date) return
+  async function handleSave() {
+    if (!form.title || !form.date || isSaving) return
     const data = { title: form.title, description: form.description, date: form.date }
-    if (editId) {
-      void updateReminder(editId, data)
-    } else {
-      void addReminder({ ...data, completed: false })
+    setIsSaving(true)
+    try {
+      if (editId) {
+        await updateReminder(editId, data)
+      } else {
+        await addReminder({ ...data, completed: false })
+      }
+      resetForm()
+      setOpen(false)
+    } finally {
+      setIsSaving(false)
     }
-    resetForm(); setOpen(false)
   }
 
   const activeReminders = reminders.filter((r) => !r.completed)
@@ -184,7 +191,7 @@ export default function Reminders() {
         </div>
       )}
 
-      <Dialog open={open} onOpenChange={setOpen}>
+      <Dialog open={open} onOpenChange={(nextOpen) => { if (!isSaving) setOpen(nextOpen) }}>
         <DialogContent className="border-graphite bg-surface sm:max-w-4xl">
           <DialogHeader>
             <DialogTitle className="text-on-surface">{editId ? 'Editar Recordatorio' : 'Agregar Recordatorio'}</DialogTitle>
@@ -207,8 +214,8 @@ export default function Reminders() {
             />
           </div>
           <DialogFooter>
-            <Button variant="ghost" onClick={() => { resetForm(); setOpen(false) }} className="text-muted-gray">Cancelar</Button>
-            <Button onClick={handleSave} className="bg-primary-container text-white hover:brightness-110 shadow-vault">Guardar</Button>
+            <Button variant="ghost" disabled={isSaving} onClick={() => { resetForm(); setOpen(false) }} className="text-muted-gray">Cancelar</Button>
+            <Button loading={isSaving} onClick={() => void handleSave()} className="bg-primary-container text-white hover:brightness-110 shadow-vault">Guardar</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

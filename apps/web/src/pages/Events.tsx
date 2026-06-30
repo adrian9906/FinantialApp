@@ -62,6 +62,7 @@ export default function Events() {
   const [formError, setFormError] = useState<string | null>(null)
   const [calendarMonth, setCalendarMonth] = useState(() => new Date(new Date().getFullYear(), new Date().getMonth(), 1))
   const [viewMode, setViewMode] = useState<'list' | 'calendar'>('calendar')
+  const [isSaving, setIsSaving] = useState(false)
   const [form, setForm] = useState<FormState>({ name: '', date: '', amount: '', isNotification: false })
 
   const sortedEvents = useMemo(
@@ -115,7 +116,7 @@ export default function Events() {
   }
 
   async function handleSave() {
-    if (!form.name || !form.date) return
+    if (!form.name || !form.date || isSaving) return
 
     if (typedAmount > availableForCurrentForm) {
       setFormError(`No puedes reservar $${typedAmount.toLocaleString()} porque solo te quedan $${availableForCurrentForm.toLocaleString()} para eventos.`)
@@ -129,14 +130,20 @@ export default function Events() {
       isNotification: form.isNotification,
     }
 
-    if (editId) {
-      await updateEvent(editId, data)
-    } else {
-      await addEvent(data)
-    }
+    setIsSaving(true)
 
-    resetForm()
-    setOpen(false)
+    try {
+      if (editId) {
+        await updateEvent(editId, data)
+      } else {
+        await addEvent(data)
+      }
+
+      resetForm()
+      setOpen(false)
+    } finally {
+      setIsSaving(false)
+    }
   }
 
   return (
@@ -360,7 +367,7 @@ export default function Events() {
         </div>
       </Tabs>
 
-      <Dialog open={open} onOpenChange={setOpen}>
+      <Dialog open={open} onOpenChange={(nextOpen) => { if (!isSaving) setOpen(nextOpen) }}>
         <DialogContent className="border-graphite bg-surface sm:max-w-4xl">
           <DialogHeader>
             <DialogTitle className="text-on-surface">{editId ? 'Editar evento' : 'Agregar evento'}</DialogTitle>
@@ -469,6 +476,7 @@ export default function Events() {
           <DialogFooter>
             <Button
               variant="ghost"
+              disabled={isSaving}
               onClick={() => {
                 resetForm()
                 setOpen(false)
@@ -478,8 +486,9 @@ export default function Events() {
               Cancelar
             </Button>
             <Button
+              loading={isSaving}
               onClick={() => void handleSave()}
-              disabled={exceedsBudget}
+              disabled={isSaving || exceedsBudget}
               className="bg-primary-container text-white shadow-vault hover:brightness-110"
             >
               Guardar

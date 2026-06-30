@@ -17,6 +17,7 @@ export default function Projections() {
   const [open, setOpen] = useState(false)
   const [editId, setEditId] = useState<string | null>(null)
   const [targetSalary, setTargetSalary] = useState('')
+  const [isSaving, setIsSaving] = useState(false)
 
   const latestSalary = salaries.length > 0
     ? salaries.reduce((max, salary) => new Date(salary.month) > new Date(max.month) ? salary : max)
@@ -38,15 +39,20 @@ export default function Projections() {
   }
 
   async function handleSave() {
-    if (!targetSalary) return
+    if (!targetSalary || isSaving) return
     const payload = { targetSalary: Number(targetSalary) }
-    if (editId) {
-      await updateProjection(editId, payload)
-    } else {
-      await addProjection(payload)
+    setIsSaving(true)
+    try {
+      if (editId) {
+        await updateProjection(editId, payload)
+      } else {
+        await addProjection(payload)
+      }
+      resetForm()
+      setOpen(false)
+    } finally {
+      setIsSaving(false)
     }
-    resetForm()
-    setOpen(false)
   }
 
   return (
@@ -135,7 +141,7 @@ export default function Projections() {
         </div>
       )}
 
-      <Dialog open={open} onOpenChange={setOpen}>
+      <Dialog open={open} onOpenChange={(nextOpen) => { if (!isSaving) setOpen(nextOpen) }}>
         <DialogContent className="border-graphite bg-surface sm:max-w-2xl">
           <DialogHeader>
             <DialogTitle className="text-on-surface">{editId ? 'Editar proyección' : 'Agregar proyección'}</DialogTitle>
@@ -161,8 +167,8 @@ export default function Projections() {
             </Card>
           </div>
           <DialogFooter>
-            <Button variant="ghost" onClick={() => { resetForm(); setOpen(false) }} className="text-muted-gray">Cancelar</Button>
-            <Button onClick={() => void handleSave()} className="bg-primary-container text-white hover:brightness-110 shadow-vault">Guardar</Button>
+            <Button variant="ghost" disabled={isSaving} onClick={() => { resetForm(); setOpen(false) }} className="text-muted-gray">Cancelar</Button>
+            <Button loading={isSaving} onClick={() => void handleSave()} className="bg-primary-container text-white hover:brightness-110 shadow-vault">Guardar</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

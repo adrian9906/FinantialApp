@@ -20,6 +20,7 @@ export default function Savings() {
   const [editId, setEditId] = useState<string | null>(null)
   const [form, setForm] = useState({ amount: '', date: '' })
   const [formError, setFormError] = useState<string | null>(null)
+  const [isSaving, setIsSaving] = useState(false)
 
   function resetForm() {
     setForm({ amount: '', date: '' })
@@ -40,7 +41,7 @@ export default function Savings() {
   }
 
   async function handleSave() {
-    if (!form.amount) return
+    if (!form.amount || isSaving) return
     const amount = Number(form.amount)
 
     if (editId) {
@@ -60,13 +61,20 @@ export default function Savings() {
       type: 'saving' as const,
       date: form.date || new Date().toISOString().slice(0, 10),
     }
-    if (editId) {
-      await updateTransaction(editId, data)
-    } else {
-      await addTransaction(data)
+    setIsSaving(true)
+
+    try {
+      if (editId) {
+        await updateTransaction(editId, data)
+      } else {
+        await addTransaction(data)
+      }
+
+      resetForm()
+      setOpen(false)
+    } finally {
+      setIsSaving(false)
     }
-    resetForm()
-    setOpen(false)
   }
 
   const savingsList = transactions.filter((transaction) => transaction.type === 'saving')
@@ -143,7 +151,7 @@ export default function Savings() {
         </div>
       )}
 
-      <Dialog open={open} onOpenChange={setOpen}>
+      <Dialog open={open} onOpenChange={(nextOpen) => { if (!isSaving) setOpen(nextOpen) }}>
         <DialogContent className="border-graphite bg-surface sm:max-w-3xl">
           <DialogHeader>
             <DialogTitle className="text-on-surface">{editId ? 'Editar ahorro' : 'Agregar ahorro'}</DialogTitle>
@@ -166,8 +174,8 @@ export default function Savings() {
             {formError ? <p className="text-sm text-error">{formError}</p> : null}
           </div>
           <DialogFooter>
-            <Button variant="ghost" onClick={() => { resetForm(); setOpen(false) }} className="text-muted-gray">Cancelar</Button>
-            <Button onClick={() => void handleSave()} className="bg-primary-container text-white hover:brightness-110 shadow-vault">Guardar</Button>
+            <Button variant="ghost" disabled={isSaving} onClick={() => { resetForm(); setOpen(false) }} className="text-muted-gray">Cancelar</Button>
+            <Button loading={isSaving} onClick={() => void handleSave()} className="bg-primary-container text-white hover:brightness-110 shadow-vault">Guardar</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
