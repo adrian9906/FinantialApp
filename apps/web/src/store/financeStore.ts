@@ -7,6 +7,10 @@ import { useAuthStore } from '@/store/authStore'
 
 const GUEST_FINANCE_STORAGE_KEY = 'plata-guest-finance'
 
+type DebtInput = Omit<Debt, 'id' | 'paidAmount' | 'remainingAmount' | 'progress' | 'isSettled'> & {
+  initialPayment?: number
+}
+
 interface FinanceStore extends BootstrapPayload {
   hasLoaded: boolean
   loadedKey: string | null
@@ -21,8 +25,9 @@ interface FinanceStore extends BootstrapPayload {
   addWishlistItem: (w: Omit<WishlistItem, 'id'>) => Promise<void>
   updateWishlistItem: (id: string, data: Partial<Omit<WishlistItem, 'id'>>) => Promise<void>
   removeWishlistItem: (id: string) => Promise<void>
-  addDebt: (d: Omit<Debt, 'id'>) => Promise<void>
+  addDebt: (d: DebtInput) => Promise<void>
   updateDebt: (id: string, data: Partial<Omit<Debt, 'id'>>) => Promise<void>
+  payDebt: (id: string, amount: number) => Promise<void>
   removeDebt: (id: string) => Promise<void>
   addEvent: (e: Omit<AppEvent, 'id'>) => Promise<void>
   updateEvent: (id: string, data: Partial<Omit<AppEvent, 'id'>>) => Promise<void>
@@ -40,6 +45,42 @@ function getEmptyState(): BootstrapPayload {
   return createEmptyBootstrapPayload()
 }
 
+function normalizeDebt(entry: Partial<Debt>): Debt {
+  const amount = Number(entry.amount ?? 0)
+  const paidAmount = Math.max(0, Number(entry.paidAmount ?? 0))
+  const remainingAmount = Math.max(0, Number(entry.remainingAmount ?? (amount - paidAmount)))
+  const progress = amount > 0
+    ? Math.min(100, Math.round((Math.min(amount, paidAmount) / amount) * 100))
+    : 0
+
+  return {
+    id: String(entry.id ?? makeId('debt')),
+    amount,
+    history: String(entry.history ?? ''),
+    startDate: String(entry.startDate ?? ''),
+    endDate: String(entry.endDate ?? ''),
+    interest: entry.interest === undefined || entry.interest === null ? undefined : Number(entry.interest),
+    paidAmount: Math.min(amount, paidAmount),
+    remainingAmount,
+    progress: Number.isFinite(Number(entry.progress)) ? Number(entry.progress) : progress,
+    isSettled: entry.isSettled ?? remainingAmount === 0,
+  }
+}
+
+function normalizeBootstrapSnapshot(payload?: Partial<BootstrapPayload> | null): BootstrapPayload {
+  const snapshot = payload ?? {}
+
+  return {
+    salaries: snapshot.salaries ?? [],
+    transactions: snapshot.transactions ?? [],
+    debts: (snapshot.debts ?? []).map(normalizeDebt),
+    wishlist: snapshot.wishlist ?? [],
+    events: snapshot.events ?? [],
+    projections: snapshot.projections ?? [],
+    reminders: snapshot.reminders ?? [],
+  }
+}
+
 function getGuestSnapshot(): BootstrapPayload {
   if (typeof window === 'undefined') return getEmptyState()
 
@@ -48,15 +89,7 @@ function getGuestSnapshot(): BootstrapPayload {
 
   try {
     const parsed = JSON.parse(raw) as Partial<BootstrapPayload>
-    return {
-      salaries: parsed.salaries ?? [],
-      transactions: parsed.transactions ?? [],
-      debts: parsed.debts ?? [],
-      wishlist: parsed.wishlist ?? [],
-      events: parsed.events ?? [],
-      projections: parsed.projections ?? [],
-      reminders: parsed.reminders ?? [],
-    }
+    return normalizeBootstrapSnapshot(parsed)
   } catch {
     return getEmptyState()
   }
@@ -112,7 +145,7 @@ export const useFinanceStore = create<FinanceStore>()((set, get) => ({
 
     if (activeKey === 'guest') {
       set({
-        ...getGuestSnapshot(),
+        ...normalizeBootstrapSnapshot(getGuestSnapshot()),
         hasLoaded: true,
         loadedKey: activeKey,
       })
@@ -128,12 +161,21 @@ export const useFinanceStore = create<FinanceStore>()((set, get) => ({
       return
     }
 
-    const payload = await requestJson<BootstrapPayload>('/bootstrap')
-    set({
-      ...payload,
-      hasLoaded: true,
-      loadedKey: activeKey,
-    })
+    try {
+      const payload = await requestJson<BootstrapPayload>('/bootstrap')
+      set({
+        ...normalizeBootstrapSnapshot(payload),
+        hasLoaded: true,
+        loadedKey: activeKey,
+      })
+    } catch {
+      useAuthStore.getState().logout().catch(() => {})
+      set({
+        ...getEmptyState(),
+        hasLoaded: false,
+        loadedKey: null,
+      })
+    }
   },
   reset: () => {
     set({
@@ -274,8 +316,21 @@ export const useFinanceStore = create<FinanceStore>()((set, get) => ({
   },
   addDebt: async (debt) => {
     if (isGuestMode()) {
+      const paidAmount = Math.min(debt.amount, Math.max(0, debt.initialPayment ?? 0))
+      const remainingAmount = Math.max(0, debt.amount - paidAmount)
       updateGuestState(set, (state) => ({
-        debts: [{ ...debt, id: makeId('debt') }, ...state.debts],
+        debts: [{
+          id: makeId('debt'),
+          amount: debt.amount,
+          history: debt.history,
+          startDate: debt.startDate,
+          endDate: debt.endDate,
+          interest: debt.interest,
+          paidAmount,
+          remainingAmount,
+          progress: debt.amount > 0 ? Math.min(100, Math.round((paidAmount / debt.amount) * 100)) : 100,
+          isSettled: remainingAmount === 0,
+        }, ...state.debts],
       }))
       return
     }
@@ -284,12 +339,26 @@ export const useFinanceStore = create<FinanceStore>()((set, get) => ({
       method: 'POST',
       body: JSON.stringify(debt),
     })
-    set((state) => ({ debts: [created, ...state.debts] }))
+    set((state) => ({ debts: [normalizeDebt(created), ...state.debts] }))
   },
   updateDebt: async (id, data) => {
     if (isGuestMode()) {
       updateGuestState(set, (state) => ({
-        debts: state.debts.map((entry) => (entry.id === id ? { ...entry, ...data } : entry)),
+        debts: state.debts.map((entry) => {
+          if (entry.id !== id) return entry
+          const nextAmount = data.amount ?? entry.amount
+          const nextPaidAmount = Math.min(nextAmount, data.paidAmount ?? entry.paidAmount)
+          const nextRemainingAmount = Math.max(0, nextAmount - nextPaidAmount)
+          return {
+            ...entry,
+            ...data,
+            amount: nextAmount,
+            paidAmount: nextPaidAmount,
+            remainingAmount: nextRemainingAmount,
+            progress: nextAmount > 0 ? Math.min(100, Math.round((nextPaidAmount / nextAmount) * 100)) : 100,
+            isSettled: nextRemainingAmount === 0,
+          }
+        }),
       }))
       return
     }
@@ -299,7 +368,36 @@ export const useFinanceStore = create<FinanceStore>()((set, get) => ({
       body: JSON.stringify(data),
     })
     set((state) => ({
-      debts: state.debts.map((entry) => (entry.id === id ? updated : entry)),
+      debts: state.debts.map((entry) => (entry.id === id ? normalizeDebt(updated) : entry)),
+    }))
+  },
+  payDebt: async (id, amount) => {
+    if (amount <= 0) return
+
+    if (isGuestMode()) {
+      updateGuestState(set, (state) => ({
+        debts: state.debts.map((entry) => {
+          if (entry.id !== id) return entry
+          const nextPaidAmount = Math.min(entry.amount, entry.paidAmount + amount)
+          const nextRemainingAmount = Math.max(0, entry.amount - nextPaidAmount)
+          return {
+            ...entry,
+            paidAmount: nextPaidAmount,
+            remainingAmount: nextRemainingAmount,
+            progress: entry.amount > 0 ? Math.min(100, Math.round((nextPaidAmount / entry.amount) * 100)) : 100,
+            isSettled: nextRemainingAmount === 0,
+          }
+        }),
+      }))
+      return
+    }
+
+    const updated = await requestJson<Debt>(`/debts/${id}/pay`, {
+      method: 'PATCH',
+      body: JSON.stringify({ amount }),
+    })
+    set((state) => ({
+      debts: state.debts.map((entry) => (entry.id === id ? normalizeDebt(updated) : entry)),
     }))
   },
   removeDebt: async (id) => {

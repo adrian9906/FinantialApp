@@ -89,8 +89,21 @@ model Deuda {
   updatedAt        DateTime @updatedAt
   usuarioId        String
   usuario          Usuario  @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+  pagos            DeudaPago[]
 
   @@map("deudas")
+}
+
+model DeudaPago {
+  id        String   @id @default(uuid())
+  cantidad  Float
+  fecha     DateTime @default(now())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  deudaId   String
+  deuda     Deuda    @relation(fields: [deudaId], references: [id], onDelete: Cascade)
+
+  @@map("deudas_pagos")
 }
 
 model Item {

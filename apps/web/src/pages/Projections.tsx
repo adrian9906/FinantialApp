@@ -120,7 +120,7 @@ export default function Projections() {
                       {reached ? 'Alcanzada' : 'En progreso'}
                     </Badge>
                   </div>
-                  <div className="flex justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                  <div className="flex justify-end gap-1 opacity-100 transition-opacity md:opacity-0 md:group-hover:opacity-100">
                     <Button variant="ghost" size="icon" className="text-muted-gray hover:text-primary" onClick={() => handleOpen(projection)}>
                       <Pencil data-icon="inline-start" />
                     </Button>

@@ -121,13 +121,13 @@ export default function Savings() {
           </div>
           <div className="divide-y divide-graphite">
             {savingsList.map((transaction) => (
-              <div key={transaction.id} className="grid grid-cols-[1fr_100px_80px] gap-4 p-4 hover:bg-surface-container-low transition-colors items-center group">
+              <div key={transaction.id} className="group grid grid-cols-1 gap-3 p-4 transition-colors hover:bg-surface-container-low md:grid-cols-[1fr_100px_80px] md:gap-4 md:items-center">
                 <div>
                   <p className="text-sm font-medium text-on-surface">Ahorro registrado</p>
                   <p className="text-xs text-muted-gray">{transaction.date}</p>
                 </div>
-                <span className="text-sm font-medium text-success text-right">+${transaction.amount.toLocaleString()}</span>
-                <div className="text-right opacity-0 group-hover:opacity-100 transition-opacity">
+                <span className="text-sm font-medium text-success md:text-right">+${transaction.amount.toLocaleString()}</span>
+                <div className="opacity-100 transition-opacity md:text-right md:opacity-0 md:group-hover:opacity-100">
                   <div className="flex justify-end gap-1">
                     <Button variant="ghost" size="icon" className="text-muted-gray hover:text-primary" onClick={() => handleOpen(transaction)}>
                       <Pencil data-icon="inline-start" />

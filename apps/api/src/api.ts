@@ -141,7 +141,10 @@ function serializeDebt(entry: {
   fechaInicio: Date
   fechaTerminacion: Date
   interes: number | null
+  pagos?: Array<{ cantidad: number }>
 }): Debt {
+  const paidAmount = entry.pagos?.reduce((sum, payment) => sum + payment.cantidad, 0) ?? 0
+  const remainingAmount = Math.max(0, entry.cantidad - paidAmount)
   return {
     id: entry.id,
     amount: entry.cantidad,
@@ -149,6 +152,10 @@ function serializeDebt(entry: {
     startDate: toDateString(entry.fechaInicio),
     endDate: toDateString(entry.fechaTerminacion),
     interest: entry.interes ?? undefined,
+    paidAmount,
+    remainingAmount,
+    progress: entry.cantidad > 0 ? Math.min(100, Math.round((paidAmount / entry.cantidad) * 100)) : 100,
+    isSettled: remainingAmount === 0,
   }
 }
 
@@ -228,7 +235,11 @@ async function loadBootstrap(userId: string) {
       orderBy: { fecha: 'desc' },
     }),
     prisma.ahorro.findMany({ where: { usuarioId: userId }, orderBy: { fecha: 'desc' } }),
-    prisma.deuda.findMany({ where: { usuarioId: userId }, orderBy: { fechaTerminacion: 'asc' } }),
+    prisma.deuda.findMany({
+      where: { usuarioId: userId },
+      include: { pagos: true },
+      orderBy: { fechaTerminacion: 'asc' },
+    }),
     prisma.deseo.findMany({
       where: { usuarioId: userId },
       include: { items: { orderBy: { createdAt: 'asc' } } },
@@ -261,31 +272,121 @@ async function loadBootstrap(userId: string) {
 
 async function saveDebt(userId: string, body: JsonRecord, id?: string) {
   const prisma = await getPrisma()
-  const payload = {
-    cantidad: Number(body.amount ?? 0),
-    historial: String(body.history ?? '').trim(),
-    fechaInicio: body.startDate ? new Date(String(body.startDate)) : new Date(),
-    fechaTerminacion: body.endDate ? new Date(String(body.endDate)) : new Date(),
-    interes: body.interest === undefined || body.interest === null || body.interest === '' ? null : Number(body.interest),
+  const amount = Number(body.amount ?? 0)
+  const history = String(body.history ?? '').trim()
+  const startDate = body.startDate ? new Date(String(body.startDate)) : new Date()
+  const endDate = body.endDate ? new Date(String(body.endDate)) : new Date()
+  const interest = body.interest === undefined || body.interest === null || body.interest === '' ? null : Number(body.interest)
+  const initialPayment = Math.max(0, Number(body.initialPayment ?? 0))
+
+  if (!id) {
+    if (!history) {
+      throw new Error('El historial de la deuda es obligatorio.')
+    }
+
+    const paidAmount = Math.min(amount, initialPayment)
+    const created = await prisma.deuda.create({
+      data: {
+        cantidad: amount,
+        historial: history,
+        fechaInicio: startDate,
+        fechaTerminacion: endDate,
+        interes: interest,
+        usuarioId: userId,
+        pagos: paidAmount > 0
+          ? {
+              create: {
+                cantidad: paidAmount,
+                fecha: new Date(),
+              },
+            }
+          : undefined,
+      },
+      include: {
+        pagos: true,
+      },
+    })
+
+    return serializeDebt(created)
   }
 
-  if (!payload.historial) {
-    throw new Error('El historial de la deuda es obligatorio.')
+  const existing = await prisma.deuda.findUnique({
+    where: { id },
+    include: {
+      pagos: true,
+    },
+  })
+
+  if (!existing) {
+    throw new Error('Deuda no encontrada.')
   }
 
-  const entry = id
-    ? await prisma.deuda.update({
-        where: { id },
-        data: payload,
-      })
-    : await prisma.deuda.create({
-        data: {
-          ...payload,
-          usuarioId: userId,
+  const updated = await prisma.deuda.update({
+    data: (() => {
+      const nextAmount = body.amount === undefined ? existing.cantidad : amount
+      const paidAmount = existing.pagos.reduce((sum, payment) => sum + payment.cantidad, 0)
+      const nextHistory = body.history === undefined ? existing.historial : history
+
+      if (!nextHistory.trim()) {
+        throw new Error('El historial de la deuda es obligatorio.')
+      }
+
+      if (nextAmount < paidAmount) {
+        throw new Error(`No puedes dejar la deuda en $${nextAmount.toLocaleString()} porque ya tiene $${paidAmount.toLocaleString()} abonados.`)
+      }
+
+      return {
+        cantidad: nextAmount,
+        historial: nextHistory,
+        fechaInicio: body.startDate === undefined ? existing.fechaInicio : startDate,
+        fechaTerminacion: body.endDate === undefined ? existing.fechaTerminacion : endDate,
+        interes: body.interest === undefined ? existing.interes : interest,
+      }
+    })(),
+    where: { id },
+    include: {
+      pagos: true,
+    },
+  })
+
+  return serializeDebt(updated)
+}
+
+async function payDebt(userId: string, id: string, amount: number) {
+  const prisma = await getPrisma()
+  const debt = await prisma.deuda.findFirst({
+    where: { id, usuarioId: userId },
+    include: { pagos: true },
+  })
+
+  if (!debt) {
+    throw new Error('Deuda no encontrada.')
+  }
+
+  const paidAmount = debt.pagos.reduce((sum, payment) => sum + payment.cantidad, 0)
+  const remainingAmount = Math.max(0, debt.cantidad - paidAmount)
+  const nextAmount = Math.min(Math.max(0, amount), remainingAmount)
+
+  if (nextAmount <= 0) {
+    return serializeDebt(debt)
+  }
+
+  const updated = await prisma.deuda.update({
+    where: { id },
+    data: {
+      pagos: {
+        create: {
+          cantidad: nextAmount,
+          fecha: new Date(),
         },
-      })
+      },
+    },
+    include: {
+      pagos: true,
+    },
+  })
 
-  return serializeDebt(entry)
+  return serializeDebt(updated)
 }
 
 async function saveTransaction(
@@ -885,6 +986,13 @@ export async function handleApiRequest(req: IncomingMessage, res: ServerResponse
         sendEmpty(res)
         return true
       }
+    }
+
+    const payDebtMatch = pathname.match(/^\/api\/debts\/([^/]+)\/pay$/)
+    if (payDebtMatch && method === 'PATCH') {
+      const body = await readJsonBody(req)
+      sendJson(res, 200, await payDebt(authenticatedUser.id, payDebtMatch[1], Number(body.amount ?? 0)))
+      return true
     }
 
     if (pathname === '/api/events' && method === 'POST') {

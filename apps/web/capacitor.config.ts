@@ -2,12 +2,19 @@ import type { CapacitorConfig } from '@capacitor/cli';
 
 const config: CapacitorConfig = {
   appId: 'com.plata_app.app',
-  appName: '@plata/web',
+  appName: 'Plata App',
   webDir: 'dist',
   server: {
-    url: 'https://petronovacaribe.com/web/',
-    androidScheme: 'https'
-  }
+    url: 'https://finantial-app-web.vercel.app/',
+    androidScheme: 'https',
+  },
+  plugins: {
+    SplashScreen: {
+      androidSplashResourceName: 'splash',
+      launchAutoHide: true,
+      showSpinner: false,
+    },
+  },
 };
 
 export default config;

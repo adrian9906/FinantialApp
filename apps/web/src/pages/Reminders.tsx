@@ -131,7 +131,7 @@ export default function Reminders() {
                         </span>
                       </div>
                     </div>
-                    <div className="flex gap-1 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <div className="flex gap-1 shrink-0 opacity-100 transition-opacity md:opacity-0 md:group-hover:opacity-100">
                       <Button variant="ghost" size="icon" className="text-muted-gray hover:text-primary" onClick={() => handleOpen(r)}>
                         <Pencil data-icon="inline-start" />
                       </Button>
@@ -165,7 +165,7 @@ export default function Reminders() {
                         {new Date(r.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
                       </span>
                     </div>
-                    <div className="flex gap-1 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <div className="flex gap-1 shrink-0 opacity-100 transition-opacity md:opacity-0 md:group-hover:opacity-100">
                       <Button variant="ghost" size="icon" className="text-muted-gray hover:text-primary" onClick={() => handleOpen(r)}>
                         <Pencil data-icon="inline-start" />
                       </Button>

@@ -21,7 +21,7 @@ export default function Dashboard() {
   const upcomingEvents = events
     .filter((event) => new Date(event.date).getTime() >= new Date().setHours(0, 0, 0, 0))
     .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
-  const totalDebt = debts.reduce((sum, debt) => sum + debt.amount, 0)
+  const totalDebt = debts.reduce((sum, debt) => sum + debt.remainingAmount, 0)
   const salaryHealth = overview.totalSalary - overview.totalExpenses - overview.totalWants - overview.totalSavings
 
   const savingsPercentage = overview.budgetSavings > 0

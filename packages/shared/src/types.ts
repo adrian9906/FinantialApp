@@ -19,6 +19,10 @@ export interface Debt {
   startDate: string
   endDate: string
   interest?: number
+  paidAmount: number
+  remainingAmount: number
+  progress: number
+  isSettled: boolean
 }
 
 export interface WishlistItem {

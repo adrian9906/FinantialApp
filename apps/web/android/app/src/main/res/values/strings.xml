@@ -1,7 +1,7 @@
 <?xml version='1.0' encoding='utf-8'?>
 <resources>
-    <string name="app_name">@plata/web</string>
-    <string name="title_activity_main">@plata/web</string>
+    <string name="app_name">Plata App</string>
+    <string name="title_activity_main">Plata App</string>
     <string name="package_name">com.plata_app.app</string>
     <string name="custom_url_scheme">com.plata_app.app</string>
 </resources>

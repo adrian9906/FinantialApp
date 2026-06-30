@@ -182,7 +182,7 @@ export default function Salary() {
                       <p className="text-xs text-muted-gray">{entry.month}</p>
                     </div>
                   </div>
-                  <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                  <div className="flex gap-1 opacity-100 transition-opacity md:opacity-0 md:group-hover:opacity-100">
                     <Button variant="ghost" size="icon" className="text-muted-gray hover:text-primary" onClick={() => handleOpen(entry)}>
                       <Pencil data-icon="inline-start" />
                     </Button>
