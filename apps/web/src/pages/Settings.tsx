@@ -1,21 +1,38 @@
 import { useMemo, useState, type Dispatch, type ReactNode, type SetStateAction } from 'react'
 import {
+  Archive,
   Check,
+  History,
   MoonStar,
   Palette,
   RefreshCcw,
+  RotateCcw,
   SlidersHorizontal,
   Sparkles,
   SunMedium,
 } from 'lucide-react'
 import { toast } from 'sonner'
 
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from '@/components/ui/alert-dialog'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { parseExpenseDescription } from '@/lib/expense-utils'
+import { parseWantDescription } from '@/lib/want-utils'
+import { useFinanceStore } from '@/store/financeStore'
 import {
   defaultFormula,
   type AllocationFormula,
@@ -542,6 +559,222 @@ function BackgroundCard({
   )
 }
 
+function MonthlyResetCard() {
+  const transactions = useFinanceStore((state) => state.transactions)
+  const monthlyPlanningHistory = useFinanceStore((state) => state.monthlyPlanningHistory)
+  const resetMonthlyPlans = useFinanceStore((state) => state.resetMonthlyPlans)
+  const restoreMonthlyPlan = useFinanceStore((state) => state.restoreMonthlyPlan)
+  const [isResetting, setIsResetting] = useState(false)
+  const [restoringKey, setRestoringKey] = useState<string | null>(null)
+
+  const plannedExpenses = useMemo(
+    () => transactions.filter((transaction) => transaction.type === 'expense'),
+    [transactions],
+  )
+  const plannedWants = useMemo(
+    () => transactions.filter((transaction) => transaction.type === 'want'),
+    [transactions],
+  )
+
+  const monthlySummary = useMemo(() => {
+    const expenseChecked = plannedExpenses.filter((transaction) => parseExpenseDescription(transaction.description).status === 'checked').length
+    const wantChecked = plannedWants.filter((transaction) => parseWantDescription(transaction.description).status === 'checked').length
+
+    return {
+      plannedExpenses: plannedExpenses.length,
+      plannedWants: plannedWants.length,
+      expenseChecked,
+      wantChecked,
+    }
+  }, [plannedExpenses, plannedWants])
+
+  async function handleResetMonth() {
+    if (isResetting) return
+    if (plannedExpenses.length === 0 && plannedWants.length === 0) {
+      toast.error('No hay listas activas para archivar este mes.')
+      return
+    }
+
+    setIsResetting(true)
+    try {
+      await resetMonthlyPlans()
+      toast.success('Se guardo el historial del mes y las listas activas quedaron en cero.')
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'No se pudo cerrar el mes.')
+    } finally {
+      setIsResetting(false)
+    }
+  }
+
+  async function handleRestore(historyId: string, scope: 'expenses' | 'wants' | 'all') {
+    const key = `${historyId}:${scope}`
+    setRestoringKey(key)
+    try {
+      await restoreMonthlyPlan(historyId, scope)
+      toast.success(
+        scope === 'all'
+          ? 'Se restauraron gastos y gustos desde el historial.'
+          : scope === 'expenses'
+            ? 'Se restauro la lista de gastos.'
+            : 'Se restauro la lista de gustos.',
+      )
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'No se pudo restaurar el historial.')
+    } finally {
+      setRestoringKey(null)
+    }
+  }
+
+  return (
+    <section className="grid gap-4 xl:grid-cols-[minmax(0,0.95fr)_minmax(0,1.05fr)]">
+      <Card className="border-graphite bg-surface p-6 shadow-vault">
+        <SectionIntro
+          eyebrow="Cierre mensual"
+          title="Reset de listas"
+          description="Guarda una foto de tus gastos y gustos del mes, vacia las listas activas y te deja listo para planificar el proximo mes desde cero."
+          icon={
+            <div className="flex size-11 items-center justify-center rounded-2xl bg-warning/10 text-warning shadow-vault-sm">
+              <Archive className="size-5" />
+            </div>
+          }
+        />
+
+        <div className="mt-6 grid gap-3 sm:grid-cols-2">
+          <div className="rounded-2xl border border-graphite bg-surface-container-low p-4">
+            <p className="text-xs uppercase tracking-[0.22em] text-medium-gray">Gastos activos</p>
+            <p className="mt-2 text-2xl font-semibold text-on-surface">{monthlySummary.plannedExpenses}</p>
+            <p className="mt-1 text-xs text-muted-gray">{monthlySummary.expenseChecked} ya marcados como comprados</p>
+          </div>
+          <div className="rounded-2xl border border-graphite bg-surface-container-low p-4">
+            <p className="text-xs uppercase tracking-[0.22em] text-medium-gray">Gustos activos</p>
+            <p className="mt-2 text-2xl font-semibold text-on-surface">{monthlySummary.plannedWants}</p>
+            <p className="mt-1 text-xs text-muted-gray">{monthlySummary.wantChecked} ya marcados como disfrutados</p>
+          </div>
+        </div>
+
+        <div className="mt-5 rounded-2xl border border-graphite bg-surface-container-low p-4">
+          <p className="text-sm font-medium text-on-surface">Que hace este reset</p>
+          <p className="mt-2 text-sm text-muted-gray">
+            Guarda el historial de compras del mes actual y elimina solo las listas activas de gastos y gustos. Tus ahorros, deudas, salario, deseos y eventos no se borran.
+          </p>
+
+          <div className="mt-4">
+            <AlertDialog>
+              <AlertDialogTrigger
+                render={
+                  <Button
+                    className="bg-warning text-black hover:bg-warning/85"
+                    disabled={isResetting || (plannedExpenses.length === 0 && plannedWants.length === 0)}
+                    loading={isResetting}
+                  />
+                }
+              >
+                <RefreshCcw className="size-4" />
+                Cerrar mes y limpiar listas
+              </AlertDialogTrigger>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>Resetear gastos y gustos del mes</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    Se guardara el historial actual para reutilizarlo despues y las listas activas quedaran vacias. Esta accion no toca tus ahorros, deudas ni salario.
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel disabled={isResetting}>Cancelar</AlertDialogCancel>
+                  <AlertDialogAction
+                    className="bg-warning text-black hover:bg-warning/85"
+                    loading={isResetting}
+                    onClick={() => void handleResetMonth()}
+                  >
+                    Confirmar reset mensual
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
+          </div>
+        </div>
+      </Card>
+
+      <Card className="border-graphite bg-surface p-6 shadow-vault">
+        <SectionIntro
+          eyebrow="Historial"
+          title="Listas reutilizables"
+          description="Cada cierre mensual guarda una version de tu lista para que puedas recuperarla luego completa o por categoria."
+          icon={
+            <div className="flex size-11 items-center justify-center rounded-2xl bg-primary/10 text-primary shadow-vault-sm">
+              <History className="size-5" />
+            </div>
+          }
+        />
+
+        <div className="mt-6 space-y-3">
+          {monthlyPlanningHistory.length === 0 ? (
+            <div className="rounded-2xl border border-dashed border-graphite bg-surface-container-low p-6 text-sm text-muted-gray">
+              Aun no has guardado ningun historial mensual. Cuando hagas el reset del mes, aparecera aqui para reutilizarlo.
+            </div>
+          ) : (
+            monthlyPlanningHistory.map((history) => (
+              <div key={history.id} className="rounded-2xl border border-graphite bg-surface-container-low p-4">
+                <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+                  <div>
+                    <p className="text-sm font-semibold text-on-surface">{history.label}</p>
+                    <p className="mt-1 text-xs text-muted-gray">
+                      Guardado el {new Date(history.createdAt).toLocaleDateString('es-ES')} con {history.expenses.length} gasto(s) y {history.wants.length} gusto(s).
+                    </p>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    <Badge variant="secondary" className="bg-primary/10 text-primary">
+                      {history.expenses.length} gastos
+                    </Badge>
+                    <Badge variant="secondary" className="bg-secondary/10 text-secondary">
+                      {history.wants.length} gustos
+                    </Badge>
+                  </div>
+                </div>
+
+                <div className="mt-4 flex flex-wrap gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    disabled={restoringKey !== null || history.expenses.length === 0}
+                    loading={restoringKey === `${history.id}:expenses`}
+                    onClick={() => void handleRestore(history.id, 'expenses')}
+                    className="border-graphite bg-abyss text-on-surface hover:bg-surface-container"
+                  >
+                    <RotateCcw className="size-4" />
+                    Restaurar gastos
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    disabled={restoringKey !== null || history.wants.length === 0}
+                    loading={restoringKey === `${history.id}:wants`}
+                    onClick={() => void handleRestore(history.id, 'wants')}
+                    className="border-graphite bg-abyss text-on-surface hover:bg-surface-container"
+                  >
+                    <RotateCcw className="size-4" />
+                    Restaurar gustos
+                  </Button>
+                  <Button
+                    size="sm"
+                    disabled={restoringKey !== null || (history.expenses.length === 0 && history.wants.length === 0)}
+                    loading={restoringKey === `${history.id}:all`}
+                    onClick={() => void handleRestore(history.id, 'all')}
+                    className="bg-primary-container text-primary-foreground hover:brightness-110"
+                  >
+                    <RotateCcw className="size-4" />
+                    Restaurar todo
+                  </Button>
+                </div>
+              </div>
+            ))
+          )}
+        </div>
+      </Card>
+    </section>
+  )
+}
+
 export default function Settings() {
   const appearance = usePreferencesStore((state) => state.appearance)
   const theme = usePreferencesStore((state) => state.theme)
@@ -627,6 +860,8 @@ export default function Settings() {
         <ThemeCard theme={theme} setTheme={setTheme} />
         <BackgroundCard background={background} setBackground={setBackground} />
       </section>
+
+      <MonthlyResetCard />
     </div>
   )
 }

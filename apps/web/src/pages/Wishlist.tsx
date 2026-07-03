@@ -5,6 +5,7 @@ import { ImageUploadField } from '@/components/wishlist/ImageUploadField'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
+import { Checkbox } from '@/components/ui/checkbox'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -37,6 +38,14 @@ function parseMoneyInput(value: string) {
 
 function formatCurrency(value: number) {
   return `$${currencyFormatter.format(value)}`
+}
+
+function getReservedAmount(item: { price: number; savedAmount: number }) {
+  return Math.max(0, Math.min(item.price, item.savedAmount ?? 0))
+}
+
+function isPurchased(item: { price: number; savedAmount: number }) {
+  return item.price > 0 && getReservedAmount(item) >= item.price
 }
 
 function getPriorityLabel(priority: FormState['priority']) {
@@ -175,6 +184,7 @@ export default function Wishlist() {
   }, [salaries, transactions])
 
   const currentSavedAmount = Math.max(0, overview.totalSavings)
+  const purchasedCount = wishlist.filter(isPurchased).length
 
   const editItem = useMemo(
     () => wishlist.find((item) => item.id === editId) ?? null,
@@ -234,6 +244,28 @@ export default function Wishlist() {
       setIsSaving(false)
     }
   }
+
+  async function handleTogglePurchased(item: typeof wishlist[number]) {
+    if (isSaving || item.price <= 0) return
+
+    const purchased = isPurchased(item)
+    const reservedAmount = getReservedAmount(item)
+    const availableToSpend = currentSavedAmount + reservedAmount
+
+    if (!purchased && availableToSpend < item.price) {
+      return
+    }
+
+    setIsSaving(true)
+    try {
+      await updateWishlistItem(item.id, {
+        savedAmount: purchased ? 0 : item.price,
+      })
+    } finally {
+      setIsSaving(false)
+    }
+  }
+
   return (
     <div className="space-y-6 animate-in fade-in duration-500">
       <header className="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
@@ -279,7 +311,11 @@ export default function Wishlist() {
         <Card className="border-0 bg-surface p-5 shadow-vault">
           <p className="text-xs uppercase tracking-[0.22em] text-medium-gray">Ahorro disponible</p>
           <p className="mt-3 text-3xl font-semibold text-on-surface">{formatCurrency(currentSavedAmount)}</p>
-          <p className="mt-2 text-sm text-muted-gray">Este total se compara automaticamente contra cada producto.</p>
+          <p className="mt-2 text-sm text-muted-gray">
+            {overview.reservedForPurchasedWishlist > 0
+              ? `${formatCurrency(overview.reservedForPurchasedWishlist)} ya se descontaron por deseos marcados como comprados.`
+              : 'Este total se compara automaticamente contra cada producto.'}
+          </p>
         </Card>
 
         <Card className="border-0 bg-surface p-5 shadow-vault">
@@ -291,7 +327,7 @@ export default function Wishlist() {
         <Card className="border-0 bg-surface p-5 shadow-vault">
           <p className="text-xs uppercase tracking-[0.22em] text-medium-gray">Deseos alcanzables hoy</p>
           <p className="mt-3 text-3xl font-semibold text-on-surface">{reachedItems}</p>
-          <p className="mt-2 text-sm text-muted-gray">Productos que ya puedes pagar con tu ahorro actual.</p>
+          <p className="mt-2 text-sm text-muted-gray">{purchasedCount} deseo(s) ya marcados como comprados.</p>
         </Card>
       </section>
 
@@ -308,7 +344,19 @@ export default function Wishlist() {
       ) : viewMode === 'cards' ? (
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2 2xl:grid-cols-3">
           {wishlist.map((item) => {
-            const projection = buildProjection(item.price, currentSavedAmount, averageMonthlySavings)
+            const purchased = isPurchased(item)
+            const reservedAmount = getReservedAmount(item)
+            const effectiveSavedAmount = purchased ? currentSavedAmount + reservedAmount : currentSavedAmount
+            const canBePurchased = purchased || effectiveSavedAmount >= item.price
+            const projection = purchased
+              ? {
+                  remaining: 0,
+                  progress: 100,
+                  timelineLabel: 'Ya lo compraste.',
+                  purchaseDateLabel: `Descontado del ahorro: ${formatCurrency(reservedAmount)}`,
+                  isReady: true,
+                }
+              : buildProjection(item.price, effectiveSavedAmount, averageMonthlySavings)
 
             return (
               <article key={item.id} className="overflow-hidden rounded-2xl bg-surface shadow-vault">
@@ -324,12 +372,36 @@ export default function Wishlist() {
                     <Badge variant="outline" className={getPriorityBadgeClass(item.priority)}>
                       Prioridad {getPriorityLabel(item.priority)}
                     </Badge>
+                    {purchased ? (
+                      <Badge variant="secondary" className="ml-2 bg-emerald-500/15 text-emerald-200">
+                        Comprado
+                      </Badge>
+                    ) : null}
                     <h2 className="mt-2 text-2xl font-semibold text-white">{item.name}</h2>
                     <p className="mt-1 text-sm text-lavender">{formatCurrency(item.price)}</p>
                   </div>
                 </div>
 
                 <div className="space-y-4 p-5">
+                  <div className="flex items-start justify-between gap-3 rounded-xl border border-graphite bg-abyss p-4">
+                    <div className="space-y-1">
+                      <p className="text-sm font-medium text-on-surface">Marcar como comprado</p>
+                      <p className="text-xs text-muted-gray">
+                        {purchased
+                          ? `Ya se descontaron ${formatCurrency(reservedAmount)} de tus ahorros.`
+                          : canBePurchased
+                            ? `Ya puedes comprarlo y descontar ${formatCurrency(item.price)} de tus ahorros.`
+                            : `Aun no alcanza el ahorro disponible para descontar ${formatCurrency(item.price)}.`}
+                      </p>
+                    </div>
+                    <Checkbox
+                      checked={purchased}
+                      disabled={isSaving || !canBePurchased}
+                      onCheckedChange={() => void handleTogglePurchased(item)}
+                      aria-label={`Marcar ${item.name} como comprado`}
+                    />
+                  </div>
+
                   <div className="rounded-xl border border-graphite bg-abyss p-4">
                     <div className="mb-2 flex items-center justify-between text-sm">
                       <span className="text-muted-gray">Progreso</span>
@@ -339,7 +411,7 @@ export default function Wishlist() {
                       <div className="h-full rounded-full bg-primary transition-all duration-700" style={{ width: `${projection.progress}%` }} />
                     </div>
                     <div className="mt-3 flex items-center justify-between text-xs text-muted-gray">
-                      <span>Tienes: {formatCurrency(currentSavedAmount)}</span>
+                      <span>Tienes: {formatCurrency(effectiveSavedAmount)}</span>
                       <span>Faltan: {formatCurrency(projection.remaining)}</span>
                     </div>
                   </div>
@@ -357,7 +429,7 @@ export default function Wishlist() {
 
                   <div className="flex items-center justify-between gap-3">
                     <p className="text-xs text-muted-gray">
-                      Basado en {formatCurrency(currentSavedAmount)} ahorrados y un promedio de {formatCurrency(averageMonthlySavings)} al mes.
+                      Basado en {formatCurrency(effectiveSavedAmount)} disponibles y un promedio de {formatCurrency(averageMonthlySavings)} al mes.
                     </p>
                     <div className="flex gap-1">
                       <Button variant="ghost" size="icon" className="text-muted-gray hover:text-primary" onClick={() => handleOpen(item)}>
@@ -376,7 +448,19 @@ export default function Wishlist() {
       ) : (
         <div className="space-y-4">
           {wishlist.map((item) => {
-            const projection = buildProjection(item.price, currentSavedAmount, averageMonthlySavings)
+            const purchased = isPurchased(item)
+            const reservedAmount = getReservedAmount(item)
+            const effectiveSavedAmount = purchased ? currentSavedAmount + reservedAmount : currentSavedAmount
+            const canBePurchased = purchased || effectiveSavedAmount >= item.price
+            const projection = purchased
+              ? {
+                  remaining: 0,
+                  progress: 100,
+                  timelineLabel: 'Ya lo compraste.',
+                  purchaseDateLabel: `Descontado del ahorro: ${formatCurrency(reservedAmount)}`,
+                  isReady: true,
+                }
+              : buildProjection(item.price, effectiveSavedAmount, averageMonthlySavings)
 
             return (
               <article key={item.id} className="rounded-2xl bg-surface p-4 shadow-vault">
@@ -393,9 +477,16 @@ export default function Wishlist() {
                     </div>
 
                     <div className="space-y-2">
-                      <Badge variant="outline" className={getPriorityBadgeClass(item.priority)}>
-                        Prioridad {getPriorityLabel(item.priority)}
-                      </Badge>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <Badge variant="outline" className={getPriorityBadgeClass(item.priority)}>
+                          Prioridad {getPriorityLabel(item.priority)}
+                        </Badge>
+                        {purchased ? (
+                          <Badge variant="secondary" className="bg-emerald-500/15 text-emerald-200">
+                            Comprado
+                          </Badge>
+                        ) : null}
+                      </div>
                       <h2 className="text-xl font-semibold text-on-surface">{item.name}</h2>
                       <p className="text-sm text-primary">{formatCurrency(item.price)}</p>
                       <p className="text-sm text-muted-gray">{projection.purchaseDateLabel}</p>
@@ -412,15 +503,36 @@ export default function Wishlist() {
                         <div className="h-full rounded-full bg-primary transition-all duration-700" style={{ width: `${projection.progress}%` }} />
                       </div>
                       <div className="mt-3 space-y-1 text-sm text-muted-gray">
-                        <p>Tienes ahorrados: {formatCurrency(currentSavedAmount)}</p>
+                        <p>Tienes ahorrados: {formatCurrency(effectiveSavedAmount)}</p>
                         <p>Restante: {formatCurrency(projection.remaining)}</p>
                         <p>{projection.timelineLabel}</p>
                       </div>
                     </div>
 
                     <div className="space-y-3">
+                      <div className="flex items-start justify-between gap-3 rounded-xl border border-graphite bg-abyss p-4">
+                        <div className="space-y-1">
+                          <p className="text-sm font-medium text-on-surface">Marcar como comprado</p>
+                          <p className="text-xs text-muted-gray">
+                            {purchased
+                              ? `Ya se descontaron ${formatCurrency(reservedAmount)} de tus ahorros.`
+                              : canBePurchased
+                                ? `Marca el check para descontar ${formatCurrency(item.price)} de tus ahorros.`
+                                : 'Todavia no tienes ahorro suficiente para marcarlo.'}
+                          </p>
+                        </div>
+                        <Checkbox
+                          checked={purchased}
+                          disabled={isSaving || !canBePurchased}
+                          onCheckedChange={() => void handleTogglePurchased(item)}
+                          aria-label={`Marcar ${item.name} como comprado`}
+                        />
+                      </div>
+
                       <p className="rounded-xl border border-graphite bg-abyss p-4 text-sm text-muted-gray">
-                        Si mantienes este ritmo de ahorro, podras comprarlo el {projection.purchaseDateLabel.replace('Compra posible: ', '')}.
+                        {purchased
+                          ? `Este deseo ya fue comprado y se descontaron ${formatCurrency(reservedAmount)} de tus ahorros.`
+                          : `Si mantienes este ritmo de ahorro, podras comprarlo el ${projection.purchaseDateLabel.replace('Compra posible: ', '')}.`}
                       </p>
 
                       <div className="flex justify-end gap-1">

@@ -1,8 +1,21 @@
 import { create } from 'zustand'
-import type { AppEvent, BootstrapPayload, Debt, Projection, Reminder, Salary, Transaction, WishlistItem } from '@plata/shared'
+import type {
+  AppEvent,
+  BootstrapPayload,
+  Debt,
+  MonthlyPlanningHistory,
+  MonthlyPlanningItem,
+  Projection,
+  Reminder,
+  Salary,
+  Transaction,
+  WishlistItem,
+} from '@plata/shared'
 import { createEmptyBootstrapPayload } from '@plata/shared'
 
+import { parseExpenseDescription } from '@/lib/expense-utils'
 import { requestJson } from '@/lib/api'
+import { parseWantDescription } from '@/lib/want-utils'
 import { useAuthStore } from '@/store/authStore'
 
 const GUEST_FINANCE_STORAGE_KEY = 'plata-guest-finance'
@@ -25,6 +38,8 @@ interface FinanceStore extends BootstrapPayload {
   addWishlistItem: (w: Omit<WishlistItem, 'id'>) => Promise<void>
   updateWishlistItem: (id: string, data: Partial<Omit<WishlistItem, 'id'>>) => Promise<void>
   removeWishlistItem: (id: string) => Promise<void>
+  resetMonthlyPlans: () => Promise<void>
+  restoreMonthlyPlan: (id: string, scope?: 'expenses' | 'wants' | 'all') => Promise<void>
   addDebt: (d: DebtInput) => Promise<void>
   updateDebt: (id: string, data: Partial<Omit<Debt, 'id'>>) => Promise<void>
   payDebt: (id: string, amount: number) => Promise<void>
@@ -75,10 +90,90 @@ function normalizeBootstrapSnapshot(payload?: Partial<BootstrapPayload> | null):
     transactions: snapshot.transactions ?? [],
     debts: (snapshot.debts ?? []).map(normalizeDebt),
     wishlist: snapshot.wishlist ?? [],
+    monthlyPlanningHistory: snapshot.monthlyPlanningHistory ?? [],
     events: snapshot.events ?? [],
     projections: snapshot.projections ?? [],
     reminders: snapshot.reminders ?? [],
   }
+}
+
+function getMonthKey(value = new Date()) {
+  return value.toISOString().slice(0, 7)
+}
+
+function buildMonthlyPlanningHistory(transactions: Transaction[]): MonthlyPlanningHistory | null {
+  const expenses = transactions
+    .filter((transaction) => transaction.type === 'expense')
+    .map<MonthlyPlanningItem>((transaction) => {
+      const parsed = parseExpenseDescription(transaction.description)
+
+      return {
+        amount: transaction.amount,
+        itemName: parsed.itemName,
+        category: parsed.category,
+        status: parsed.status,
+        date: transaction.date,
+      }
+    })
+
+  const wants = transactions
+    .filter((transaction) => transaction.type === 'want')
+    .map<MonthlyPlanningItem>((transaction) => {
+      const parsed = parseWantDescription(transaction.description)
+
+      return {
+        amount: transaction.amount,
+        itemName: parsed.itemName,
+        category: parsed.category,
+        status: parsed.status,
+        date: transaction.date,
+      }
+    })
+
+  if (expenses.length === 0 && wants.length === 0) return null
+
+  const now = new Date()
+
+  return {
+    id: makeId('monthly-plan'),
+    month: getMonthKey(now),
+    label: now.toLocaleDateString('es-ES', { month: 'long', year: 'numeric' }),
+    createdAt: now.toISOString(),
+    expenses,
+    wants,
+  }
+}
+
+function buildTransactionsFromHistory(
+  history: MonthlyPlanningHistory,
+  scope: 'expenses' | 'wants' | 'all',
+): Array<Omit<Transaction, 'id'>> {
+  const today = new Date().toISOString().slice(0, 10)
+  const nextTransactions: Array<Omit<Transaction, 'id'>> = []
+
+  if (scope === 'expenses' || scope === 'all') {
+    nextTransactions.push(
+      ...history.expenses.map((entry) => ({
+        amount: entry.amount,
+        type: 'expense' as const,
+        description: `${entry.category}::${entry.status}::${entry.itemName.trim()}`,
+        date: today,
+      })),
+    )
+  }
+
+  if (scope === 'wants' || scope === 'all') {
+    nextTransactions.push(
+      ...history.wants.map((entry) => ({
+        amount: entry.amount,
+        type: 'want' as const,
+        description: `${entry.category}::${entry.status}::${entry.itemName.trim()}`,
+        date: today,
+      })),
+    )
+  }
+
+  return nextTransactions
 }
 
 function getGuestSnapshot(): BootstrapPayload {
@@ -127,6 +222,7 @@ function updateGuestState(
       transactions: next.transactions ?? state.transactions,
       debts: next.debts ?? state.debts,
       wishlist: next.wishlist ?? state.wishlist,
+      monthlyPlanningHistory: next.monthlyPlanningHistory ?? state.monthlyPlanningHistory,
       events: next.events ?? state.events,
       projections: next.projections ?? state.projections,
       reminders: next.reminders ?? state.reminders,
@@ -313,6 +409,65 @@ export const useFinanceStore = create<FinanceStore>()((set, get) => ({
 
     await requestJson<void>(`/wishlist/${id}`, { method: 'DELETE' })
     set((state) => ({ wishlist: state.wishlist.filter((item) => item.id !== id) }))
+  },
+  resetMonthlyPlans: async () => {
+    const snapshot = buildMonthlyPlanningHistory(get().transactions)
+    if (!snapshot) return
+
+    const nextTransactions = get().transactions.filter(
+      (transaction) => transaction.type !== 'expense' && transaction.type !== 'want',
+    )
+
+    if (isGuestMode()) {
+      updateGuestState(set, (state) => ({
+        transactions: nextTransactions,
+        monthlyPlanningHistory: [snapshot, ...state.monthlyPlanningHistory],
+      }))
+      return
+    }
+
+    const created = await requestJson<MonthlyPlanningHistory>('/monthly-plans/reset', {
+      method: 'POST',
+      body: JSON.stringify({
+        month: snapshot.month,
+        label: snapshot.label,
+        expenseIds: get().transactions.filter((transaction) => transaction.type === 'expense').map((transaction) => transaction.id),
+        wantIds: get().transactions.filter((transaction) => transaction.type === 'want').map((transaction) => transaction.id),
+        expenses: snapshot.expenses,
+        wants: snapshot.wants,
+      }),
+    })
+
+    set((state) => ({
+      transactions: nextTransactions,
+      monthlyPlanningHistory: [created, ...state.monthlyPlanningHistory],
+    }))
+  },
+  restoreMonthlyPlan: async (id, scope = 'all') => {
+    const history = get().monthlyPlanningHistory.find((entry) => entry.id === id)
+    if (!history) return
+
+    const restoredTransactions = buildTransactionsFromHistory(history, scope)
+    if (restoredTransactions.length === 0) return
+
+    if (isGuestMode()) {
+      updateGuestState(set, (state) => ({
+        transactions: [
+          ...restoredTransactions.map((transaction) => ({ ...transaction, id: makeId(transaction.type) })),
+          ...state.transactions,
+        ],
+      }))
+      return
+    }
+
+    const created = await requestJson<Transaction[]>(`/monthly-plans/${id}/restore`, {
+      method: 'POST',
+      body: JSON.stringify({ scope }),
+    })
+
+    set((state) => ({
+      transactions: [...created, ...state.transactions],
+    }))
   },
   addDebt: async (debt) => {
     if (isGuestMode()) {

@@ -1,4 +1,14 @@
-import type { AppEvent, AuthUser, Debt, Projection, Reminder, Salary, Transaction, WishlistItem } from './types'
+import type {
+  AppEvent,
+  AuthUser,
+  Debt,
+  MonthlyPlanningHistory,
+  Projection,
+  Reminder,
+  Salary,
+  Transaction,
+  WishlistItem,
+} from './types'
 
 export type AuthMode = 'anonymous' | 'guest' | 'authenticated'
 
@@ -22,6 +32,7 @@ export interface BootstrapPayload {
   transactions: Transaction[]
   debts: Debt[]
   wishlist: WishlistItem[]
+  monthlyPlanningHistory: MonthlyPlanningHistory[]
   events: AppEvent[]
   projections: Projection[]
   reminders: Reminder[]
@@ -33,6 +44,7 @@ export function createEmptyBootstrapPayload(): BootstrapPayload {
     transactions: [],
     debts: [],
     wishlist: [],
+    monthlyPlanningHistory: [],
     events: [],
     projections: [],
     reminders: [],
@@ -45,6 +57,7 @@ export function normalizeBootstrapPayload(payload?: Partial<BootstrapPayload> | 
     transactions: payload?.transactions ?? [],
     debts: payload?.debts ?? [],
     wishlist: payload?.wishlist ?? [],
+    monthlyPlanningHistory: payload?.monthlyPlanningHistory ?? [],
     events: payload?.events ?? [],
     projections: payload?.projections ?? [],
     reminders: payload?.reminders ?? [],

@@ -1,5 +1,16 @@
 import type { IncomingMessage, ServerResponse } from 'node:http'
-import type { AppEvent, Debt, Projection, Reminder, Salary, Transaction, WishlistItem } from '@plata/shared'
+import type {
+  AppEvent,
+  Debt,
+  MonthlyPlanningHistory,
+  MonthlyPlanningItem,
+  Projection,
+  Reminder,
+  Salary,
+  Transaction,
+  WishlistItem,
+} from '@plata/shared'
+import type { Prisma } from '@prisma/client'
 
 import { clearSession, createSession, getSessionUser, hashPassword, verifyPassword } from './auth.js'
 import { getPrisma } from './prisma.js'
@@ -159,6 +170,40 @@ function serializeDebt(entry: {
   }
 }
 
+function parseMonthlyPlanningItems(value: unknown): MonthlyPlanningItem[] {
+  if (!Array.isArray(value)) return []
+
+  return value.map((entry) => {
+    const item = entry as Record<string, unknown>
+
+    return {
+      amount: Number(item.amount ?? 0),
+      itemName: String(item.itemName ?? ''),
+      category: String(item.category ?? ''),
+      status: item.status === 'pending' ? 'pending' : 'checked',
+      date: String(item.date ?? toDateString(new Date())),
+    }
+  })
+}
+
+function serializeMonthlyPlanningHistory(entry: {
+  id: string
+  mesReferencia: string
+  etiqueta: string
+  createdAt: Date
+  gastos: unknown
+  gustos: unknown
+}): MonthlyPlanningHistory {
+  return {
+    id: entry.id,
+    month: entry.mesReferencia,
+    label: entry.etiqueta,
+    createdAt: entry.createdAt.toISOString(),
+    expenses: parseMonthlyPlanningItems(entry.gastos),
+    wants: parseMonthlyPlanningItems(entry.gustos),
+  }
+}
+
 function serializeEvent(entry: {
   id: string
   nombre: string
@@ -222,7 +267,7 @@ async function requireUser(req: IncomingMessage, res: ServerResponse): Promise<A
 async function loadBootstrap(userId: string) {
   const prisma = await getPrisma()
 
-  const [salaries, expenses, wants, savings, debts, wishlist, events, projections, reminders] = await Promise.all([
+  const [salaries, expenses, wants, savings, debts, wishlist, monthlyPlanningHistory, events, projections, reminders] = await Promise.all([
     prisma.salario.findMany({ where: { usuarioId: userId }, orderBy: { fecha: 'desc' } }),
     prisma.gasto.findMany({
       where: { usuarioId: userId },
@@ -245,6 +290,10 @@ async function loadBootstrap(userId: string) {
       include: { items: { orderBy: { createdAt: 'asc' } } },
       orderBy: { createdAt: 'desc' },
     }),
+    prisma.historialMensual.findMany({
+      where: { usuarioId: userId },
+      orderBy: { createdAt: 'desc' },
+    }),
     prisma.evento.findMany({ where: { usuarioId: userId }, orderBy: { fecha: 'asc' } }),
     prisma.proyeccion.findMany({ where: { usuarioId: userId }, orderBy: { createdAt: 'desc' } }),
     prisma.notificacion.findMany({ where: { usuarioId: userId }, orderBy: { fecha: 'asc' } }),
@@ -264,10 +313,131 @@ async function loadBootstrap(userId: string) {
     transactions,
     debts: debts.map(serializeDebt),
     wishlist: wishlist.map(serializeWishlist),
+    monthlyPlanningHistory: monthlyPlanningHistory.map(serializeMonthlyPlanningHistory),
     events: events.map(serializeEvent),
     projections: projections.map(serializeProjection),
     reminders: reminders.map(serializeReminder),
   }
+}
+
+async function createMonthlyReset(
+  userId: string,
+  body: JsonRecord,
+) {
+  const prisma = await getPrisma()
+  const month = String(body.month ?? toMonthString(new Date()))
+  const label = String(body.label ?? month)
+  const expenseIds = Array.isArray(body.expenseIds) ? body.expenseIds.map((entry) => String(entry)) : []
+  const wantIds = Array.isArray(body.wantIds) ? body.wantIds.map((entry) => String(entry)) : []
+  const expenses = parseMonthlyPlanningItems(body.expenses)
+  const wants = parseMonthlyPlanningItems(body.wants)
+
+  const created = await prisma.$transaction(async (tx) => {
+    const history = await tx.historialMensual.create({
+      data: {
+        mesReferencia: month,
+        etiqueta: label,
+        gastos: expenses as unknown as Prisma.InputJsonValue,
+        gustos: wants as unknown as Prisma.InputJsonValue,
+        usuarioId: userId,
+      },
+    })
+
+    if (expenseIds.length > 0) {
+      await tx.gasto.deleteMany({
+        where: {
+          usuarioId: userId,
+          id: { in: expenseIds },
+        },
+      })
+    }
+
+    if (wantIds.length > 0) {
+      await tx.gusto.deleteMany({
+        where: {
+          usuarioId: userId,
+          id: { in: wantIds },
+        },
+      })
+    }
+
+    return history
+  })
+
+  return serializeMonthlyPlanningHistory(created)
+}
+
+async function restoreMonthlyReset(
+  userId: string,
+  historyId: string,
+  scope: 'expenses' | 'wants' | 'all',
+) {
+  const prisma = await getPrisma()
+  const history = await prisma.historialMensual.findFirst({
+    where: {
+      id: historyId,
+      usuarioId: userId,
+    },
+  })
+
+  if (!history) {
+    throw new Error('Historial mensual no encontrado.')
+  }
+
+  const expenses = parseMonthlyPlanningItems(history.gastos)
+  const wants = parseMonthlyPlanningItems(history.gustos)
+  const today = new Date()
+  const createdTransactions: Transaction[] = []
+
+  await prisma.$transaction(async (tx) => {
+    if (scope === 'expenses' || scope === 'all') {
+      for (const entry of expenses) {
+        const created = await tx.gasto.create({
+          data: {
+            cantidad: entry.amount,
+            fecha: today,
+            usuarioId: userId,
+            items: {
+              create: {
+                nombre: `${entry.category}::${entry.status}::${entry.itemName}`,
+                precio: entry.amount,
+                fecha: today,
+                categoria: 'expense',
+              },
+            },
+          },
+          include: { items: { orderBy: { createdAt: 'asc' } } },
+        })
+
+        createdTransactions.push(serializeExpense(created))
+      }
+    }
+
+    if (scope === 'wants' || scope === 'all') {
+      for (const entry of wants) {
+        const created = await tx.gusto.create({
+          data: {
+            cantidad: entry.amount,
+            fecha: today,
+            usuarioId: userId,
+            items: {
+              create: {
+                nombre: `${entry.category}::${entry.status}::${entry.itemName}`,
+                precio: entry.amount,
+                fecha: today,
+                categoria: 'want',
+              },
+            },
+          },
+          include: { items: { orderBy: { createdAt: 'asc' } } },
+        })
+
+        createdTransactions.push(serializeWant(created))
+      }
+    }
+  })
+
+  return createdTransactions
 }
 
 async function saveDebt(userId: string, body: JsonRecord, id?: string) {
@@ -966,6 +1136,19 @@ export async function handleApiRequest(req: IncomingMessage, res: ServerResponse
         sendEmpty(res)
         return true
       }
+    }
+
+    if (pathname === '/api/monthly-plans/reset' && method === 'POST') {
+      sendJson(res, 201, await createMonthlyReset(authenticatedUser.id, await readJsonBody(req)))
+      return true
+    }
+
+    const monthlyPlanRestoreMatch = pathname.match(/^\/api\/monthly-plans\/([^/]+)\/restore$/)
+    if (monthlyPlanRestoreMatch && method === 'POST') {
+      const body = await readJsonBody(req)
+      const scope = body.scope === 'expenses' || body.scope === 'wants' ? body.scope : 'all'
+      sendJson(res, 200, await restoreMonthlyReset(authenticatedUser.id, monthlyPlanRestoreMatch[1], scope))
+      return true
     }
 
     if (pathname === '/api/debts' && method === 'POST') {

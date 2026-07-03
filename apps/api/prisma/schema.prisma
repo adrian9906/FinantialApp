@@ -21,6 +21,7 @@ model Usuario {
   deudas         Deuda[]
   eventos        Evento[]
   deseos         Deseo[]
+  historiales    HistorialMensual[]
   proyecciones   Proyeccion[]
   notificaciones Notificacion[]
   sesiones       Sesion[]
@@ -163,6 +164,20 @@ model DeseoItem {
   deseo              Deseo     @relation(fields: [deseoId], references: [id], onDelete: Cascade)
 
   @@map("deseos_items")
+}
+
+model HistorialMensual {
+  id            String   @id @default(uuid())
+  mesReferencia String
+  etiqueta      String
+  gastos        Json
+  gustos        Json
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  usuarioId     String
+  usuario       Usuario  @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+
+  @@map("historiales_mensuales")
 }
 
 model Proyeccion {

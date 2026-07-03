@@ -34,6 +34,23 @@ export interface WishlistItem {
   image?: string
 }
 
+export interface MonthlyPlanningItem {
+  amount: number
+  itemName: string
+  category: string
+  status: 'pending' | 'checked'
+  date: string
+}
+
+export interface MonthlyPlanningHistory {
+  id: string
+  month: string
+  label: string
+  createdAt: string
+  expenses: MonthlyPlanningItem[]
+  wants: MonthlyPlanningItem[]
+}
+
 export interface AppEvent {
   id: string
   name: string
