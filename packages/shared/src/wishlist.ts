@@ -1,5 +1,12 @@
 export type WishlistPriority = 'low' | 'medium' | 'high'
 
+type WishlistLike = {
+  price: number
+  savedAmount?: number
+  externalContribution?: number
+  isPurchased?: boolean
+}
+
 export function getPriorityLabel(priority: WishlistPriority) {
   if (priority === 'high') return 'Alta'
   if (priority === 'low') return 'Baja'
@@ -89,4 +96,31 @@ export function buildPurchaseProjection(
     purchaseDateLabel: `Compra posible: ${formatDate(purchaseDate)}`,
     isReady: false,
   }
+}
+
+export function getWishlistExternalContribution(item: WishlistLike) {
+  return Math.max(0, Number(item.externalContribution ?? 0))
+}
+
+export function getWishlistReservedAmount(item: WishlistLike) {
+  return Math.max(0, Math.min(item.price, Number(item.savedAmount ?? 0)))
+}
+
+export function isWishlistPurchased(item: WishlistLike) {
+  const explicitFlag = item.isPurchased
+  if (typeof explicitFlag === 'boolean') {
+    return explicitFlag
+  }
+
+  return item.price > 0 && getWishlistReservedAmount(item) >= item.price
+}
+
+export function getWishlistAvailableAmount(item: WishlistLike, currentSavedAmount: number) {
+  const baseSavings = Math.max(0, currentSavedAmount)
+  const reservedAmount = getWishlistReservedAmount(item)
+  const externalContribution = getWishlistExternalContribution(item)
+
+  return isWishlistPurchased(item)
+    ? baseSavings + reservedAmount + externalContribution
+    : baseSavings + externalContribution
 }

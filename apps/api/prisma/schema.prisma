@@ -140,6 +140,8 @@ model Evento {
 model Deseo {
   id        String      @id @default(uuid())
   cantidad  Float
+  aportado  Float       @default(0)
+  comprado  Boolean     @default(false)
   fecha     DateTime    @default(now())
   createdAt DateTime    @default(now())
   updatedAt DateTime    @updatedAt

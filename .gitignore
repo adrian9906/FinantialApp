@@ -38,3 +38,4 @@ apps/*/dist
 apps/*/node_modules
 .pnpm-store
 .codebase-memory
+docs/

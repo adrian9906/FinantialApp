@@ -31,6 +31,8 @@ export interface WishlistItem {
   price: number
   priority: 'low' | 'medium' | 'high'
   savedAmount: number
+  externalContribution?: number
+  isPurchased?: boolean
   image?: string
 }
 

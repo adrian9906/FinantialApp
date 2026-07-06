@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { parseSavingDescription } from '@plata/shared'
 import { useFinanceStore } from '@/store/financeStore'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -131,7 +132,11 @@ export default function Savings() {
             {savingsList.map((transaction) => (
               <div key={transaction.id} className="group grid grid-cols-1 gap-3 p-4 transition-colors hover:bg-surface-container-low md:grid-cols-[1fr_100px_80px] md:gap-4 md:items-center">
                 <div>
-                  <p className="text-sm font-medium text-on-surface">Ahorro registrado</p>
+                  <p className="text-sm font-medium text-on-surface">
+                    {parseSavingDescription(transaction.description).kind === 'transfer'
+                      ? 'Transferido desde gastos'
+                      : 'Ahorro registrado'}
+                  </p>
                   <p className="text-xs text-muted-gray">{transaction.date}</p>
                 </div>
                 <span className="text-sm font-medium text-success md:text-right">+${transaction.amount.toLocaleString()}</span>

@@ -1,4 +1,11 @@
 import { useMemo, useState } from 'react'
+import {
+  buildPurchaseProjection,
+  getWishlistAvailableAmount,
+  getWishlistExternalContribution,
+  getWishlistReservedAmount,
+  isWishlistPurchased,
+} from '@plata/shared'
 import { Grid3X3, LayoutList, Pencil, Plus, ShoppingCart, Trash2 } from 'lucide-react'
 
 import { ImageUploadField } from '@/components/wishlist/ImageUploadField'
@@ -16,6 +23,7 @@ import { useFinanceStore } from '@/store/financeStore'
 interface FormState {
   name: string
   price: string
+  externalContribution: string
   priority: 'low' | 'medium' | 'high'
   image?: string
 }
@@ -40,14 +48,6 @@ function formatCurrency(value: number) {
   return `$${currencyFormatter.format(value)}`
 }
 
-function getReservedAmount(item: { price: number; savedAmount: number }) {
-  return Math.max(0, Math.min(item.price, item.savedAmount ?? 0))
-}
-
-function isPurchased(item: { price: number; savedAmount: number }) {
-  return item.price > 0 && getReservedAmount(item) >= item.price
-}
-
 function getPriorityLabel(priority: FormState['priority']) {
   if (priority === 'high') return 'Alta'
   if (priority === 'low') return 'Baja'
@@ -66,86 +66,6 @@ function getPriorityBadgeClass(priority: FormState['priority']) {
   return 'border-emerald-500/30 bg-emerald-500/15 text-emerald-200'
 }
 
-function addDays(baseDate: Date, totalDays: number) {
-  const nextDate = new Date(baseDate)
-  nextDate.setDate(nextDate.getDate() + totalDays)
-  return nextDate
-}
-
-function buildProjection(price: number, savedAmount: number, averageMonthlySavings: number) {
-  if (!Number.isFinite(price) || price <= 0) {
-    return {
-      remaining: 0,
-      progress: 0,
-      timelineLabel: 'Agrega un precio valido para estimar la compra.',
-      purchaseDateLabel: 'Sin fecha estimada',
-      isReady: false,
-    }
-  }
-
-  const safeSavedAmount = Number.isFinite(savedAmount) ? Math.max(0, savedAmount) : 0
-  const safeMonthlySavings = Number.isFinite(averageMonthlySavings) ? averageMonthlySavings : 0
-  const remaining = Math.max(0, price - safeSavedAmount)
-
-  if (remaining === 0) {
-    return {
-      remaining,
-      progress: Math.min(100, (safeSavedAmount / price) * 100),
-      timelineLabel: 'Ya puedes comprarlo.',
-      purchaseDateLabel: `Disponible desde hoy (${dateFormatter.format(new Date())})`,
-      isReady: true,
-    }
-  }
-
-  if (safeMonthlySavings <= 0) {
-    return {
-      remaining,
-      progress: Math.min(100, (safeSavedAmount / price) * 100),
-      timelineLabel: 'No hay ahorro mensual suficiente para proyectar esta compra.',
-      purchaseDateLabel: 'Sin fecha estimada',
-      isReady: false,
-    }
-  }
-
-  const exactMonths = remaining / safeMonthlySavings
-  const totalDays = Math.max(1, Math.ceil(exactMonths * 30.44))
-
-  if (!Number.isFinite(totalDays)) {
-    return {
-      remaining,
-      progress: Math.min(100, (safeSavedAmount / price) * 100),
-      timelineLabel: 'No se pudo calcular el tiempo estimado con ese valor.',
-      purchaseDateLabel: 'Sin fecha estimada',
-      isReady: false,
-    }
-  }
-
-  const purchaseDate = addDays(new Date(), totalDays)
-
-  if (Number.isNaN(purchaseDate.getTime())) {
-    return {
-      remaining,
-      progress: Math.min(100, (safeSavedAmount / price) * 100),
-      timelineLabel: 'El plazo estimado es demasiado grande para calcular una fecha exacta.',
-      purchaseDateLabel: 'Sin fecha estimada',
-      isReady: false,
-    }
-  }
-
-  const timelineLabel =
-    totalDays < 31
-      ? `${totalDays} dia${totalDays === 1 ? '' : 's'} para completar la meta`
-      : `${Math.ceil(exactMonths)} mes${Math.ceil(exactMonths) === 1 ? '' : 'es'} para completar la meta`
-
-  return {
-    remaining,
-    progress: Math.min(100, (safeSavedAmount / price) * 100),
-    timelineLabel,
-    purchaseDateLabel: `Compra posible: ${dateFormatter.format(purchaseDate)}`,
-    isReady: false,
-  }
-}
-
 export default function Wishlist() {
   const wishlist = useFinanceStore((state) => state.wishlist)
   const transactions = useFinanceStore((state) => state.transactions)
@@ -161,6 +81,7 @@ export default function Wishlist() {
   const [form, setForm] = useState<FormState>({
     name: '',
     price: '',
+    externalContribution: '',
     priority: 'medium',
     image: undefined,
   })
@@ -184,19 +105,20 @@ export default function Wishlist() {
   }, [salaries, transactions])
 
   const currentSavedAmount = Math.max(0, overview.totalSavings)
-  const purchasedCount = wishlist.filter(isPurchased).length
+  const purchasedCount = wishlist.filter((item) => isWishlistPurchased(item)).length
 
   const editItem = useMemo(
     () => wishlist.find((item) => item.id === editId) ?? null,
     [editId, wishlist]
   )
 
-  const reachedItems = wishlist.filter((item) => currentSavedAmount >= item.price && item.price > 0).length
+  const reachedItems = wishlist.filter((item) => getWishlistAvailableAmount(item, currentSavedAmount) >= item.price && item.price > 0).length
 
   function resetForm() {
     setForm({
       name: '',
       price: '',
+      externalContribution: '',
       priority: 'medium',
       image: undefined,
     })
@@ -209,6 +131,7 @@ export default function Wishlist() {
       setForm({
         name: entry.name,
         price: String(entry.price),
+        externalContribution: String(getWishlistExternalContribution(entry) || ''),
         priority: entry.priority,
         image: entry.image,
       })
@@ -222,11 +145,17 @@ export default function Wishlist() {
   async function handleSave() {
     if (!form.name || !form.price || isSaving) return
 
+    const nextPrice = parseMoneyInput(form.price)
+    const nextExternalContribution = parseMoneyInput(form.externalContribution)
+    const wasPurchased = editItem?.isPurchased ?? false
+
     const data = {
       name: form.name.trim(),
-      price: parseMoneyInput(form.price),
+      price: nextPrice,
       priority: form.priority,
-      savedAmount: editItem?.savedAmount ?? 0,
+      savedAmount: wasPurchased ? Math.max(0, nextPrice - nextExternalContribution) : 0,
+      externalContribution: nextExternalContribution,
+      isPurchased: wasPurchased,
       image: form.image,
     }
 
@@ -248,9 +177,10 @@ export default function Wishlist() {
   async function handleTogglePurchased(item: typeof wishlist[number]) {
     if (isSaving || item.price <= 0) return
 
-    const purchased = isPurchased(item)
-    const reservedAmount = getReservedAmount(item)
-    const availableToSpend = currentSavedAmount + reservedAmount
+    const purchased = isWishlistPurchased(item)
+    const externalContribution = getWishlistExternalContribution(item)
+    const reservedAmount = getWishlistReservedAmount(item)
+    const availableToSpend = getWishlistAvailableAmount(item, currentSavedAmount)
 
     if (!purchased && availableToSpend < item.price) {
       return
@@ -259,7 +189,8 @@ export default function Wishlist() {
     setIsSaving(true)
     try {
       await updateWishlistItem(item.id, {
-        savedAmount: purchased ? 0 : item.price,
+        savedAmount: purchased ? 0 : Math.max(0, item.price - externalContribution),
+        isPurchased: !purchased,
       })
     } finally {
       setIsSaving(false)
@@ -272,7 +203,7 @@ export default function Wishlist() {
         <div className="space-y-2">
           <h1 className="text-[28px] font-semibold tracking-tight text-on-surface md:text-[36px]">Deseos</h1>
           <p className="max-w-2xl text-sm text-muted-gray">
-            Organiza cada producto con foto, actualiza el ahorro desde la vista principal y mira cuando podrias comprarlo segun tu promedio mensual de ahorro.
+            Organiza cada producto con foto, suma dinero externo si hace falta y mira cuando podrias comprarlo segun tu ahorro real mas aportes extra.
           </p>
         </div>
 
@@ -344,9 +275,10 @@ export default function Wishlist() {
       ) : viewMode === 'cards' ? (
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2 2xl:grid-cols-3">
           {wishlist.map((item) => {
-            const purchased = isPurchased(item)
-            const reservedAmount = getReservedAmount(item)
-            const effectiveSavedAmount = purchased ? currentSavedAmount + reservedAmount : currentSavedAmount
+            const purchased = isWishlistPurchased(item)
+            const reservedAmount = getWishlistReservedAmount(item)
+            const externalContribution = getWishlistExternalContribution(item)
+            const effectiveSavedAmount = getWishlistAvailableAmount(item, currentSavedAmount)
             const canBePurchased = purchased || effectiveSavedAmount >= item.price
             const projection = purchased
               ? {
@@ -356,7 +288,7 @@ export default function Wishlist() {
                   purchaseDateLabel: `Descontado del ahorro: ${formatCurrency(reservedAmount)}`,
                   isReady: true,
                 }
-              : buildProjection(item.price, effectiveSavedAmount, averageMonthlySavings)
+              : buildPurchaseProjection(item.price, effectiveSavedAmount, averageMonthlySavings, (date) => dateFormatter.format(date))
 
             return (
               <article key={item.id} className="overflow-hidden rounded-2xl bg-surface shadow-vault">
@@ -390,8 +322,8 @@ export default function Wishlist() {
                         {purchased
                           ? `Ya se descontaron ${formatCurrency(reservedAmount)} de tus ahorros.`
                           : canBePurchased
-                            ? `Ya puedes comprarlo y descontar ${formatCurrency(item.price)} de tus ahorros.`
-                            : `Aun no alcanza el ahorro disponible para descontar ${formatCurrency(item.price)}.`}
+                            ? `Ya puedes comprarlo. De tus ahorros saldrian ${formatCurrency(Math.max(0, item.price - externalContribution))}.`
+                            : `Aun no alcanza el ahorro disponible mas el aporte externo para cubrir ${formatCurrency(item.price)}.`}
                       </p>
                     </div>
                     <Checkbox
@@ -414,6 +346,11 @@ export default function Wishlist() {
                       <span>Tienes: {formatCurrency(effectiveSavedAmount)}</span>
                       <span>Faltan: {formatCurrency(projection.remaining)}</span>
                     </div>
+                    {externalContribution > 0 ? (
+                      <p className="mt-3 text-xs text-muted-gray">
+                        Incluye {formatCurrency(externalContribution)} de dinero externo para este deseo.
+                      </p>
+                    ) : null}
                   </div>
 
                   <div className="grid gap-3 rounded-xl border border-graphite bg-abyss p-4 md:grid-cols-2">
@@ -448,9 +385,10 @@ export default function Wishlist() {
       ) : (
         <div className="space-y-4">
           {wishlist.map((item) => {
-            const purchased = isPurchased(item)
-            const reservedAmount = getReservedAmount(item)
-            const effectiveSavedAmount = purchased ? currentSavedAmount + reservedAmount : currentSavedAmount
+            const purchased = isWishlistPurchased(item)
+            const reservedAmount = getWishlistReservedAmount(item)
+            const externalContribution = getWishlistExternalContribution(item)
+            const effectiveSavedAmount = getWishlistAvailableAmount(item, currentSavedAmount)
             const canBePurchased = purchased || effectiveSavedAmount >= item.price
             const projection = purchased
               ? {
@@ -460,7 +398,7 @@ export default function Wishlist() {
                   purchaseDateLabel: `Descontado del ahorro: ${formatCurrency(reservedAmount)}`,
                   isReady: true,
                 }
-              : buildProjection(item.price, effectiveSavedAmount, averageMonthlySavings)
+              : buildPurchaseProjection(item.price, effectiveSavedAmount, averageMonthlySavings, (date) => dateFormatter.format(date))
 
             return (
               <article key={item.id} className="rounded-2xl bg-surface p-4 shadow-vault">
@@ -505,6 +443,7 @@ export default function Wishlist() {
                       <div className="mt-3 space-y-1 text-sm text-muted-gray">
                         <p>Tienes ahorrados: {formatCurrency(effectiveSavedAmount)}</p>
                         <p>Restante: {formatCurrency(projection.remaining)}</p>
+                        {externalContribution > 0 ? <p>Aporte externo: {formatCurrency(externalContribution)}</p> : null}
                         <p>{projection.timelineLabel}</p>
                       </div>
                     </div>
@@ -517,8 +456,8 @@ export default function Wishlist() {
                             {purchased
                               ? `Ya se descontaron ${formatCurrency(reservedAmount)} de tus ahorros.`
                               : canBePurchased
-                                ? `Marca el check para descontar ${formatCurrency(item.price)} de tus ahorros.`
-                                : 'Todavia no tienes ahorro suficiente para marcarlo.'}
+                                ? `Marca el check para descontar ${formatCurrency(Math.max(0, item.price - externalContribution))} de tus ahorros.`
+                                : 'Todavia no tienes ahorro suficiente, incluso contando el aporte externo.'}
                           </p>
                         </div>
                         <Checkbox
@@ -585,6 +524,20 @@ export default function Wishlist() {
               </div>
 
               <div className="space-y-2">
+                <Label className="text-medium-gray">Dinero externo</Label>
+                <Input
+                  type="number"
+                  min="0"
+                  value={form.externalContribution}
+                  onChange={(event) => setForm((current) => ({ ...current, externalContribution: event.target.value }))}
+                  className="border-graphite bg-abyss text-on-surface"
+                />
+                <p className="text-xs text-muted-gray">
+                  Usa este campo si parte del dinero saldra de ingresos extra y no del ahorro calculado por la formula.
+                </p>
+              </div>
+
+              <div className="space-y-2">
                 <Label className="text-medium-gray">Prioridad</Label>
                 <Select value={form.priority} onValueChange={(value) => setForm((current) => ({ ...current, priority: value as FormState['priority'] }))}>
                   <SelectTrigger className="border-graphite bg-abyss text-on-surface">
@@ -613,11 +566,19 @@ export default function Wishlist() {
                 {form.price ? `Meta: ${formatCurrency(parseMoneyInput(form.price))}` : 'Agrega el precio para activar la proyeccion de compra.'}
               </p>
               <p className="mt-1 text-sm text-muted-gray">
-                Tienes ahorrados ahora mismo: {formatCurrency(currentSavedAmount)}
+                Ahorro real ahora mismo: {formatCurrency(currentSavedAmount)}
+              </p>
+              <p className="mt-1 text-sm text-muted-gray">
+                Aporte externo para este deseo: {formatCurrency(parseMoneyInput(form.externalContribution))}
               </p>
               <p className="mt-1 text-sm text-muted-gray">
                 {form.price
-                  ? buildProjection(parseMoneyInput(form.price), currentSavedAmount, averageMonthlySavings).purchaseDateLabel
+                  ? buildPurchaseProjection(
+                    parseMoneyInput(form.price),
+                    currentSavedAmount + parseMoneyInput(form.externalContribution),
+                    averageMonthlySavings,
+                    (date) => dateFormatter.format(date),
+                  ).purchaseDateLabel
                   : 'Sin fecha estimada todavia.'}
               </p>
             </Card>

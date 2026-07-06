@@ -9,6 +9,7 @@ import type {
   Transaction,
   WishlistItem,
 } from './types'
+import { getWishlistExternalContribution, isWishlistPurchased } from './wishlist'
 
 export type AuthMode = 'anonymous' | 'guest' | 'authenticated'
 
@@ -56,7 +57,12 @@ export function normalizeBootstrapPayload(payload?: Partial<BootstrapPayload> | 
     salaries: payload?.salaries ?? [],
     transactions: payload?.transactions ?? [],
     debts: payload?.debts ?? [],
-    wishlist: payload?.wishlist ?? [],
+    wishlist: (payload?.wishlist ?? []).map((item): WishlistItem => ({
+      ...item,
+      savedAmount: Number(item.savedAmount ?? 0),
+      externalContribution: getWishlistExternalContribution(item),
+      isPurchased: isWishlistPurchased(item),
+    })),
     monthlyPlanningHistory: payload?.monthlyPlanningHistory ?? [],
     events: payload?.events ?? [],
     projections: payload?.projections ?? [],

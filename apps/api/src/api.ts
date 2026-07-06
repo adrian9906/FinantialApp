@@ -131,16 +131,21 @@ function serializeSaving(entry: { id: string; cantidad: number; fecha: Date }): 
 function serializeWishlist(entry: {
   id: string
   cantidad: number
+  aportado: number
+  comprado: boolean
   items: Array<{ nombre: string; precio: number; prioridad: string; foto: string | null }>
 }): WishlistItem {
   const item = entry.items[0]
+  const isPurchased = entry.comprado || entry.cantidad > 0
 
   return {
     id: entry.id,
     name: item?.nombre ?? 'Deseo',
     price: item?.precio ?? 0,
     priority: normalizePriority(item?.prioridad),
-    savedAmount: entry.cantidad,
+    savedAmount: isPurchased ? entry.cantidad : 0,
+    externalContribution: entry.aportado,
+    isPurchased,
     image: item?.foto ?? undefined,
   }
 }
@@ -744,9 +749,13 @@ async function saveWishlist(userId: string, body: JsonRecord, id?: string) {
   const prisma = await getPrisma()
   const name = String(body.name ?? '').trim()
   const price = Number(body.price ?? 0)
-  const savedAmount = Number(body.savedAmount ?? 0)
+  const rawSavedAmount = Number(body.savedAmount ?? 0)
+  const externalContribution = Math.max(0, Number(body.externalContribution ?? 0))
   const priority = normalizePriority(body.priority)
   const image = body.image ? String(body.image) : body.url ? String(body.url) : null
+  const inferredPurchased = rawSavedAmount > 0 && rawSavedAmount >= price
+  const isPurchased = typeof body.isPurchased === 'boolean' ? body.isPurchased : inferredPurchased
+  const savedAmount = isPurchased ? Math.max(0, rawSavedAmount) : 0
 
   if (!name) {
     throw new Error('El nombre del deseo es obligatorio.')
@@ -766,6 +775,8 @@ async function saveWishlist(userId: string, body: JsonRecord, id?: string) {
       where: { id },
       data: {
         cantidad: savedAmount,
+        aportado: externalContribution,
+        comprado: isPurchased,
         items: existing.items[0]
           ? {
               update: {
@@ -796,6 +807,8 @@ async function saveWishlist(userId: string, body: JsonRecord, id?: string) {
   const created = await prisma.deseo.create({
     data: {
       cantidad: savedAmount,
+      aportado: externalContribution,
+      comprado: isPurchased,
       usuarioId: userId,
       items: {
         create: {

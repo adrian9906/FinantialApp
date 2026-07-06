@@ -5,6 +5,7 @@ import type {
   Debt,
   MonthlyPlanningHistory,
   MonthlyPlanningItem,
+  normalizeBootstrapPayload,
   Projection,
   Reminder,
   Salary,
@@ -83,17 +84,11 @@ function normalizeDebt(entry: Partial<Debt>): Debt {
 }
 
 function normalizeBootstrapSnapshot(payload?: Partial<BootstrapPayload> | null): BootstrapPayload {
-  const snapshot = payload ?? {}
+  const snapshot = normalizeBootstrapPayload(payload)
 
   return {
-    salaries: snapshot.salaries ?? [],
-    transactions: snapshot.transactions ?? [],
-    debts: (snapshot.debts ?? []).map(normalizeDebt),
-    wishlist: snapshot.wishlist ?? [],
-    monthlyPlanningHistory: snapshot.monthlyPlanningHistory ?? [],
-    events: snapshot.events ?? [],
-    projections: snapshot.projections ?? [],
-    reminders: snapshot.reminders ?? [],
+    ...snapshot,
+    debts: snapshot.debts.map(normalizeDebt),
   }
 }
 
@@ -401,6 +396,8 @@ export const useFinanceStore = create<FinanceStore>()((set, get) => ({
         price: data.price ?? current.price,
         priority: data.priority ?? current.priority,
         savedAmount: data.savedAmount ?? current.savedAmount,
+        externalContribution: data.externalContribution ?? current.externalContribution ?? 0,
+        isPurchased: data.isPurchased ?? current.isPurchased ?? false,
         image: data.image ?? current.image,
       }),
     })

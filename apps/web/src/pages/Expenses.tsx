@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { buildExpenseTransferSavingDescription } from '@plata/shared'
 import { ArrowUpRight, Dumbbell, HeartPulse, House, Package, Pencil, Plus, ShoppingBasket, Trash2, type LucideIcon } from 'lucide-react'
 import { useFinanceStore } from '@/store/financeStore'
 import { buildExpenseDescription, getPlannedExpenseTotal, parseExpenseDescription, type ExpenseCategory } from '@/lib/expense-utils'
@@ -167,6 +168,7 @@ export default function Expenses() {
   const [sparkBursts, setSparkBursts] = useState<Record<string, number>>({})
   const [formError, setFormError] = useState<string | null>(null)
   const [isSaving, setIsSaving] = useState(false)
+  const [isTransferring, setIsTransferring] = useState(false)
   const [form, setForm] = useState<ExpenseFormState>({
     amount: '',
     itemName: '',
@@ -315,6 +317,23 @@ export default function Expenses() {
     })
   }
 
+  async function handleTransferRemainingToSavings() {
+    if (remaining <= 0 || isTransferring) return
+
+    setIsTransferring(true)
+
+    try {
+      await addTransaction({
+        amount: remaining,
+        type: 'saving',
+        description: buildExpenseTransferSavingDescription(),
+        date: new Date().toISOString().slice(0, 10),
+      })
+    } finally {
+      setIsTransferring(false)
+    }
+  }
+
   return (
     <div className="space-y-6 animate-in fade-in duration-500">
       <header className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
@@ -344,6 +363,20 @@ export default function Expenses() {
             </h2>
             <div className="h-2 w-full overflow-hidden rounded-full bg-surface-container-highest">
               <div className="h-full rounded-full bg-primary transition-all duration-1000" style={{ width: `${pct}%` }} />
+            </div>
+            <div className="mt-4 flex flex-wrap items-center gap-3">
+              <Button
+                variant="secondary"
+                loading={isTransferring}
+                disabled={remaining <= 0 || isTransferring}
+                onClick={() => void handleTransferRemainingToSavings()}
+                className="bg-tertiary-container text-white hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                Pasar ${Math.max(0, remaining).toLocaleString()} a ahorros
+              </Button>
+              <p className="text-xs text-muted-gray">
+                Si ese dinero ya no lo vas a gastar este mes, puedes moverlo a ahorro en un toque.
+              </p>
             </div>
           </div>
 
