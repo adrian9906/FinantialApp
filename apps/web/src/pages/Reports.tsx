@@ -1,15 +1,36 @@
 import { useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { AlertTriangle, ArrowRight, CalendarDays, Landmark, PiggyBank, ReceiptText, Sparkles, Target, TrendingDown, TrendingUp } from 'lucide-react'
-import { Bar, BarChart, CartesianGrid, XAxis, YAxis } from 'recharts'
-import { getMonthlyOverview, getWishlistReservedAmount, isWishlistPurchased, type MonthlyPlanningHistory } from '@plata/shared'
+import {
+  Activity,
+  AlertTriangle,
+  ArrowRight,
+  CalendarDays,
+  Landmark,
+  PiggyBank,
+  ReceiptText,
+  Sparkles,
+  Target,
+  TrendingDown,
+  TrendingUp,
+} from 'lucide-react'
+import { Bar, BarChart, CartesianGrid, Line, LineChart, XAxis, YAxis } from 'recharts'
+import { getWishlistReservedAmount, isWishlistPurchased } from '@plata/shared'
 
+import { ExportExcelButton } from '@/components/reports/ExportExcelButton'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { ExportExcelButton } from '@/components/reports/ExportExcelButton'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { ChartContainer, ChartTooltip, ChartTooltipContent, type ChartConfig } from '@/components/ui/chart'
 import { exportMonthlyReport } from '@/lib/reportExports'
+import {
+  buildMonthComparison,
+  buildMonthlyRankings,
+  buildMonthlySummaries,
+  formatMonthLabel,
+  getMonthKey,
+  getPreviousMonthKey,
+  getTrendDirection,
+} from '@/lib/reporting'
 import { useFinanceStore } from '@/store/financeStore'
 import { usePreferencesStore } from '@/store/preferencesStore'
 
@@ -21,35 +42,10 @@ type ReportMetric = {
   tone: 'primary' | 'danger' | 'secondary' | 'success'
 }
 
-const monthFormatter = new Intl.DateTimeFormat('es-ES', { month: 'long', year: 'numeric' })
 const shortMonthFormatter = new Intl.DateTimeFormat('es-ES', { month: 'short' })
 
 function formatCurrency(value: number) {
   return `$${Math.round(value).toLocaleString()}`
-}
-
-function getMonthKey(date: Date) {
-  return date.toISOString().slice(0, 7)
-}
-
-function getPreviousMonthKey(monthKey: string) {
-  const [year, month] = monthKey.split('-').map(Number)
-  const date = new Date(Date.UTC(year, month - 2, 1))
-  return getMonthKey(date)
-}
-
-function formatMonthLabel(monthKey: string) {
-  const [year, month] = monthKey.split('-').map(Number)
-  return monthFormatter.format(new Date(year, month - 1, 1))
-}
-
-function getChange(current: number, previous: number) {
-  const delta = current - previous
-  const percent = previous === 0
-    ? (current === 0 ? 0 : 100)
-    : Math.round((delta / previous) * 100)
-
-  return { delta, percent }
 }
 
 function toneClasses(tone: ReportMetric['tone']) {
@@ -59,8 +55,20 @@ function toneClasses(tone: ReportMetric['tone']) {
   return 'bg-primary/12 text-primary border-primary/20'
 }
 
-function getLatestCloseSnapshot(history: MonthlyPlanningHistory[], monthKey: string) {
+function getLatestCloseSnapshot(history: ReturnType<typeof useFinanceStore.getState>['monthlyPlanningHistory'], monthKey: string) {
   return history.find((entry) => entry.month === monthKey) ?? history[0] ?? null
+}
+
+function getDirectionLabel(direction: ReturnType<typeof getTrendDirection>) {
+  if (direction === 'up') return 'Sube'
+  if (direction === 'down') return 'Baja'
+  return 'Estable'
+}
+
+function getDirectionTone(direction: ReturnType<typeof getTrendDirection>) {
+  if (direction === 'up') return 'bg-emerald-500/12 text-emerald-200'
+  if (direction === 'down') return 'bg-amber-500/12 text-amber-200'
+  return 'bg-surface-container-high text-on-surface'
 }
 
 export default function Reports() {
@@ -73,20 +81,21 @@ export default function Reports() {
   const monthlyPlanningHistory = useFinanceStore((state) => state.monthlyPlanningHistory)
   const formula = usePreferencesStore((state) => state.formula)
   const [isExporting, setIsExporting] = useState(false)
+  const [trendRange, setTrendRange] = useState<3 | 6 | 12>(6)
 
   const report = useMemo(() => {
     const currentMonthKey = getMonthKey(new Date())
     const previousMonthKey = getPreviousMonthKey(currentMonthKey)
-
-    const currentSalaries = salaries.filter((salary) => salary.month === currentMonthKey)
-    const previousSalaries = salaries.filter((salary) => salary.month === previousMonthKey)
-    const currentTransactions = transactions.filter((transaction) => transaction.date.slice(0, 7) === currentMonthKey)
-    const previousTransactions = transactions.filter((transaction) => transaction.date.slice(0, 7) === previousMonthKey)
-    const currentEvents = events.filter((event) => event.date.slice(0, 7) === currentMonthKey)
-    const previousEvents = events.filter((event) => event.date.slice(0, 7) === previousMonthKey)
-
-    const currentOverview = getMonthlyOverview(currentSalaries, currentTransactions, [], formula)
-    const previousOverview = getMonthlyOverview(previousSalaries, previousTransactions, [], formula)
+    const monthlySummaries = buildMonthlySummaries({
+      salaries,
+      transactions,
+      debts,
+      monthlyPlanningHistory,
+      formula,
+    })
+    const currentSummary = monthlySummaries.find((entry) => entry.month === currentMonthKey)
+    const previousSummary = monthlySummaries.find((entry) => entry.month === previousMonthKey)
+    const comparisonRows = buildMonthComparison(currentSummary, previousSummary)
 
     const reservedForPurchasedWishlist = wishlist.reduce(
       (sum, item) => sum + (isWishlistPurchased(item) ? getWishlistReservedAmount(item) : 0),
@@ -95,73 +104,77 @@ export default function Reports() {
     const activeDebts = debts.filter((debt) => !debt.isSettled)
     const totalDebtRemaining = activeDebts.reduce((sum, debt) => sum + debt.remainingAmount, 0)
     const totalDebtPaid = debts.reduce((sum, debt) => sum + debt.paidAmount, 0)
-
+    const currentEvents = events.filter((event) => event.date.slice(0, 7) === currentMonthKey)
+    const previousEvents = events.filter((event) => event.date.slice(0, 7) === previousMonthKey)
     const currentSnapshot = getLatestCloseSnapshot(monthlyPlanningHistory, currentMonthKey)
     const previousSnapshot = getLatestCloseSnapshot(monthlyPlanningHistory, previousMonthKey)
+    const rankings = buildMonthlyRankings(transactions, currentMonthKey)
 
     const metrics: ReportMetric[] = [
       {
         label: 'Salario del mes',
-        current: currentOverview.grossSalary,
-        previous: previousOverview.grossSalary,
+        current: currentSummary?.salary ?? 0,
+        previous: previousSummary?.salary ?? 0,
         tone: 'primary',
       },
       {
         label: 'Gasto real',
-        current: currentOverview.totalExpenses,
-        previous: previousOverview.totalExpenses,
-        budget: currentOverview.budgetExpenses,
+        current: currentSummary?.expenses ?? 0,
+        previous: previousSummary?.expenses ?? 0,
+        budget: currentSummary?.budgetExpenses ?? 0,
         tone: 'danger',
       },
       {
         label: 'Gusto real',
-        current: currentOverview.totalWants,
-        previous: previousOverview.totalWants,
-        budget: currentOverview.budgetWants,
+        current: currentSummary?.wants ?? 0,
+        previous: previousSummary?.wants ?? 0,
+        budget: currentSummary?.budgetWants ?? 0,
         tone: 'secondary',
       },
       {
         label: 'Ahorro real',
-        current: Math.max(0, currentOverview.totalSavings - reservedForPurchasedWishlist),
-        previous: previousOverview.totalSavings,
-        budget: currentOverview.budgetSavings,
+        current: Math.max(0, (currentSummary?.savings ?? 0) - reservedForPurchasedWishlist),
+        previous: previousSummary?.savings ?? 0,
+        budget: currentSummary?.budgetSavings ?? 0,
         tone: 'success',
       },
     ]
 
-    const comparisonData = metrics.map((metric) => ({
-      label: metric.label.replace(' del mes', '').replace(' real', ''),
-      actual: metric.current,
-      previous: metric.previous,
-    }))
+    const comparisonData = comparisonRows
+      .filter((row) => row.key !== 'debtPaid')
+      .map((row) => ({
+        label: row.label,
+        actual: row.current,
+        previous: row.previous,
+      }))
 
     const budgetData = [
       {
         key: 'gastos',
         label: 'Gastos',
-        actual: currentOverview.totalExpenses,
-        budget: currentOverview.budgetExpenses,
+        actual: currentSummary?.expenses ?? 0,
+        budget: currentSummary?.budgetExpenses ?? 0,
         fill: 'var(--color-gastos)',
       },
       {
         key: 'gustos',
         label: 'Gustos',
-        actual: currentOverview.totalWants,
-        budget: currentOverview.budgetWants,
+        actual: currentSummary?.wants ?? 0,
+        budget: currentSummary?.budgetWants ?? 0,
         fill: 'var(--color-gustos)',
       },
       {
         key: 'ahorros',
         label: 'Ahorros',
-        actual: Math.max(0, currentOverview.totalSavings - reservedForPurchasedWishlist),
-        budget: currentOverview.budgetSavings,
-        fill: 'var(--color-ahorros)',
+        actual: Math.max(0, (currentSummary?.savings ?? 0) - reservedForPurchasedWishlist),
+        budget: currentSummary?.budgetSavings ?? 0,
+        fill: 'var(--color-tertiary-container)',
       },
     ]
 
     const findings: Array<{ title: string; body: string; tone: 'good' | 'warn' | 'neutral' }> = []
 
-    if (currentOverview.grossSalary <= 0) {
+    if ((currentSummary?.salary ?? 0) <= 0) {
       findings.push({
         title: 'Sin salario registrado para este mes',
         body: 'El informe existe, pero varias metas y desviaciones quedaran incompletas hasta que registres salario.',
@@ -169,24 +182,24 @@ export default function Reports() {
       })
     }
 
-    if (currentOverview.totalExpenses > currentOverview.budgetExpenses) {
+    if ((currentSummary?.expenses ?? 0) > (currentSummary?.budgetExpenses ?? 0)) {
       findings.push({
         title: 'Los gastos esenciales estan por encima del objetivo',
-        body: `Te pasaste por ${formatCurrency(currentOverview.totalExpenses - currentOverview.budgetExpenses)} frente al presupuesto mensual de gastos.`,
+        body: `Te pasaste por ${formatCurrency((currentSummary?.expenses ?? 0) - (currentSummary?.budgetExpenses ?? 0))} frente al presupuesto mensual de gastos.`,
         tone: 'warn',
       })
     } else {
       findings.push({
         title: 'Los gastos esenciales siguen bajo control',
-        body: `Aun tienes ${formatCurrency(currentOverview.budgetExpenses - currentOverview.totalExpenses)} libres dentro del bloque de gastos del mes.`,
+        body: `Aun tienes ${formatCurrency(Math.max(0, (currentSummary?.budgetExpenses ?? 0) - (currentSummary?.expenses ?? 0)))} libres dentro del bloque de gastos del mes.`,
         tone: 'good',
       })
     }
 
-    if (Math.max(0, currentOverview.totalSavings - reservedForPurchasedWishlist) < currentOverview.budgetSavings) {
+    if (Math.max(0, (currentSummary?.savings ?? 0) - reservedForPurchasedWishlist) < (currentSummary?.budgetSavings ?? 0)) {
       findings.push({
         title: 'El ahorro real va por debajo de la meta',
-        body: `Te faltan ${formatCurrency(currentOverview.budgetSavings - Math.max(0, currentOverview.totalSavings - reservedForPurchasedWishlist))} para cerrar el objetivo de ahorro de este mes.`,
+        body: `Te faltan ${formatCurrency(Math.max(0, (currentSummary?.budgetSavings ?? 0) - Math.max(0, (currentSummary?.savings ?? 0) - reservedForPurchasedWishlist)))} para cerrar el objetivo de ahorro de este mes.`,
         tone: 'neutral',
       })
     } else {
@@ -213,14 +226,32 @@ export default function Reports() {
       })
     }
 
+    const trendSeries = monthlySummaries.slice(-trendRange).map((entry) => ({
+      label: entry.shortLabel,
+      salario: entry.salary,
+      gastos: entry.expenses,
+      gustos: entry.wants,
+      ahorros: entry.savings,
+      deuda: entry.debtRemaining,
+      libre: entry.freeBalance,
+    }))
+
+    const trendSignals = [
+      { label: 'Gastos', direction: getTrendDirection(trendSeries.map((entry) => entry.gastos)) },
+      { label: 'Gustos', direction: getTrendDirection(trendSeries.map((entry) => entry.gustos)) },
+      { label: 'Ahorros', direction: getTrendDirection(trendSeries.map((entry) => entry.ahorros)) },
+      { label: 'Deuda', direction: getTrendDirection(trendSeries.map((entry) => entry.deuda)) },
+    ]
+
     return {
       currentMonthKey,
       previousMonthKey,
       currentLabel: formatMonthLabel(currentMonthKey),
       previousLabel: formatMonthLabel(previousMonthKey),
-      currentOverview,
-      previousOverview,
+      currentSummary,
+      previousSummary,
       metrics,
+      comparisonRows,
       comparisonData,
       budgetData,
       findings,
@@ -230,15 +261,24 @@ export default function Reports() {
       reservedForPurchasedWishlist,
       currentSnapshot,
       previousSnapshot,
+      rankings,
+      monthlySummaries,
+      trendSeries,
+      trendSignals,
     }
-  }, [debts, events, formula, monthlyPlanningHistory, salaries, transactions, wishlist])
+  }, [debts, events, formula, monthlyPlanningHistory, salaries, transactions, trendRange, wishlist])
 
   const comparisonConfig = {
     actual: { label: shortMonthFormatter.format(new Date()), color: 'var(--color-primary)' },
     previous: { label: 'Mes anterior', color: 'var(--color-secondary)' },
+  } satisfies ChartConfig
+
+  const trendConfig = {
     gastos: { label: 'Gastos', color: 'var(--color-primary)' },
     gustos: { label: 'Gustos', color: 'var(--color-secondary)' },
     ahorros: { label: 'Ahorros', color: 'var(--color-tertiary-container)' },
+    deuda: { label: 'Deuda', color: 'var(--color-warning)' },
+    libre: { label: 'Saldo libre', color: 'var(--color-on-surface)' },
   } satisfies ChartConfig
 
   async function handleExport() {
@@ -260,7 +300,7 @@ export default function Reports() {
 
   return (
     <div className="space-y-6 animate-in fade-in duration-500">
-      <header className="relative overflow-hidden rounded-[28px] border border-primary/10 bg-surface px-6 py-6 shadow-vault md:px-8">
+      <header className="relative overflow-hidden rounded-[28px] border border-primary/10 bg-surface px-4 py-5 shadow-vault sm:px-6 md:px-8">
         <div className="absolute inset-y-0 right-0 w-1/2 bg-[radial-gradient(circle_at_top_right,rgba(79,70,229,0.18),transparent_52%)]" />
         <div className="relative z-10 flex flex-col gap-5 xl:flex-row xl:items-end xl:justify-between">
           <div className="space-y-3">
@@ -269,11 +309,11 @@ export default function Reports() {
               Informe mensual automatico
             </Badge>
             <div>
-              <h1 className="text-[30px] font-semibold tracking-tight text-on-surface md:text-[40px]">
+              <h1 className="text-[28px] font-semibold tracking-tight text-on-surface md:text-[40px]">
                 Reports
               </h1>
               <p className="mt-2 max-w-3xl text-sm leading-6 text-muted-gray">
-                Un corte financiero del mes con KPIs reales, desviacion frente a presupuesto, deuda acumulada y lectura rapida de lo que esta pasando.
+                Tu tablero mensual con comparador entre meses, tendencias, rankings de compra y lectura rapida del estado financiero.
               </p>
             </div>
           </div>
@@ -299,7 +339,8 @@ export default function Reports() {
 
       <section className="grid gap-4 md:grid-cols-2 2xl:grid-cols-4">
         {report.metrics.map((metric) => {
-          const change = getChange(metric.current, metric.previous)
+          const delta = metric.current - metric.previous
+          const percent = metric.previous === 0 ? (metric.current === 0 ? 0 : 100) : Math.round((delta / metric.previous) * 100)
           const overBudget = metric.budget !== undefined && metric.current > metric.budget
 
           return (
@@ -310,13 +351,13 @@ export default function Reports() {
                     <CardDescription className="text-[11px] uppercase tracking-[0.22em] text-medium-gray">
                       {metric.label}
                     </CardDescription>
-                    <CardTitle className="mt-3 text-[30px] font-semibold text-on-surface">
+                    <CardTitle className="mt-3 text-[28px] font-semibold text-on-surface sm:text-[30px]">
                       {formatCurrency(metric.current)}
                     </CardTitle>
                   </div>
                   <Badge variant="secondary" className={`border ${toneClasses(metric.tone)}`}>
-                    {change.delta >= 0 ? <TrendingUp className="size-3.5" /> : <TrendingDown className="size-3.5" />}
-                    {change.percent}%
+                    {delta >= 0 ? <TrendingUp className="size-3.5" /> : <TrendingDown className="size-3.5" />}
+                    {percent}%
                   </Badge>
                 </div>
               </CardHeader>
@@ -339,22 +380,22 @@ export default function Reports() {
         })}
       </section>
 
-      <section className="grid gap-4 xl:grid-cols-[1.35fr_0.65fr]">
+      <section className="grid gap-4 xl:grid-cols-[1.15fr_0.85fr]">
         <Card className="border-graphite bg-surface shadow-vault">
           <CardHeader className="flex flex-row items-start justify-between gap-4">
             <div>
-              <CardTitle className="text-on-surface">Comparativa del mes</CardTitle>
+              <CardTitle className="text-on-surface">Comparador entre meses</CardTitle>
               <CardDescription className="text-muted-gray">
-                Cruce rapido entre este mes y el anterior para salario, gasto, gusto y ahorro.
+                Cruce visual del mes actual contra el anterior para salario, gasto, gusto, ahorro y saldo libre.
               </CardDescription>
             </div>
             <Badge variant="secondary" className="bg-surface-container-high text-on-surface">
               <CalendarDays className="size-3.5" />
-              Auto-generado
+              {report.currentMonthKey} vs {report.previousMonthKey}
             </Badge>
           </CardHeader>
           <CardContent>
-            <ChartContainer config={comparisonConfig} className="h-[320px] w-full">
+            <ChartContainer config={comparisonConfig} className="h-[310px] w-full">
               <BarChart data={report.comparisonData} margin={{ top: 8, right: 10, left: -22, bottom: 0 }}>
                 <CartesianGrid vertical={false} strokeDasharray="3 3" />
                 <XAxis dataKey="label" tickLine={false} axisLine={false} />
@@ -363,6 +404,90 @@ export default function Reports() {
                 <Bar dataKey="actual" radius={10} fill="var(--color-primary)" />
                 <Bar dataKey="previous" radius={10} fill="var(--color-secondary)" />
               </BarChart>
+            </ChartContainer>
+          </CardContent>
+        </Card>
+
+        <Card className="border-graphite bg-surface shadow-vault">
+          <CardHeader>
+            <CardTitle className="text-on-surface">Variacion absoluta y porcentual</CardTitle>
+            <CardDescription className="text-muted-gray">
+              Tabla compacta con cambios exactos para cada bloque financiero.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="overflow-x-auto">
+              <table className="min-w-full text-sm">
+                <thead>
+                  <tr className="border-b border-graphite text-left text-[11px] uppercase tracking-[0.18em] text-medium-gray">
+                    <th className="px-0 py-3">Indicador</th>
+                    <th className="px-3 py-3">Delta</th>
+                    <th className="px-3 py-3">% </th>
+                    <th className="px-3 py-3">Meta</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {report.comparisonRows.map((row) => (
+                    <tr key={row.key} className="border-b border-graphite/70 last:border-b-0">
+                      <td className="px-0 py-3 font-medium text-on-surface">{row.label}</td>
+                      <td className={`px-3 py-3 ${row.delta >= 0 ? 'text-emerald-200' : 'text-amber-200'}`}>
+                        {row.delta > 0 ? '+' : ''}{formatCurrency(row.delta)}
+                      </td>
+                      <td className="px-3 py-3 text-muted-gray">{row.percent}%</td>
+                      <td className="px-3 py-3 text-muted-gray">{row.budget ? formatCurrency(row.budget) : 'N/A'}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </CardContent>
+        </Card>
+      </section>
+
+      <section className="grid gap-4 xl:grid-cols-[1.2fr_0.8fr]">
+        <Card className="border-graphite bg-surface shadow-vault">
+          <CardHeader className="gap-4 sm:flex-row sm:items-start sm:justify-between">
+            <div>
+              <CardTitle className="text-on-surface">Tendencias de 3, 6 y 12 meses</CardTitle>
+              <CardDescription className="text-muted-gray">
+                Evolucion de gastos, gustos, ahorro, deuda pendiente y saldo libre segun el rango que quieras mirar.
+              </CardDescription>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {[3, 6, 12].map((range) => (
+                <Button
+                  key={range}
+                  type="button"
+                  variant="secondary"
+                  className={trendRange === range ? 'bg-primary text-primary-foreground hover:bg-primary/90' : 'bg-surface-container-high text-on-surface hover:bg-surface-container-higher'}
+                  onClick={() => setTrendRange(range as 3 | 6 | 12)}
+                >
+                  {range} meses
+                </Button>
+              ))}
+            </div>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="flex flex-wrap gap-2">
+              {report.trendSignals.map((signal) => (
+                <Badge key={signal.label} variant="secondary" className={getDirectionTone(signal.direction)}>
+                  <Activity className="size-3.5" />
+                  {signal.label}: {getDirectionLabel(signal.direction)}
+                </Badge>
+              ))}
+            </div>
+            <ChartContainer config={trendConfig} className="h-[340px] w-full">
+              <LineChart data={report.trendSeries} margin={{ top: 8, right: 10, left: -18, bottom: 0 }}>
+                <CartesianGrid vertical={false} strokeDasharray="3 3" />
+                <XAxis dataKey="label" tickLine={false} axisLine={false} />
+                <YAxis tickLine={false} axisLine={false} />
+                <ChartTooltip content={<ChartTooltipContent />} />
+                <Line type="monotone" dataKey="gastos" stroke="var(--color-primary)" strokeWidth={2.5} dot={false} />
+                <Line type="monotone" dataKey="gustos" stroke="var(--color-secondary)" strokeWidth={2.5} dot={false} />
+                <Line type="monotone" dataKey="ahorros" stroke="var(--color-tertiary-container)" strokeWidth={2.5} dot={false} />
+                <Line type="monotone" dataKey="deuda" stroke="var(--color-warning)" strokeWidth={2.5} dot={false} />
+                <Line type="monotone" dataKey="libre" stroke="var(--color-on-surface)" strokeWidth={2} dot={false} strokeDasharray="5 5" />
+              </LineChart>
             </ChartContainer>
           </CardContent>
         </Card>
@@ -410,6 +535,104 @@ export default function Reports() {
                   ? `${report.currentSnapshot.expenses.length} gasto(s) y ${report.currentSnapshot.wants.length} gusto(s) guardados en el reset mensual.`
                   : 'Haz el reset mensual cuando cierres el mes para alimentar este bloque automaticamente.'}
               </p>
+            </div>
+          </CardContent>
+        </Card>
+      </section>
+
+      <section className="grid gap-4 xl:grid-cols-3">
+        <Card className="border-graphite bg-surface shadow-vault">
+          <CardHeader>
+            <CardTitle className="text-on-surface">Top categorias</CardTitle>
+            <CardDescription className="text-muted-gray">
+              Las categorias que mas dinero consumieron en {report.currentLabel}.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            {report.rankings.topCategoriesByAmount.length > 0 ? report.rankings.topCategoriesByAmount.map((entry, index) => (
+              <div key={`${entry.type}-${entry.label}`} className="rounded-2xl border border-graphite bg-abyss/85 p-4">
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <p className="text-sm font-semibold text-on-surface">{index + 1}. {entry.label}</p>
+                    <p className="mt-1 text-xs text-muted-gray">
+                      {entry.type === 'expense' ? 'Gasto' : 'Gusto'} · {entry.count} movimiento(s)
+                    </p>
+                  </div>
+                  <Badge variant="secondary" className="bg-primary/10 text-primary">
+                    {formatCurrency(entry.totalAmount)}
+                  </Badge>
+                </div>
+              </div>
+            )) : (
+              <p className="text-sm text-muted-gray">Todavia no hay movimientos este mes para calcular categorias.</p>
+            )}
+          </CardContent>
+        </Card>
+
+        <Card className="border-graphite bg-surface shadow-vault">
+          <CardHeader>
+            <CardTitle className="text-on-surface">Top productos</CardTitle>
+            <CardDescription className="text-muted-gray">
+              Lo mas costoso del mes agrupado por nombre de item.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            {report.rankings.topProductsByAmount.length > 0 ? report.rankings.topProductsByAmount.map((entry, index) => (
+              <div key={`${entry.type}-${entry.category}-${entry.label}`} className="rounded-2xl border border-graphite bg-abyss/85 p-4">
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <p className="text-sm font-semibold text-on-surface">{index + 1}. {entry.label}</p>
+                    <p className="mt-1 text-xs text-muted-gray">
+                      {entry.category} · {entry.count} registro(s)
+                    </p>
+                  </div>
+                  <Badge variant="secondary" className="bg-secondary/15 text-secondary">
+                    {formatCurrency(entry.totalAmount)}
+                  </Badge>
+                </div>
+              </div>
+            )) : (
+              <p className="text-sm text-muted-gray">Todavia no hay items comprados este mes para el ranking.</p>
+            )}
+          </CardContent>
+        </Card>
+
+        <Card className="border-graphite bg-surface shadow-vault">
+          <CardHeader>
+            <CardTitle className="text-on-surface">Lo mas repetido</CardTitle>
+            <CardDescription className="text-muted-gray">
+              Patrones de compra frecuentes para detectar habitos del mes.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="space-y-3">
+              <p className="text-xs uppercase tracking-[0.2em] text-medium-gray">Categorias repetidas</p>
+              {report.rankings.topCategoriesByCount.slice(0, 3).map((entry) => (
+                <div key={`repeat-category-${entry.type}-${entry.label}`} className="flex items-center justify-between gap-3 rounded-2xl border border-graphite bg-abyss/85 px-4 py-3">
+                  <div>
+                    <p className="text-sm font-medium text-on-surface">{entry.label}</p>
+                    <p className="text-xs text-muted-gray">{entry.type === 'expense' ? 'Gasto' : 'Gusto'}</p>
+                  </div>
+                  <Badge variant="secondary" className="bg-surface-container-high text-on-surface">
+                    {entry.count}x
+                  </Badge>
+                </div>
+              ))}
+            </div>
+
+            <div className="space-y-3">
+              <p className="text-xs uppercase tracking-[0.2em] text-medium-gray">Productos repetidos</p>
+              {report.rankings.topProductsByCount.slice(0, 3).map((entry) => (
+                <div key={`repeat-product-${entry.type}-${entry.label}`} className="flex items-center justify-between gap-3 rounded-2xl border border-graphite bg-abyss/85 px-4 py-3">
+                  <div>
+                    <p className="text-sm font-medium text-on-surface">{entry.label}</p>
+                    <p className="text-xs text-muted-gray">{entry.category}</p>
+                  </div>
+                  <Badge variant="secondary" className="bg-surface-container-high text-on-surface">
+                    {entry.count}x
+                  </Badge>
+                </div>
+              ))}
             </div>
           </CardContent>
         </Card>

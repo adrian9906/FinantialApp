@@ -79,6 +79,12 @@ function normalizeDebt(entry: Partial<Debt>): Debt {
     remainingAmount,
     progress: Number.isFinite(Number(entry.progress)) ? Number(entry.progress) : progress,
     isSettled: entry.isSettled ?? remainingAmount === 0,
+    payments: Array.isArray(entry.payments)
+      ? entry.payments.map((payment) => ({
+          amount: Number(payment.amount ?? 0),
+          date: String(payment.date ?? new Date().toISOString().slice(0, 10)),
+        }))
+      : [],
   }
 }
 
@@ -490,6 +496,9 @@ export const useFinanceStore = create<FinanceStore>()((set, get) => ({
           remainingAmount,
           progress: debt.amount > 0 ? Math.min(100, Math.round((paidAmount / debt.amount) * 100)) : 100,
           isSettled: remainingAmount === 0,
+          payments: paidAmount > 0
+            ? [{ amount: paidAmount, date: new Date().toISOString().slice(0, 10) }]
+            : [],
         }, ...state.debts],
       }))
       return
@@ -517,6 +526,7 @@ export const useFinanceStore = create<FinanceStore>()((set, get) => ({
             remainingAmount: nextRemainingAmount,
             progress: nextAmount > 0 ? Math.min(100, Math.round((nextPaidAmount / nextAmount) * 100)) : 100,
             isSettled: nextRemainingAmount === 0,
+            payments: entry.payments ?? [],
           }
         }),
       }))
@@ -546,6 +556,7 @@ export const useFinanceStore = create<FinanceStore>()((set, get) => ({
             remainingAmount: nextRemainingAmount,
             progress: entry.amount > 0 ? Math.min(100, Math.round((nextPaidAmount / entry.amount) * 100)) : 100,
             isSettled: nextRemainingAmount === 0,
+            payments: [...(entry.payments ?? []), { amount, date: new Date().toISOString().slice(0, 10) }],
           }
         }),
       }))

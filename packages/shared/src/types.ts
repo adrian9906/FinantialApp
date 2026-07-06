@@ -12,6 +12,11 @@ export interface Transaction {
   date: string
 }
 
+export interface DebtPayment {
+  amount: number
+  date: string
+}
+
 export interface Debt {
   id: string
   amount: number
@@ -23,6 +28,7 @@ export interface Debt {
   remainingAmount: number
   progress: number
   isSettled: boolean
+  payments?: DebtPayment[]
 }
 
 export interface WishlistItem {

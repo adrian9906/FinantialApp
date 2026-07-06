@@ -15,16 +15,14 @@ import {
 
 import { parseExpenseDescription } from '@/lib/expense-utils'
 import { downloadExcelWorkbook, type ExcelSheetDefinition } from '@/lib/excel'
+import {
+  buildMonthComparison,
+  buildMonthlyRankings,
+  buildMonthlySummaries,
+  getMonthKey,
+  getPreviousMonthKey,
+} from '@/lib/reporting'
 import { parseWantDescription } from '@/lib/want-utils'
-
-function getMonthKey(date: Date) {
-  return date.toISOString().slice(0, 7)
-}
-
-function getPreviousMonthKey(monthKey: string) {
-  const [year, month] = monthKey.split('-').map(Number)
-  return new Date(Date.UTC(year, month - 2, 1)).toISOString().slice(0, 7)
-}
 
 function toCurrency(value: number) {
   return Math.round(value * 100) / 100
@@ -186,6 +184,17 @@ export async function exportMonthlyReport(params: {
 
   const currentOverview = getMonthlyOverview(currentSalaries, currentTransactions, [], formula)
   const previousOverview = getMonthlyOverview(previousSalaries, previousTransactions, [], formula)
+  const monthlySummaries = buildMonthlySummaries({
+    salaries,
+    transactions,
+    debts,
+    monthlyPlanningHistory,
+    formula,
+  })
+  const currentSummary = monthlySummaries.find((entry) => entry.month === currentMonthKey)
+  const previousSummary = monthlySummaries.find((entry) => entry.month === previousMonthKey)
+  const comparisonRows = buildMonthComparison(currentSummary, previousSummary)
+  const rankings = buildMonthlyRankings(transactions, currentMonthKey)
   const reservedForPurchasedWishlist = wishlist.reduce(
     (sum, item) => sum + (isWishlistPurchased(item) ? getWishlistReservedAmount(item) : 0),
     0,
@@ -203,6 +212,53 @@ export async function exportMonthlyReport(params: {
         ['Deuda pagada acumulada', toCurrency(debts.reduce((sum, debt) => sum + debt.paidAmount, 0)), '', ''],
         ['Deuda pendiente actual', toCurrency(debts.reduce((sum, debt) => sum + debt.remainingAmount, 0)), '', ''],
       ],
+    },
+    {
+      name: 'Comparador mensual',
+      columns: ['Indicador', 'Mes actual', 'Mes anterior', 'Variacion', 'Variacion %', 'Meta'],
+      rows: comparisonRows.map((row) => [
+        row.label,
+        toCurrency(row.current),
+        toCurrency(row.previous),
+        toCurrency(row.delta),
+        row.percent,
+        row.budget ? toCurrency(row.budget) : '',
+      ]),
+    },
+    {
+      name: 'Tendencias',
+      columns: ['Mes', 'Salario', 'Gastos', 'Gustos', 'Ahorros', 'Deuda pagada', 'Deuda pendiente', 'Saldo libre'],
+      rows: monthlySummaries.map((summary) => [
+        summary.label,
+        toCurrency(summary.salary),
+        toCurrency(summary.expenses),
+        toCurrency(summary.wants),
+        toCurrency(summary.savings),
+        toCurrency(summary.debtPaid),
+        toCurrency(summary.debtRemaining),
+        toCurrency(summary.freeBalance),
+      ]),
+    },
+    {
+      name: 'Top categorias',
+      columns: ['Categoria', 'Tipo', 'Monto total', 'Repeticiones'],
+      rows: rankings.topCategoriesByAmount.map((entry) => [
+        entry.label,
+        entry.type === 'expense' ? 'gasto' : 'gusto',
+        toCurrency(entry.totalAmount),
+        entry.count,
+      ]),
+    },
+    {
+      name: 'Top productos',
+      columns: ['Producto', 'Categoria', 'Tipo', 'Monto total', 'Repeticiones'],
+      rows: rankings.topProductsByAmount.map((entry) => [
+        entry.label,
+        entry.category,
+        entry.type === 'expense' ? 'gasto' : 'gusto',
+        toCurrency(entry.totalAmount),
+        entry.count,
+      ]),
     },
     {
       name: 'Movimientos',

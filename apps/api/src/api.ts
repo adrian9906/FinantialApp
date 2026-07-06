@@ -157,7 +157,7 @@ function serializeDebt(entry: {
   fechaInicio: Date
   fechaTerminacion: Date
   interes: number | null
-  pagos?: Array<{ cantidad: number }>
+  pagos?: Array<{ cantidad: number; fecha: Date }>
 }): Debt {
   const paidAmount = entry.pagos?.reduce((sum, payment) => sum + payment.cantidad, 0) ?? 0
   const remainingAmount = Math.max(0, entry.cantidad - paidAmount)
@@ -172,6 +172,10 @@ function serializeDebt(entry: {
     remainingAmount,
     progress: entry.cantidad > 0 ? Math.min(100, Math.round((paidAmount / entry.cantidad) * 100)) : 100,
     isSettled: remainingAmount === 0,
+    payments: entry.pagos?.map((payment) => ({
+      amount: payment.cantidad,
+      date: toDateString(payment.fecha),
+    })) ?? [],
   }
 }
 
