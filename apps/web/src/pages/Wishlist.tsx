@@ -179,7 +179,6 @@ export default function Wishlist() {
 
     const purchased = isWishlistPurchased(item)
     const externalContribution = getWishlistExternalContribution(item)
-    const reservedAmount = getWishlistReservedAmount(item)
     const availableToSpend = getWishlistAvailableAmount(item, currentSavedAmount)
 
     if (!purchased && availableToSpend < item.price) {

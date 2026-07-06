@@ -5,14 +5,13 @@ import type {
   Debt,
   MonthlyPlanningHistory,
   MonthlyPlanningItem,
-  normalizeBootstrapPayload,
   Projection,
   Reminder,
   Salary,
   Transaction,
   WishlistItem,
 } from '@plata/shared'
-import { createEmptyBootstrapPayload } from '@plata/shared'
+import { createEmptyBootstrapPayload, normalizeBootstrapPayload } from '@plata/shared'
 
 import { parseExpenseDescription } from '@/lib/expense-utils'
 import { requestJson } from '@/lib/api'
