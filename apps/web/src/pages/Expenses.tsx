@@ -169,6 +169,9 @@ export default function Expenses() {
   const [formError, setFormError] = useState<string | null>(null)
   const [isSaving, setIsSaving] = useState(false)
   const [isTransferring, setIsTransferring] = useState(false)
+  const [transferOpen, setTransferOpen] = useState(false)
+  const [transferAmount, setTransferAmount] = useState('')
+  const [transferError, setTransferError] = useState<string | null>(null)
   const [form, setForm] = useState<ExpenseFormState>({
     amount: '',
     itemName: '',
@@ -318,17 +321,30 @@ export default function Expenses() {
   }
 
   async function handleTransferRemainingToSavings() {
-    if (remaining <= 0 || isTransferring) return
+    if (isTransferring) return
+
+    const nextAmount = Number(transferAmount)
+    if (!Number.isFinite(nextAmount) || nextAmount <= 0) {
+      setTransferError('El monto debe ser mayor que cero.')
+      return
+    }
+    if (nextAmount > remaining) {
+      setTransferError(`Solo puedes mover hasta $${Math.max(0, remaining).toLocaleString()}.`)
+      return
+    }
 
     setIsTransferring(true)
 
     try {
       await addTransaction({
-        amount: remaining,
+        amount: nextAmount,
         type: 'saving',
         description: buildExpenseTransferSavingDescription(),
         date: new Date().toISOString().slice(0, 10),
       })
+      setTransferOpen(false)
+      setTransferAmount('')
+      setTransferError(null)
     } finally {
       setIsTransferring(false)
     }
@@ -367,12 +383,15 @@ export default function Expenses() {
             <div className="mt-4 flex flex-wrap items-center gap-3">
               <Button
                 variant="secondary"
-                loading={isTransferring}
-                disabled={remaining <= 0 || isTransferring}
-                onClick={() => void handleTransferRemainingToSavings()}
+                disabled={remaining <= 0}
+                onClick={() => {
+                  setTransferAmount(String(Math.max(0, remaining)))
+                  setTransferError(null)
+                  setTransferOpen(true)
+                }}
                 className="bg-tertiary-container text-white hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-40"
               >
-                Pasar ${Math.max(0, remaining).toLocaleString()} a ahorros
+                Pasar dinero a ahorros
               </Button>
               <p className="text-xs text-muted-gray">
                 Si ese dinero ya no lo vas a gastar este mes, puedes moverlo a ahorro en un toque.
@@ -610,6 +629,58 @@ export default function Expenses() {
               className="bg-primary-container text-white shadow-vault hover:brightness-110"
             >
               Guardar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={transferOpen} onOpenChange={(nextOpen) => { if (!isTransferring) setTransferOpen(nextOpen) }}>
+        <DialogContent className="border-graphite bg-surface sm:max-w-xl">
+          <DialogHeader>
+            <DialogTitle className="text-on-surface">Mover dinero a ahorros</DialogTitle>
+            <DialogDescription>
+              Elige cuanto del restante de gastos quieres pasar a ahorros este mes.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label className="text-medium-gray">Monto a mover</Label>
+              <Input
+                type="number"
+                min="0"
+                max={Math.max(0, remaining)}
+                value={transferAmount}
+                onChange={(event) => {
+                  setTransferError(null)
+                  setTransferAmount(event.target.value)
+                }}
+                className="bg-abyss border-graphite text-on-surface"
+              />
+              <p className="text-xs text-muted-gray">
+                Disponible para mover: ${Math.max(0, remaining).toLocaleString()}
+              </p>
+            </div>
+            {transferError ? <p className="text-sm text-error">{transferError}</p> : null}
+          </div>
+          <DialogFooter>
+            <Button
+              variant="ghost"
+              disabled={isTransferring}
+              onClick={() => {
+                setTransferOpen(false)
+                setTransferError(null)
+              }}
+              className="text-muted-gray"
+            >
+              Cancelar
+            </Button>
+            <Button
+              loading={isTransferring}
+              disabled={isTransferring || remaining <= 0}
+              onClick={() => void handleTransferRemainingToSavings()}
+              className="bg-tertiary-container text-white hover:brightness-110"
+            >
+              Mover a ahorros
             </Button>
           </DialogFooter>
         </DialogContent>

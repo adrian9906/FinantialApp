@@ -133,9 +133,11 @@ export default function Savings() {
               <div key={transaction.id} className="group grid grid-cols-1 gap-3 p-4 transition-colors hover:bg-surface-container-low md:grid-cols-[1fr_100px_80px] md:gap-4 md:items-center">
                 <div>
                   <p className="text-sm font-medium text-on-surface">
-                    {parseSavingDescription(transaction.description).kind === 'transfer'
-                      ? 'Transferido desde gastos'
-                      : 'Ahorro registrado'}
+                    {(() => {
+                      const savingDetails = parseSavingDescription(transaction.description)
+                      if (savingDetails.kind !== 'transfer') return 'Ahorro registrado'
+                      return savingDetails.source === 'want' ? 'Transferido desde gustos' : 'Transferido desde gastos'
+                    })()}
                   </p>
                   <p className="text-xs text-muted-gray">{transaction.date}</p>
                 </div>
