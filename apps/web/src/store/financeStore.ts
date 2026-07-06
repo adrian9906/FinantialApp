@@ -391,9 +391,18 @@ export const useFinanceStore = create<FinanceStore>()((set, get) => ({
       return
     }
 
+    const current = get().wishlist.find((item) => item.id === id)
+    if (!current) return
+
     const updated = await requestJson<WishlistItem>(`/wishlist/${id}`, {
       method: 'PUT',
-      body: JSON.stringify(data),
+      body: JSON.stringify({
+        name: data.name ?? current.name,
+        price: data.price ?? current.price,
+        priority: data.priority ?? current.priority,
+        savedAmount: data.savedAmount ?? current.savedAmount,
+        image: data.image ?? current.image,
+      }),
     })
     set((state) => ({
       wishlist: state.wishlist.map((item) => (item.id === id ? updated : item)),
