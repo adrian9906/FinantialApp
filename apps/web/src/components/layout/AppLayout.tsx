@@ -11,6 +11,7 @@ import {
   TrendingUp,
   Bell,
   Settings2,
+  Activity,
   Menu,
   X,
   ChevronUp,
@@ -48,6 +49,7 @@ const navItems = [
   { to: '/events', icon: Calendar, label: 'Eventos' },
   { to: '/projections', icon: TrendingUp, label: 'Proyecciones' },
   { to: '/reminders', icon: Bell, label: 'Recordatorios' },
+  { to: '/reports', icon: Activity, label: 'Reports' },
   { to: '/settings', icon: Settings2, label: 'Settings' },
 ]
 
@@ -210,7 +212,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
 
       <Sidebar />
       <main className="pointer-events-none relative z-10 min-h-dvh flex-1 lg:pl-64">
-        <div className="pointer-events-auto mx-auto w-full max-w-[90%] px-4 py-6 sm:px-6 lg:px-8 lg:py-8">
+        <div className="pointer-events-auto mx-auto w-full max-w-full px-3 py-5 sm:px-6 md:max-w-[94%] lg:max-w-[90%] lg:px-8 lg:py-8">
           {authMode === 'guest' && (
             <div className="mb-6 flex flex-col gap-3 rounded-2xl border border-amber-500/30 bg-[color:color-mix(in_srgb,var(--warning)_14%,var(--surface))] px-4 py-4 text-sm text-on-surface shadow-vault sm:flex-row sm:items-center sm:justify-between">
               <div className="space-y-1">

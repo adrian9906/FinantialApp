@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { useFinanceStore } from '@/store/financeStore'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
+import { ExportExcelButton } from '@/components/reports/ExportExcelButton'
 import { Input } from '@/components/ui/input'
 import {
   Dialog,
@@ -13,6 +14,7 @@ import {
 } from '@/components/ui/dialog'
 import { Label } from '@/components/ui/label'
 import { ChevronLeft, ChevronRight, Plus, Pencil, Trash2, Wallet, Receipt } from 'lucide-react'
+import { exportSalariesReport } from '@/lib/reportExports'
 import { formatFormulaLabel, usePreferencesStore } from '@/store/preferencesStore'
 
 const MONTH_LABELS = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic']
@@ -43,6 +45,7 @@ export default function Salary() {
   const [month, setMonth] = useState('')
   const [calendarYear, setCalendarYear] = useState(new Date().getFullYear())
   const [isSaving, setIsSaving] = useState(false)
+  const [isExporting, setIsExporting] = useState(false)
 
   const latestSalary = salaries.length > 0
     ? salaries.reduce((max, salary) => new Date(salary.month) > new Date(max.month) ? salary : max)
@@ -95,15 +98,27 @@ export default function Salary() {
   const budgetWants = latestSalary ? latestSalary.amount * (formula.wants / 100) : 0
   const budgetSavings = latestSalary ? latestSalary.amount * (formula.savings / 100) : 0
 
+  async function handleExport() {
+    setIsExporting(true)
+    try {
+      await exportSalariesReport(salaries)
+    } finally {
+      setIsExporting(false)
+    }
+  }
+
   return (
     <div className="space-y-6 animate-in fade-in duration-500">
-      <header className="flex flex-col gap-1">
-        <h1 className="text-[28px] md:text-[36px] font-semibold text-on-surface tracking-tight">
-          Matriz de Ingresos
-        </h1>
-        <p className="text-sm text-muted-gray max-w-2xl">
-          Cada salario se guarda en SQLite y alimenta la formula {formatFormulaLabel(formula)} del resto de la app.
-        </p>
+      <header className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
+        <div className="space-y-1">
+          <h1 className="text-[28px] md:text-[36px] font-semibold text-on-surface tracking-tight">
+            Matriz de Ingresos
+          </h1>
+          <p className="text-sm text-muted-gray max-w-2xl">
+            Cada salario se guarda en SQLite y alimenta la formula {formatFormulaLabel(formula)} del resto de la app.
+          </p>
+        </div>
+        <ExportExcelButton loading={isExporting} onClick={handleExport} />
       </header>
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">

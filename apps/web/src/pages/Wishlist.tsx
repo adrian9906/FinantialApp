@@ -9,6 +9,7 @@ import {
 import { Grid3X3, LayoutList, Pencil, Plus, ShoppingCart, Trash2 } from 'lucide-react'
 
 import { ImageUploadField } from '@/components/wishlist/ImageUploadField'
+import { ExportExcelButton } from '@/components/reports/ExportExcelButton'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
@@ -16,6 +17,7 @@ import { Checkbox } from '@/components/ui/checkbox'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { exportWishlistReport } from '@/lib/reportExports'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { useMonthlyOverview } from '@/lib/useMonthlyOverview'
 import { useFinanceStore } from '@/store/financeStore'
@@ -78,6 +80,7 @@ export default function Wishlist() {
   const [editId, setEditId] = useState<string | null>(null)
   const [viewMode, setViewMode] = useState<ViewMode>('cards')
   const [isSaving, setIsSaving] = useState(false)
+  const [isExporting, setIsExporting] = useState(false)
   const [form, setForm] = useState<FormState>({
     name: '',
     price: '',
@@ -196,6 +199,15 @@ export default function Wishlist() {
     }
   }
 
+  async function handleExport() {
+    setIsExporting(true)
+    try {
+      await exportWishlistReport(wishlist)
+    } finally {
+      setIsExporting(false)
+    }
+  }
+
   return (
     <div className="space-y-6 animate-in fade-in duration-500">
       <header className="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
@@ -230,6 +242,7 @@ export default function Wishlist() {
             </Button>
           </div>
 
+          <ExportExcelButton loading={isExporting} onClick={handleExport} />
           <Button onClick={() => handleOpen()} className="bg-primary-container text-white hover:bg-primary-container/80 shadow-vault">
             <Plus className="size-4" />
             Agregar artículo

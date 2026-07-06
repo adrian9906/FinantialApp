@@ -4,10 +4,12 @@ import { Calendar, CalendarDays, ChevronLeft, ChevronRight, Pencil, Plus, Timer,
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
+import { ExportExcelButton } from '@/components/reports/ExportExcelButton'
 import { DatePickerField } from '@/components/ui/date-picker-field'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { exportEventsReport } from '@/lib/reportExports'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { useMonthlyOverview } from '@/lib/useMonthlyOverview'
@@ -63,6 +65,7 @@ export default function Events() {
   const [calendarMonth, setCalendarMonth] = useState(() => new Date(new Date().getFullYear(), new Date().getMonth(), 1))
   const [viewMode, setViewMode] = useState<'list' | 'calendar'>('calendar')
   const [isSaving, setIsSaving] = useState(false)
+  const [isExporting, setIsExporting] = useState(false)
   const [form, setForm] = useState<FormState>({ name: '', date: '', amount: '', isNotification: false })
 
   const sortedEvents = useMemo(
@@ -91,6 +94,15 @@ export default function Events() {
   }, [sortedEvents])
 
   const monthMatrix = useMemo(() => buildMonthMatrix(calendarMonth), [calendarMonth])
+
+  async function handleExport() {
+    setIsExporting(true)
+    try {
+      await exportEventsReport(events)
+    } finally {
+      setIsExporting(false)
+    }
+  }
 
   function resetForm() {
     setForm({ name: '', date: '', amount: '', isNotification: false })
@@ -155,10 +167,13 @@ export default function Events() {
             Los eventos salen del dinero que todavia queda en `Gustos`: primero se resta lo ya gastado ahi y despues se reserva lo que planifiques aqui.
           </p>
         </div>
-        <Button onClick={() => handleOpen()} className="border border-graphite bg-primary-container text-white shadow-vault hover:bg-primary-container/80">
-          <Plus className="size-4" />
-          Nuevo evento
-        </Button>
+        <div className="flex flex-col gap-3 sm:flex-row">
+          <ExportExcelButton loading={isExporting} onClick={handleExport} />
+          <Button onClick={() => handleOpen()} className="border border-graphite bg-primary-container text-white shadow-vault hover:bg-primary-container/80">
+            <Plus className="size-4" />
+            Nuevo evento
+          </Button>
+        </div>
       </header>
 
       <section className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">

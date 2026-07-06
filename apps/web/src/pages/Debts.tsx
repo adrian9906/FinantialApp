@@ -4,11 +4,13 @@ import { CalendarClock, CheckCheck, Landmark, Pencil, Plus, ReceiptText, Trash2,
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
+import { ExportExcelButton } from '@/components/reports/ExportExcelButton'
 import { Checkbox } from '@/components/ui/checkbox'
 import { DatePickerField } from '@/components/ui/date-picker-field'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { exportDebtsReport } from '@/lib/reportExports'
 import { useMonthlyOverview } from '@/lib/useMonthlyOverview'
 import { useFinanceStore } from '@/store/financeStore'
 
@@ -38,6 +40,7 @@ export default function Debts() {
   const [paymentError, setPaymentError] = useState<string | null>(null)
   const [isSaving, setIsSaving] = useState(false)
   const [isPaying, setIsPaying] = useState(false)
+  const [isExporting, setIsExporting] = useState(false)
   const [form, setForm] = useState<DebtFormState>({
     amount: '',
     history: '',
@@ -177,6 +180,15 @@ export default function Debts() {
     await payDebt(entry.id, entry.remainingAmount)
   }
 
+  async function handleExport() {
+    setIsExporting(true)
+    try {
+      await exportDebtsReport(debts)
+    } finally {
+      setIsExporting(false)
+    }
+  }
+
   const totalDebt = debts.reduce((sum, debt) => sum + debt.amount, 0)
   const totalPaid = debts.reduce((sum, debt) => sum + debt.paidAmount, 0)
   const totalRemaining = debts.reduce((sum, debt) => sum + debt.remainingAmount, 0)
@@ -195,9 +207,12 @@ export default function Debts() {
             Cada abono que registres aqui se descuenta automaticamente del salario disponible. Si marcas una deuda como saldada, se paga el restante completo.
           </p>
         </div>
-        <Button onClick={() => handleOpen()} className="bg-primary-container text-white shadow-vault hover:bg-primary-container/80">
-          <Plus className="size-4" /> Nueva deuda
-        </Button>
+        <div className="flex flex-col gap-3 sm:flex-row">
+          <ExportExcelButton loading={isExporting} onClick={handleExport} />
+          <Button onClick={() => handleOpen()} className="bg-primary-container text-white shadow-vault hover:bg-primary-container/80">
+            <Plus className="size-4" /> Nueva deuda
+          </Button>
+        </div>
       </header>
 
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-5">

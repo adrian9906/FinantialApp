@@ -7,6 +7,7 @@ import { useMonthlyOverview } from '@/lib/useMonthlyOverview'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
+import { ExportExcelButton } from '@/components/reports/ExportExcelButton'
 import { Checkbox } from '@/components/ui/checkbox'
 import { DatePickerField } from '@/components/ui/date-picker-field'
 import {
@@ -19,6 +20,7 @@ import {
 } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { exportExpensesReport } from '@/lib/reportExports'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 
@@ -169,6 +171,7 @@ export default function Expenses() {
   const [formError, setFormError] = useState<string | null>(null)
   const [isSaving, setIsSaving] = useState(false)
   const [isTransferring, setIsTransferring] = useState(false)
+  const [isExporting, setIsExporting] = useState(false)
   const [transferOpen, setTransferOpen] = useState(false)
   const [transferAmount, setTransferAmount] = useState('')
   const [transferError, setTransferError] = useState<string | null>(null)
@@ -350,6 +353,15 @@ export default function Expenses() {
     }
   }
 
+  async function handleExport() {
+    setIsExporting(true)
+    try {
+      await exportExpensesReport(transactions)
+    } finally {
+      setIsExporting(false)
+    }
+  }
+
   return (
     <div className="space-y-6 animate-in fade-in duration-500">
       <header className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
@@ -359,9 +371,12 @@ export default function Expenses() {
             Convierte los gastos esenciales en una lista de compras organizada por categorias. Cada producto sigue guardandose en Prisma como una transaccion de gasto.
           </p>
         </div>
-        <Button onClick={() => handleOpen()} className="bg-primary-container text-white shadow-vault hover:bg-primary-container/80">
-          <Plus className="size-4" /> Agregar producto
-        </Button>
+        <div className="flex flex-col gap-3 sm:flex-row">
+          <ExportExcelButton loading={isExporting} onClick={handleExport} />
+          <Button onClick={() => handleOpen()} className="bg-primary-container text-white shadow-vault hover:bg-primary-container/80">
+            <Plus className="size-4" /> Agregar producto
+          </Button>
+        </div>
       </header>
 
       <div className="relative overflow-hidden rounded-xl bg-surface p-6 shadow-vault">

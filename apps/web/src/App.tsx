@@ -13,6 +13,7 @@ import Events from '@/pages/Events'
 import Projections from '@/pages/Projections'
 import Reminders from '@/pages/Reminders'
 import Settings from '@/pages/Settings'
+import Reports from '@/pages/Reports'
 import { useEffect } from 'react'
 import { useFinanceStore } from '@/store/financeStore'
 import { useAuthStore } from '@/store/authStore'
@@ -91,6 +92,7 @@ function ProtectedApp() {
         <Route path="/events" element={<Events />} />
         <Route path="/projections" element={<Projections />} />
         <Route path="/reminders" element={<Reminders />} />
+        <Route path="/reports" element={<Reports />} />
         <Route path="/settings" element={<Settings />} />
       </Routes>
     </AppLayout>

@@ -3,6 +3,7 @@ import { parseSavingDescription } from '@plata/shared'
 import { useFinanceStore } from '@/store/financeStore'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
+import { ExportExcelButton } from '@/components/reports/ExportExcelButton'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { DatePickerField } from '@/components/ui/date-picker-field'
@@ -10,6 +11,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, Di
 import { Plus, Trash2, PiggyBank, Pencil } from 'lucide-react'
 import { useMonthlyOverview } from '@/lib/useMonthlyOverview'
 import { Badge } from '@/components/ui/badge'
+import { exportSavingsReport } from '@/lib/reportExports'
 
 export default function Savings() {
   const transactions = useFinanceStore((state) => state.transactions)
@@ -22,6 +24,7 @@ export default function Savings() {
   const [form, setForm] = useState({ amount: '', date: '' })
   const [formError, setFormError] = useState<string | null>(null)
   const [isSaving, setIsSaving] = useState(false)
+  const [isExporting, setIsExporting] = useState(false)
 
   function resetForm() {
     setForm({ amount: '', date: '' })
@@ -83,16 +86,28 @@ export default function Savings() {
   const remaining = overview.budgetSavings - overview.totalSavings
   const budgetFull = remaining <= 0
 
+  async function handleExport() {
+    setIsExporting(true)
+    try {
+      await exportSavingsReport(transactions)
+    } finally {
+      setIsExporting(false)
+    }
+  }
+
   return (
     <div className="space-y-6 animate-in fade-in duration-500">
-      <header className="flex items-center justify-between">
+      <header className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
         <div>
           <h1 className="text-[28px] md:text-[36px] font-semibold text-on-surface tracking-tight">Ahorros</h1>
           <p className="text-sm text-muted-gray">Esta vista opera directo sobre el modelo `Ahorro`.</p>
         </div>
-        <Button onClick={() => handleOpen()} disabled={budgetFull} className="bg-tertiary-container text-white hover:brightness-110 shadow-vault disabled:opacity-40 disabled:cursor-not-allowed">
-          <Plus className="size-4" /> Agregar ahorro
-        </Button>
+        <div className="flex flex-col gap-3 sm:flex-row">
+          <ExportExcelButton loading={isExporting} onClick={handleExport} />
+          <Button onClick={() => handleOpen()} disabled={budgetFull} className="bg-tertiary-container text-white hover:brightness-110 shadow-vault disabled:opacity-40 disabled:cursor-not-allowed">
+            <Plus className="size-4" /> Agregar ahorro
+          </Button>
+        </div>
       </header>
 
       <div className="bg-surface rounded-xl shadow-vault p-6 relative overflow-hidden group">
