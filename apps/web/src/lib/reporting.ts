@@ -15,6 +15,7 @@ export type ReportMonthSummary = {
   label: string
   shortLabel: string
   salary: number
+  effectiveSalaryMonth: string | null
   expenses: number
   wants: number
   savings: number
@@ -26,6 +27,9 @@ export type ReportMonthSummary = {
   budgetSavings: number
   expenseItems: number
   wantItems: number
+  cycleEndsAt: string
+  daysRemainingInCycle: number
+  recommendedDailyAvailable: number
 }
 
 export type RankedCategory = {
@@ -71,6 +75,45 @@ export function formatShortMonthLabel(monthKey: string) {
 function getMonthEnd(monthKey: string) {
   const [year, month] = monthKey.split('-').map(Number)
   return new Date(Date.UTC(year, month, 0, 23, 59, 59, 999))
+}
+
+function getMonthSalaryMap(salaries: Salary[]) {
+  const totals = new Map<string, number>()
+
+  salaries.forEach((salary) => {
+    totals.set(salary.month, (totals.get(salary.month) ?? 0) + salary.amount)
+  })
+
+  return totals
+}
+
+function getEffectiveSalaryForMonth(monthKey: string, salaryMap: Map<string, number>) {
+  const orderedMonths = [...salaryMap.keys()].sort((left, right) => left.localeCompare(right))
+  let effectiveMonth: string | null = null
+
+  orderedMonths.forEach((entryMonth) => {
+    if (entryMonth <= monthKey) {
+      effectiveMonth = entryMonth
+    }
+  })
+
+  return {
+    effectiveMonth,
+    amount: effectiveMonth ? (salaryMap.get(effectiveMonth) ?? 0) : 0,
+  }
+}
+
+function getDaysRemainingInCycle(monthKey: string) {
+  const monthEnd = getMonthEnd(monthKey)
+  const today = new Date()
+  const currentMonthKey = getMonthKey(today)
+
+  if (monthKey !== currentMonthKey) return 0
+
+  const startOfToday = new Date(today)
+  startOfToday.setHours(0, 0, 0, 0)
+  const diffMs = monthEnd.getTime() - startOfToday.getTime()
+  return Math.max(0, Math.ceil(diffMs / (1000 * 60 * 60 * 24)))
 }
 
 function sumDebtPaymentsForMonth(debts: Debt[], monthKey: string) {
@@ -143,6 +186,7 @@ export function buildMonthlySummaries(params: {
 }) {
   const { salaries, transactions, debts, monthlyPlanningHistory, formula } = params
   const monthKeys = new Set<string>([getMonthKey()])
+  const salaryMap = getMonthSalaryMap(salaries)
 
   salaries.forEach((salary) => monthKeys.add(salary.month))
   transactions.forEach((transaction) => monthKeys.add(transaction.date.slice(0, 7)))
@@ -157,18 +201,28 @@ export function buildMonthlySummaries(params: {
   const sortedMonths = [...monthKeys].sort((left, right) => left.localeCompare(right))
 
   return sortedMonths.map<ReportMonthSummary>((monthKey) => {
-    const monthSalaries = salaries.filter((salary) => salary.month === monthKey)
+    const effectiveSalary = getEffectiveSalaryForMonth(monthKey, salaryMap)
     const monthTransactions = transactions.filter((transaction) => transaction.date.slice(0, 7) === monthKey)
-    const overview = getMonthlyOverview(monthSalaries, monthTransactions, [], formula)
+    const overview = getMonthlyOverview(
+      effectiveSalary.effectiveMonth
+        ? [{ id: `effective-salary:${monthKey}`, amount: effectiveSalary.amount, month: effectiveSalary.effectiveMonth }]
+        : [],
+      monthTransactions,
+      [],
+      formula,
+    )
     const history = historyByMonth.get(monthKey)
     const debtPaid = sumDebtPaymentsForMonth(debts, monthKey)
     const debtRemaining = sumDebtRemainingAtMonthEnd(debts, monthKey)
+    const daysRemainingInCycle = getDaysRemainingInCycle(monthKey)
+    const cycleEndsAt = getMonthEnd(monthKey).toISOString()
 
     return {
       month: monthKey,
       label: formatMonthLabel(monthKey),
       shortLabel: formatShortMonthLabel(monthKey),
       salary: overview.grossSalary,
+      effectiveSalaryMonth: effectiveSalary.effectiveMonth,
       expenses: overview.totalExpenses,
       wants: overview.totalWants,
       savings: overview.totalSavings,
@@ -180,6 +234,9 @@ export function buildMonthlySummaries(params: {
       budgetSavings: overview.budgetSavings,
       expenseItems: history?.expenses.length ?? monthTransactions.filter((transaction) => transaction.type === 'expense').length,
       wantItems: history?.wants.length ?? monthTransactions.filter((transaction) => transaction.type === 'want').length,
+      cycleEndsAt,
+      daysRemainingInCycle,
+      recommendedDailyAvailable: daysRemainingInCycle > 0 ? Math.max(0, Math.round((Math.max(0, overview.grossSalary - overview.totalExpenses - overview.totalWants - overview.totalSavings - debtPaid) / daysRemainingInCycle) * 100) / 100) : 0,
     }
   })
 }

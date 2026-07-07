@@ -180,6 +180,12 @@ export default function Reports() {
         body: 'El informe existe, pero varias metas y desviaciones quedaran incompletas hasta que registres salario.',
         tone: 'warn',
       })
+    } else if (currentSummary?.effectiveSalaryMonth && currentSummary.effectiveSalaryMonth !== currentMonthKey) {
+      findings.push({
+        title: 'La meta distribuida usa tu ultimo salario vigente',
+        body: `Como no cambiaste el salario en ${formatMonthLabel(currentMonthKey)}, la formula sigue usando el monto registrado en ${formatMonthLabel(currentSummary.effectiveSalaryMonth)}.`,
+        tone: 'neutral',
+      })
     }
 
     if ((currentSummary?.expenses ?? 0) > (currentSummary?.budgetExpenses ?? 0)) {
@@ -223,6 +229,14 @@ export default function Reports() {
         title: 'Este mes tiene mas movimiento en agenda',
         body: `Hay ${currentEvents.length} evento(s) registrados frente a ${previousEvents.length} del mes anterior.`,
         tone: 'neutral',
+      })
+    }
+
+    if ((currentSummary?.daysRemainingInCycle ?? 0) > 0) {
+      findings.push({
+        title: 'El salario actual debe aguantar hasta el cierre de mes',
+        body: `Quedan ${currentSummary?.daysRemainingInCycle} dia(s) hasta ${new Date(currentSummary?.cycleEndsAt ?? new Date().toISOString()).toLocaleDateString('es-ES')}. Tu saldo libre recomendado es ${formatCurrency(currentSummary?.recommendedDailyAvailable ?? 0)} por dia.`,
+        tone: (currentSummary?.freeBalance ?? 0) > 0 ? 'neutral' : 'warn',
       })
     }
 
@@ -515,11 +529,11 @@ export default function Reports() {
               </p>
             </div>
 
-            <div className="rounded-2xl border border-graphite bg-abyss/85 p-4">
-              <div className="flex items-center gap-2 text-muted-gray">
-                <Target className="size-4" />
-                <span className="text-xs uppercase tracking-[0.2em]">Cierre mensual</span>
-              </div>
+              <div className="rounded-2xl border border-graphite bg-abyss/85 p-4">
+                <div className="flex items-center gap-2 text-muted-gray">
+                  <Target className="size-4" />
+                  <span className="text-xs uppercase tracking-[0.2em]">Cierre mensual</span>
+                </div>
               <p className="mt-3 text-lg font-semibold text-on-surface">
                 {report.currentSnapshot?.label ?? 'Aun no hay cierre guardado'}
               </p>
@@ -527,6 +541,23 @@ export default function Reports() {
                 {report.currentSnapshot
                   ? `${report.currentSnapshot.expenses.length} gasto(s) y ${report.currentSnapshot.wants.length} gusto(s) guardados en el reset mensual.`
                   : 'Haz el reset mensual cuando cierres el mes para alimentar este bloque automaticamente.'}
+                </p>
+              </div>
+
+            <div className="rounded-2xl border border-graphite bg-abyss/85 p-4">
+              <div className="flex items-center gap-2 text-muted-gray">
+                <CalendarDays className="size-4" />
+                <span className="text-xs uppercase tracking-[0.2em]">Alcance hasta cobro</span>
+              </div>
+              <p className="mt-3 text-lg font-semibold text-on-surface">
+                {report.currentSummary?.daysRemainingInCycle
+                  ? `${report.currentSummary.daysRemainingInCycle} dia(s) hasta fin de mes`
+                  : 'Mes cerrado'}
+              </p>
+              <p className="mt-1 text-xs text-muted-gray">
+                {report.currentSummary?.daysRemainingInCycle
+                  ? `Para aguantar hasta ${new Date(report.currentSummary.cycleEndsAt).toLocaleDateString('es-ES')} te conviene no pasar de ${formatCurrency(report.currentSummary.recommendedDailyAvailable)} por dia de saldo libre.`
+                  : 'Este bloque se recalcula solo en el mes actual, cuando aun falta para el proximo cobro.'}
               </p>
             </div>
           </CardContent>
