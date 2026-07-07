@@ -107,7 +107,6 @@ export default function Wishlist() {
     return totalSaved / trackedMonths
   }, [salaries, transactions])
 
-  const currentSavedAmount = Math.max(0, overview.totalSavings)
   const currentFreeSavedAmount = Math.max(0, overview.freeSavings)
   const purchasedCount = wishlist.filter((item) => isWishlistPurchased(item)).length
 

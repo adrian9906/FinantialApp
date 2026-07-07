@@ -1,27 +1,37 @@
+import { useMemo, useState } from 'react'
+import { toast } from 'sonner'
 import { useFinanceStore } from '@/store/financeStore'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { ChartContainer, ChartLegend, ChartLegendContent, ChartTooltip, ChartTooltipContent, type ChartConfig } from '@/components/ui/chart'
 import { useNavigate } from 'react-router-dom'
-import { Plus, Wallet, Bell, Calendar, Building2, Coffee, PiggyBank, ChevronRight, Landmark, Sparkles } from 'lucide-react'
+import { ArrowRight, Bell, Calendar, Building2, CheckCircle2, Coffee, Landmark, PiggyBank, Plus, RotateCcw, Sparkles, Wallet } from 'lucide-react'
 import { useMonthlyOverview } from '@/lib/useMonthlyOverview'
+import { buildRecurringPlanningSuggestions, buildRepeatPlanDrafts } from '@/lib/productivity'
 import { formatFormulaLabel, usePreferencesStore } from '@/store/preferencesStore'
 import { Bar, BarChart, CartesianGrid, Pie, PieChart, XAxis, YAxis } from 'recharts'
 
 export default function Dashboard() {
   const navigate = useNavigate()
   const overview = useMonthlyOverview()
+  const transactions = useFinanceStore((state) => state.transactions)
   const reminders = useFinanceStore((state) => state.reminders)
   const events = useFinanceStore((state) => state.events)
   const debts = useFinanceStore((state) => state.debts)
+  const monthlyPlanningHistory = useFinanceStore((state) => state.monthlyPlanningHistory)
+  const addTransaction = useFinanceStore((state) => state.addTransaction)
+  const restoreMonthlyPlan = useFinanceStore((state) => state.restoreMonthlyPlan)
   const formula = usePreferencesStore((state) => state.formula)
+  const [isRepeatingRecurring, setIsRepeatingRecurring] = useState(false)
+  const [restoringScope, setRestoringScope] = useState<'expenses' | 'wants' | 'all' | null>(null)
 
   const pendingReminders = reminders.filter((r) => !r.completed)
   const upcomingEvents = events
     .filter((event) => new Date(event.date).getTime() >= new Date().setHours(0, 0, 0, 0))
     .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
-  const totalDebt = debts.reduce((sum, debt) => sum + debt.remainingAmount, 0)
+  const activeDebts = debts.filter((debt) => !debt.isSettled)
+  const totalDebt = activeDebts.reduce((sum, debt) => sum + debt.remainingAmount, 0)
   const salaryHealth = overview.totalSalary - overview.totalExpenses - overview.totalWants - overview.totalSavings
 
   const savingsPercentage = overview.budgetSavings > 0
@@ -55,6 +65,75 @@ export default function Dashboard() {
     gustos: { label: 'Gustos', color: 'var(--color-secondary)' },
     ahorros: { label: 'Ahorros', color: 'var(--color-tertiary-container)' },
   } satisfies ChartConfig
+  const smartPlanning = useMemo(
+    () => buildRecurringPlanningSuggestions(monthlyPlanningHistory),
+    [monthlyPlanningHistory],
+  )
+  const recurringPreview = smartPlanning.recurringItems.slice(0, 6)
+  const latestHistory = smartPlanning.latestHistory
+
+  async function handleRepeatRecurring(type: 'expenses' | 'wants' | 'all') {
+    if (isRepeatingRecurring) return
+
+    const selectedSuggestions = smartPlanning.recurringItems.filter((item) =>
+      type === 'all' ? true : type === 'expenses' ? item.type === 'expense' : item.type === 'want',
+    )
+
+    if (selectedSuggestions.length === 0) {
+      toast.info('Todavia no hay suficientes meses para detectar elementos recurrentes.')
+      return
+    }
+
+    const currentKeys = new Set(
+      transactions
+        .filter((transaction) => transaction.type === 'expense' || transaction.type === 'want')
+        .map((transaction) => `${transaction.type}:${transaction.description}`),
+    )
+
+    const drafts = buildRepeatPlanDrafts(selectedSuggestions).filter(
+      (draft) => !currentKeys.has(`${draft.type}:${draft.description}`),
+    )
+
+    if (drafts.length === 0) {
+      toast.info('Las listas activas ya incluyen esos elementos recurrentes.')
+      return
+    }
+
+    setIsRepeatingRecurring(true)
+
+    try {
+      for (const draft of drafts) {
+        await addTransaction(draft)
+      }
+
+      toast.success(`Se agregaron ${drafts.length} elemento(s) recurrentes a tu plan actual.`)
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'No se pudo repetir la lista recurrente.')
+    } finally {
+      setIsRepeatingRecurring(false)
+    }
+  }
+
+  async function handleRestoreLatest(scope: 'expenses' | 'wants' | 'all') {
+    if (!latestHistory || restoringScope) return
+
+    setRestoringScope(scope)
+
+    try {
+      await restoreMonthlyPlan(latestHistory.id, scope)
+      toast.success(
+        scope === 'all'
+          ? 'Se restauro la ultima lista del mes anterior.'
+          : scope === 'expenses'
+            ? 'Se restauraron los gastos del ultimo cierre.'
+            : 'Se restauraron los gustos del ultimo cierre.',
+      )
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'No se pudo restaurar la ultima lista.')
+    } finally {
+      setRestoringScope(null)
+    }
+  }
 
   return (
     <div className="space-y-6 animate-in fade-in duration-500 mx-auto mt-10">
@@ -237,6 +316,192 @@ export default function Dashboard() {
         </Card>
       </section>
 
+      <section className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1.05fr)_minmax(0,0.95fr)]">
+        <Card className="border-graphite bg-surface shadow-vault">
+          <CardHeader className="gap-4">
+            <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+              <div>
+                <CardTitle className="text-on-surface">Acciones rapidas</CardTitle>
+                <CardDescription className="text-muted-gray">
+                  Atajos utiles para las tareas que mas repites durante el mes.
+                </CardDescription>
+              </div>
+              <Badge variant="secondary" className="w-fit bg-primary/10 text-primary">
+                Menos friccion diaria
+              </Badge>
+            </div>
+          </CardHeader>
+          <CardContent className="grid gap-3 sm:grid-cols-2">
+            <button
+              type="button"
+              onClick={() => navigate('/debts')}
+              className="rounded-2xl border border-graphite bg-surface-container-low px-4 py-4 text-left transition-all hover:border-primary/35 hover:bg-surface-container"
+            >
+              <div className="flex items-center justify-between gap-3">
+                <div className="flex size-10 items-center justify-center rounded-2xl bg-primary/10 text-primary">
+                  <Landmark className="size-4" />
+                </div>
+                <ArrowRight className="size-4 text-muted-gray" />
+              </div>
+              <p className="mt-4 text-sm font-semibold text-on-surface">Pagar deuda</p>
+              <p className="mt-1 text-xs text-muted-gray">
+                {activeDebts.length > 0
+                  ? `${activeDebts.length} deuda(s) activas con ${`$${totalDebt.toLocaleString()}`} pendientes.`
+                  : 'No tienes deudas activas por pagar ahora mismo.'}
+              </p>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => navigate('/savings')}
+              className="rounded-2xl border border-graphite bg-surface-container-low px-4 py-4 text-left transition-all hover:border-primary/35 hover:bg-surface-container"
+            >
+              <div className="flex items-center justify-between gap-3">
+                <div className="flex size-10 items-center justify-center rounded-2xl bg-emerald-500/12 text-emerald-300">
+                  <PiggyBank className="size-4" />
+                </div>
+                <ArrowRight className="size-4 text-muted-gray" />
+              </div>
+              <p className="mt-4 text-sm font-semibold text-on-surface">Registrar ahorro</p>
+              <p className="mt-1 text-xs text-muted-gray">
+                Ajusta bolsillos, mete dinero extra o mueve saldo para cubrir objetivos.
+              </p>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => navigate('/settings')}
+              className="rounded-2xl border border-graphite bg-surface-container-low px-4 py-4 text-left transition-all hover:border-primary/35 hover:bg-surface-container"
+            >
+              <div className="flex items-center justify-between gap-3">
+                <div className="flex size-10 items-center justify-center rounded-2xl bg-amber-500/12 text-amber-300">
+                  <CheckCircle2 className="size-4" />
+                </div>
+                <ArrowRight className="size-4 text-muted-gray" />
+              </div>
+              <p className="mt-4 text-sm font-semibold text-on-surface">Cerrar mes</p>
+              <p className="mt-1 text-xs text-muted-gray">
+                Guarda el historial del mes y limpia listas para empezar la siguiente planificacion.
+              </p>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => navigate('/reports')}
+              className="rounded-2xl border border-graphite bg-surface-container-low px-4 py-4 text-left transition-all hover:border-primary/35 hover:bg-surface-container"
+            >
+              <div className="flex items-center justify-between gap-3">
+                <div className="flex size-10 items-center justify-center rounded-2xl bg-secondary/12 text-secondary">
+                  <Sparkles className="size-4" />
+                </div>
+                <ArrowRight className="size-4 text-muted-gray" />
+              </div>
+              <p className="mt-4 text-sm font-semibold text-on-surface">Ver informe</p>
+              <p className="mt-1 text-xs text-muted-gray">
+                Entra directo a informes, comparativas y exportaciones del mes actual y anterior.
+              </p>
+            </button>
+          </CardContent>
+        </Card>
+
+        <Card className="border-graphite bg-surface shadow-vault">
+          <CardHeader className="gap-4">
+            <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+              <div>
+                <CardTitle className="text-on-surface">Reutilizacion inteligente</CardTitle>
+                <CardDescription className="text-muted-gray">
+                  Detecta productos repetidos entre meses y recupera listas utiles sin rehacer todo.
+                </CardDescription>
+              </div>
+              <Badge variant="secondary" className="w-fit bg-secondary/12 text-secondary">
+                Historial mensual
+              </Badge>
+            </div>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="grid gap-3 sm:grid-cols-3">
+              <div className="rounded-2xl border border-graphite bg-surface-container-low p-4">
+                <p className="text-xs uppercase tracking-[0.2em] text-medium-gray">Ultimo cierre</p>
+                <p className="mt-2 text-sm font-semibold text-on-surface">{latestHistory?.label ?? 'Sin historial'}</p>
+              </div>
+              <div className="rounded-2xl border border-graphite bg-surface-container-low p-4">
+                <p className="text-xs uppercase tracking-[0.2em] text-medium-gray">Recurrentes</p>
+                <p className="mt-2 text-2xl font-semibold text-on-surface">{smartPlanning.recurringItems.length}</p>
+              </div>
+              <div className="rounded-2xl border border-graphite bg-surface-container-low p-4">
+                <p className="text-xs uppercase tracking-[0.2em] text-medium-gray">Meses detectados</p>
+                <p className="mt-2 text-2xl font-semibold text-on-surface">
+                  {smartPlanning.recurringItems[0]?.streak ?? 0}x
+                </p>
+              </div>
+            </div>
+
+            <div className="flex flex-wrap gap-2">
+              <Button
+                onClick={() => void handleRepeatRecurring('all')}
+                disabled={isRepeatingRecurring || smartPlanning.recurringItems.length === 0}
+                loading={isRepeatingRecurring}
+                className="bg-primary-container text-white hover:brightness-110"
+              >
+                <RotateCcw className="size-4" />
+                Repetir solo lo recurrente
+              </Button>
+              <Button
+                variant="outline"
+                onClick={() => void handleRestoreLatest('expenses')}
+                disabled={!latestHistory || restoringScope !== null}
+                loading={restoringScope === 'expenses'}
+                className="border-graphite bg-abyss text-on-surface hover:bg-surface-container"
+              >
+                Restaurar gastos previos
+              </Button>
+              <Button
+                variant="outline"
+                onClick={() => void handleRestoreLatest('wants')}
+                disabled={!latestHistory || restoringScope !== null}
+                loading={restoringScope === 'wants'}
+                className="border-graphite bg-abyss text-on-surface hover:bg-surface-container"
+              >
+                Restaurar gustos previos
+              </Button>
+            </div>
+
+            {recurringPreview.length === 0 ? (
+              <div className="rounded-2xl border border-dashed border-graphite bg-surface-container-low p-5 text-sm text-muted-gray">
+                Cuando cierres varios meses, aqui veras productos que se repiten y podras reconstruir la lista mas rapido.
+              </div>
+            ) : (
+              <div className="grid gap-3">
+                {recurringPreview.map((item) => (
+                  <div
+                    key={item.key}
+                    className="flex flex-col gap-3 rounded-2xl border border-graphite bg-surface-container-low p-4 sm:flex-row sm:items-center sm:justify-between"
+                  >
+                    <div className="min-w-0">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <p className="text-sm font-semibold text-on-surface">{item.itemName}</p>
+                        <Badge variant="secondary" className="bg-primary/10 text-primary">
+                          {item.type === 'expense' ? 'Gasto' : 'Gusto'}
+                        </Badge>
+                        <Badge variant="secondary" className="bg-surface-container-high text-on-surface">
+                          {item.streak} mes(es) seguidos
+                        </Badge>
+                      </div>
+                      <p className="mt-1 text-xs text-muted-gray">
+                        Categoria {item.category} · {item.months.map((month) => month.slice(5, 7)).join(' / ')}
+                      </p>
+                    </div>
+                    <div className="text-sm font-semibold text-on-surface">
+                      ${item.amount.toLocaleString()}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      </section>
+
       <section className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         <div className="bg-surface rounded-xl shadow-vault p-6">
           <div className="flex justify-between items-center mb-4 pb-3 border-b border-graphite">
@@ -261,7 +526,7 @@ export default function Dashboard() {
                     <p className="text-sm font-medium text-on-surface truncate">{reminder.title}</p>
                     <p className="text-xs text-muted-gray">{new Date(reminder.date).toLocaleDateString()}</p>
                   </div>
-                  <ChevronRight className="size-5 text-muted-gray group-hover:text-primary transition-colors" />
+                  <ArrowRight className="size-5 text-muted-gray group-hover:text-primary transition-colors" />
                 </div>
               ))}
             </div>
@@ -293,7 +558,7 @@ export default function Dashboard() {
               </div>
               <p className="text-lg font-semibold text-on-surface">${totalDebt.toLocaleString()}</p>
               <p className="text-xs text-muted-gray mt-1">
-                {debts[0] ? debts[0].history : 'No hay deudas pendientes'}
+                {activeDebts[0] ? activeDebts[0].history : 'No hay deudas pendientes'}
               </p>
             </div>
           </div>
