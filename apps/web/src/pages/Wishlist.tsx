@@ -108,6 +108,7 @@ export default function Wishlist() {
   }, [salaries, transactions])
 
   const currentSavedAmount = Math.max(0, overview.totalSavings)
+  const currentFreeSavedAmount = Math.max(0, overview.freeSavings)
   const purchasedCount = wishlist.filter((item) => isWishlistPurchased(item)).length
 
   const editItem = useMemo(
@@ -115,7 +116,7 @@ export default function Wishlist() {
     [editId, wishlist]
   )
 
-  const reachedItems = wishlist.filter((item) => getWishlistAvailableAmount(item, currentSavedAmount) >= item.price && item.price > 0).length
+  const reachedItems = wishlist.filter((item) => getWishlistAvailableAmount(item, currentFreeSavedAmount) >= item.price && item.price > 0).length
 
   function resetForm() {
     setForm({
@@ -182,7 +183,7 @@ export default function Wishlist() {
 
     const purchased = isWishlistPurchased(item)
     const externalContribution = getWishlistExternalContribution(item)
-    const availableToSpend = getWishlistAvailableAmount(item, currentSavedAmount)
+    const availableToSpend = getWishlistAvailableAmount(item, currentFreeSavedAmount)
 
     if (!purchased && availableToSpend < item.price) {
       return
@@ -253,11 +254,13 @@ export default function Wishlist() {
       <section className="grid grid-cols-1 gap-4 lg:grid-cols-3">
         <Card className="border-0 bg-surface p-5 shadow-vault">
           <p className="text-xs uppercase tracking-[0.22em] text-medium-gray">Ahorro disponible</p>
-          <p className="mt-3 text-3xl font-semibold text-on-surface">{formatCurrency(currentSavedAmount)}</p>
+          <p className="mt-3 text-3xl font-semibold text-on-surface">{formatCurrency(currentFreeSavedAmount)}</p>
           <p className="mt-2 text-sm text-muted-gray">
-            {overview.reservedForPurchasedWishlist > 0
-              ? `${formatCurrency(overview.reservedForPurchasedWishlist)} ya se descontaron por deseos marcados como comprados.`
-              : 'Este total se compara automaticamente contra cada producto.'}
+            {overview.assignedSavingsGoals > 0
+              ? `${formatCurrency(overview.assignedSavingsGoals)} estan apartados en bolsillos de ahorro y no cuentan para deseos.`
+              : overview.reservedForPurchasedWishlist > 0
+                ? `${formatCurrency(overview.reservedForPurchasedWishlist)} ya se descontaron por deseos marcados como comprados.`
+                : 'Este total se compara automaticamente contra cada producto.'}
           </p>
         </Card>
 
@@ -290,7 +293,7 @@ export default function Wishlist() {
             const purchased = isWishlistPurchased(item)
             const reservedAmount = getWishlistReservedAmount(item)
             const externalContribution = getWishlistExternalContribution(item)
-            const effectiveSavedAmount = getWishlistAvailableAmount(item, currentSavedAmount)
+            const effectiveSavedAmount = getWishlistAvailableAmount(item, currentFreeSavedAmount)
             const canBePurchased = purchased || effectiveSavedAmount >= item.price
             const projection = purchased
               ? {
@@ -355,7 +358,7 @@ export default function Wishlist() {
                       <div className="h-full rounded-full bg-primary transition-all duration-700" style={{ width: `${projection.progress}%` }} />
                     </div>
                     <div className="mt-3 flex items-center justify-between text-xs text-muted-gray">
-                      <span>Tienes: {formatCurrency(effectiveSavedAmount)}</span>
+                      <span>Tienes libre: {formatCurrency(effectiveSavedAmount)}</span>
                       <span>Faltan: {formatCurrency(projection.remaining)}</span>
                     </div>
                     {externalContribution > 0 ? (
@@ -378,7 +381,7 @@ export default function Wishlist() {
 
                   <div className="flex items-center justify-between gap-3">
                     <p className="text-xs text-muted-gray">
-                      Basado en {formatCurrency(effectiveSavedAmount)} disponibles y un promedio de {formatCurrency(averageMonthlySavings)} al mes.
+                      Basado en {formatCurrency(effectiveSavedAmount)} libres y un promedio de {formatCurrency(averageMonthlySavings)} al mes.
                     </p>
                     <div className="flex gap-1">
                       <Button variant="ghost" size="icon" className="text-muted-gray hover:text-primary" onClick={() => handleOpen(item)}>
@@ -400,7 +403,7 @@ export default function Wishlist() {
             const purchased = isWishlistPurchased(item)
             const reservedAmount = getWishlistReservedAmount(item)
             const externalContribution = getWishlistExternalContribution(item)
-            const effectiveSavedAmount = getWishlistAvailableAmount(item, currentSavedAmount)
+            const effectiveSavedAmount = getWishlistAvailableAmount(item, currentFreeSavedAmount)
             const canBePurchased = purchased || effectiveSavedAmount >= item.price
             const projection = purchased
               ? {
@@ -453,7 +456,7 @@ export default function Wishlist() {
                         <div className="h-full rounded-full bg-primary transition-all duration-700" style={{ width: `${projection.progress}%` }} />
                       </div>
                       <div className="mt-3 space-y-1 text-sm text-muted-gray">
-                        <p>Tienes ahorrados: {formatCurrency(effectiveSavedAmount)}</p>
+                        <p>Tienes libres: {formatCurrency(effectiveSavedAmount)}</p>
                         <p>Restante: {formatCurrency(projection.remaining)}</p>
                         {externalContribution > 0 ? <p>Aporte externo: {formatCurrency(externalContribution)}</p> : null}
                         <p>{projection.timelineLabel}</p>
@@ -578,7 +581,10 @@ export default function Wishlist() {
                 {form.price ? `Meta: ${formatCurrency(parseMoneyInput(form.price))}` : 'Agrega el precio para activar la proyeccion de compra.'}
               </p>
               <p className="mt-1 text-sm text-muted-gray">
-                Ahorro real ahora mismo: {formatCurrency(currentSavedAmount)}
+                Ahorro libre ahora mismo: {formatCurrency(currentFreeSavedAmount)}
+              </p>
+              <p className="mt-1 text-sm text-muted-gray">
+                Apartado en bolsillos: {formatCurrency(overview.assignedSavingsGoals)}
               </p>
               <p className="mt-1 text-sm text-muted-gray">
                 Aporte externo para este deseo: {formatCurrency(parseMoneyInput(form.externalContribution))}
@@ -587,7 +593,7 @@ export default function Wishlist() {
                 {form.price
                   ? buildPurchaseProjection(
                     parseMoneyInput(form.price),
-                    currentSavedAmount + parseMoneyInput(form.externalContribution),
+                    currentFreeSavedAmount + parseMoneyInput(form.externalContribution),
                     averageMonthlySavings,
                     (date) => dateFormatter.format(date),
                   ).purchaseDateLabel
