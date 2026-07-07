@@ -8,6 +8,7 @@ import type {
   Projection,
   Reminder,
   Salary,
+  SavingsGoal,
   Transaction,
   WishlistItem,
 } from '@plata/shared'
@@ -50,6 +51,9 @@ interface FinanceStore extends BootstrapPayload {
   addProjection: (p: Omit<Projection, 'id'>) => Promise<void>
   updateProjection: (id: string, data: Partial<Omit<Projection, 'id'>>) => Promise<void>
   removeProjection: (id: string) => Promise<void>
+  addSavingsGoal: (goal: Omit<SavingsGoal, 'id'>) => Promise<void>
+  updateSavingsGoal: (id: string, data: Partial<Omit<SavingsGoal, 'id'>>) => Promise<void>
+  removeSavingsGoal: (id: string) => Promise<void>
   addReminder: (r: Omit<Reminder, 'id'>) => Promise<void>
   updateReminder: (id: string, data: Partial<Omit<Reminder, 'id'>>) => Promise<void>
   toggleReminder: (id: string) => Promise<void>
@@ -225,6 +229,7 @@ function updateGuestState(
       monthlyPlanningHistory: next.monthlyPlanningHistory ?? state.monthlyPlanningHistory,
       events: next.events ?? state.events,
       projections: next.projections ?? state.projections,
+      savingsGoals: next.savingsGoals ?? state.savingsGoals,
       reminders: next.reminders ?? state.reminders,
     })
     return next
@@ -663,6 +668,47 @@ export const useFinanceStore = create<FinanceStore>()((set, get) => ({
 
     await requestJson<void>(`/projections/${id}`, { method: 'DELETE' })
     set((state) => ({ projections: state.projections.filter((entry) => entry.id !== id) }))
+  },
+  addSavingsGoal: async (goal) => {
+    if (isGuestMode()) {
+      updateGuestState(set, (state) => ({
+        savingsGoals: [{ ...goal, id: makeId('savings-goal') }, ...state.savingsGoals],
+      }))
+      return
+    }
+
+    const created = await requestJson<SavingsGoal>('/savings-goals', {
+      method: 'POST',
+      body: JSON.stringify(goal),
+    })
+    set((state) => ({ savingsGoals: [created, ...state.savingsGoals] }))
+  },
+  updateSavingsGoal: async (id, data) => {
+    if (isGuestMode()) {
+      updateGuestState(set, (state) => ({
+        savingsGoals: state.savingsGoals.map((entry) => (entry.id === id ? { ...entry, ...data } : entry)),
+      }))
+      return
+    }
+
+    const updated = await requestJson<SavingsGoal>(`/savings-goals/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    })
+    set((state) => ({
+      savingsGoals: state.savingsGoals.map((entry) => (entry.id === id ? updated : entry)),
+    }))
+  },
+  removeSavingsGoal: async (id) => {
+    if (isGuestMode()) {
+      updateGuestState(set, (state) => ({
+        savingsGoals: state.savingsGoals.filter((entry) => entry.id !== id),
+      }))
+      return
+    }
+
+    await requestJson<void>(`/savings-goals/${id}`, { method: 'DELETE' })
+    set((state) => ({ savingsGoals: state.savingsGoals.filter((entry) => entry.id !== id) }))
   },
   addReminder: async (reminder) => {
     if (isGuestMode()) {

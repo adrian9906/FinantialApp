@@ -23,6 +23,7 @@ model Usuario {
   deseos         Deseo[]
   historiales    HistorialMensual[]
   proyecciones   Proyeccion[]
+  metasAhorro    MetaAhorro[]
   notificaciones Notificacion[]
   sesiones       Sesion[]
 
@@ -191,6 +192,21 @@ model Proyeccion {
   usuario     Usuario  @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
 
   @@map("proyecciones")
+}
+
+model MetaAhorro {
+  id             String   @id @default(uuid())
+  nombre         String
+  categoria      String
+  montoObjetivo  Float
+  montoActual    Float
+  aporteMensual  Float
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  usuarioId      String
+  usuario        Usuario  @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+
+  @@map("metas_ahorro")
 }
 
 model Notificacion {

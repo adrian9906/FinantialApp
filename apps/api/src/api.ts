@@ -7,6 +7,7 @@ import type {
   Projection,
   Reminder,
   Salary,
+  SavingsGoal,
   Transaction,
   WishlistItem,
 } from '@plata/shared'
@@ -236,6 +237,32 @@ function serializeProjection(entry: { id: string; salarioMeta: number }): Projec
   }
 }
 
+function normalizeSavingsGoalCategory(value: unknown): SavingsGoal['category'] {
+  if (value === 'emergency' || value === 'travel' || value === 'rent' || value === 'phone' || value === 'custom') {
+    return value
+  }
+
+  return 'custom'
+}
+
+function serializeSavingsGoal(entry: {
+  id: string
+  nombre: string
+  categoria: string
+  montoObjetivo: number
+  montoActual: number
+  aporteMensual: number
+}): SavingsGoal {
+  return {
+    id: entry.id,
+    name: entry.nombre,
+    category: normalizeSavingsGoalCategory(entry.categoria),
+    targetAmount: entry.montoObjetivo,
+    currentAmount: entry.montoActual,
+    monthlyContribution: entry.aporteMensual,
+  }
+}
+
 function serializeReminder(entry: {
   id: string
   titulo: string
@@ -276,7 +303,7 @@ async function requireUser(req: IncomingMessage, res: ServerResponse): Promise<A
 async function loadBootstrap(userId: string) {
   const prisma = await getPrisma()
 
-  const [salaries, expenses, wants, savings, debts, wishlist, monthlyPlanningHistory, events, projections, reminders] = await Promise.all([
+  const [salaries, expenses, wants, savings, debts, wishlist, monthlyPlanningHistory, events, projections, savingsGoals, reminders] = await Promise.all([
     prisma.salario.findMany({ where: { usuarioId: userId }, orderBy: { fecha: 'desc' } }),
     prisma.gasto.findMany({
       where: { usuarioId: userId },
@@ -305,6 +332,7 @@ async function loadBootstrap(userId: string) {
     }),
     prisma.evento.findMany({ where: { usuarioId: userId }, orderBy: { fecha: 'asc' } }),
     prisma.proyeccion.findMany({ where: { usuarioId: userId }, orderBy: { createdAt: 'desc' } }),
+    prisma.metaAhorro.findMany({ where: { usuarioId: userId }, orderBy: { createdAt: 'desc' } }),
     prisma.notificacion.findMany({ where: { usuarioId: userId }, orderBy: { fecha: 'asc' } }),
   ])
 
@@ -325,6 +353,7 @@ async function loadBootstrap(userId: string) {
     monthlyPlanningHistory: monthlyPlanningHistory.map(serializeMonthlyPlanningHistory),
     events: events.map(serializeEvent),
     projections: projections.map(serializeProjection),
+    savingsGoals: savingsGoals.map(serializeSavingsGoal),
     reminders: reminders.map(serializeReminder),
   }
 }
@@ -879,6 +908,39 @@ async function saveProjection(userId: string, body: JsonRecord, id?: string) {
   return serializeProjection(entry)
 }
 
+async function saveSavingsGoal(userId: string, body: JsonRecord, id?: string) {
+  const prisma = await getPrisma()
+  const payload = {
+    nombre: String(body.name ?? '').trim(),
+    categoria: normalizeSavingsGoalCategory(body.category),
+    montoObjetivo: Number(body.targetAmount ?? 0),
+    montoActual: Number(body.currentAmount ?? 0),
+    aporteMensual: Number(body.monthlyContribution ?? 0),
+  }
+
+  if (!payload.nombre) {
+    throw new Error('El nombre de la meta es obligatorio.')
+  }
+
+  if (payload.montoObjetivo <= 0) {
+    throw new Error('El monto objetivo debe ser mayor que cero.')
+  }
+
+  const entry = id
+    ? await prisma.metaAhorro.update({
+        where: { id },
+        data: payload,
+      })
+    : await prisma.metaAhorro.create({
+        data: {
+          ...payload,
+          usuarioId: userId,
+        },
+      })
+
+  return serializeSavingsGoal(entry)
+}
+
 async function saveReminder(userId: string, body: JsonRecord, id?: string) {
   const prisma = await getPrisma()
   const payload = {
@@ -1230,6 +1292,26 @@ export async function handleApiRequest(req: IncomingMessage, res: ServerResponse
       }
       if (method === 'DELETE') {
         await prisma.proyeccion.delete({ where: { id } })
+        sendEmpty(res)
+        return true
+      }
+    }
+
+    if (pathname === '/api/savings-goals' && method === 'POST') {
+      sendJson(res, 201, await saveSavingsGoal(authenticatedUser.id, await readJsonBody(req)))
+      return true
+    }
+
+    const savingsGoalMatch = pathname.match(/^\/api\/savings-goals\/([^/]+)$/)
+    if (savingsGoalMatch) {
+      const id = savingsGoalMatch[1]
+      const prisma = await getPrisma()
+      if (method === 'PUT') {
+        sendJson(res, 200, await saveSavingsGoal(authenticatedUser.id, await readJsonBody(req), id))
+        return true
+      }
+      if (method === 'DELETE') {
+        await prisma.metaAhorro.delete({ where: { id } })
         sendEmpty(res)
         return true
       }

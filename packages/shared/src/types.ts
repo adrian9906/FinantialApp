@@ -72,6 +72,15 @@ export interface Projection {
   targetSalary: number
 }
 
+export interface SavingsGoal {
+  id: string
+  name: string
+  category: 'emergency' | 'travel' | 'rent' | 'phone' | 'custom'
+  targetAmount: number
+  currentAmount: number
+  monthlyContribution: number
+}
+
 export interface Reminder {
   id: string
   title: string

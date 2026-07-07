@@ -6,6 +6,7 @@ import type {
   Projection,
   Reminder,
   Salary,
+  SavingsGoal,
   Transaction,
   WishlistItem,
 } from './types'
@@ -36,6 +37,7 @@ export interface BootstrapPayload {
   monthlyPlanningHistory: MonthlyPlanningHistory[]
   events: AppEvent[]
   projections: Projection[]
+  savingsGoals: SavingsGoal[]
   reminders: Reminder[]
 }
 
@@ -48,6 +50,7 @@ export function createEmptyBootstrapPayload(): BootstrapPayload {
     monthlyPlanningHistory: [],
     events: [],
     projections: [],
+    savingsGoals: [],
     reminders: [],
   }
 }
@@ -66,6 +69,7 @@ export function normalizeBootstrapPayload(payload?: Partial<BootstrapPayload> | 
     monthlyPlanningHistory: payload?.monthlyPlanningHistory ?? [],
     events: payload?.events ?? [],
     projections: payload?.projections ?? [],
+    savingsGoals: payload?.savingsGoals ?? [],
     reminders: payload?.reminders ?? [],
   }
 }

@@ -139,6 +139,9 @@ function createGuestDemoSnapshot(): BootstrapPayload {
       },
     ],
     projections: [{ id: 'projection-demo', targetSalary: 320 }],
+    savingsGoals: [
+      { id: 'goal-demo', name: 'Fondo de emergencia', category: 'emergency', targetAmount: 300, currentAmount: 120, monthlyContribution: 40 },
+    ],
     reminders: [
       {
         id: 'reminder-demo',

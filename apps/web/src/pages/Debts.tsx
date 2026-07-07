@@ -12,7 +12,9 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { exportDebtsReport } from '@/lib/reportExports'
 import { useMonthlyOverview } from '@/lib/useMonthlyOverview'
+import { buildDebtPlanSummary, type DebtStrategy } from '@/lib/debtPlanner'
 import { useFinanceStore } from '@/store/financeStore'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 
 interface DebtFormState {
   amount: string
@@ -41,6 +43,8 @@ export default function Debts() {
   const [isSaving, setIsSaving] = useState(false)
   const [isPaying, setIsPaying] = useState(false)
   const [isExporting, setIsExporting] = useState(false)
+  const [strategy, setStrategy] = useState<DebtStrategy>('snowball')
+  const [extraMonthlyPayment, setExtraMonthlyPayment] = useState('')
   const [form, setForm] = useState<DebtFormState>({
     amount: '',
     history: '',
@@ -197,6 +201,11 @@ export default function Debts() {
   const averageInterest = debtsWithInterest.length > 0
     ? debtsWithInterest.reduce((sum, debt) => sum + (debt.interest ?? 0), 0) / debtsWithInterest.length
     : 0
+  const extraPaymentValue = Math.max(0, Number(extraMonthlyPayment || 0))
+  const planSummary = useMemo(
+    () => buildDebtPlanSummary(debts, strategy, extraPaymentValue),
+    [debts, strategy, extraPaymentValue],
+  )
 
   return (
     <div className="space-y-6 animate-in fade-in duration-500">
@@ -262,6 +271,107 @@ export default function Debts() {
           <p className="text-xs uppercase tracking-[0.18em] text-medium-gray">Interes promedio</p>
           <p className="mt-2 text-lg font-semibold text-on-surface">{averageInterest.toFixed(2)}%</p>
         </Card>
+      ) : null}
+
+      {activeDebts > 0 ? (
+        <section className="grid gap-4 xl:grid-cols-[0.95fr_1.05fr]">
+          <Card className="border-graphite bg-surface shadow-vault">
+            <div className="border-b border-graphite p-5">
+              <p className="text-xs uppercase tracking-[0.22em] text-medium-gray">Plan de pago de deudas</p>
+              <h2 className="mt-3 text-2xl font-semibold text-on-surface">Simula estrategia y pago extra</h2>
+              <p className="mt-2 text-sm text-muted-gray">
+                Compara bola de nieve y avalancha para ver el orden recomendado, el tiempo estimado y cuanto mejoras si aprietas un poco mas cada mes.
+              </p>
+            </div>
+
+            <div className="grid gap-4 p-5 md:grid-cols-2">
+              <div className="space-y-2">
+                <Label className="text-medium-gray">Estrategia</Label>
+                <Select value={strategy} onValueChange={(value) => setStrategy(value as DebtStrategy)}>
+                  <SelectTrigger className="bg-abyss border-graphite text-on-surface">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent className="border-graphite bg-surface">
+                    <SelectItem value="snowball">Bola de nieve</SelectItem>
+                    <SelectItem value="avalanche">Avalancha</SelectItem>
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-muted-gray">
+                  {strategy === 'snowball'
+                    ? 'Prioriza la deuda mas pequena para liberar victorias rapidas.'
+                    : 'Prioriza la deuda con mas interes para reducir el costo financiero.'}
+                </p>
+              </div>
+
+              <div className="space-y-2">
+                <Label className="text-medium-gray">Pago extra mensual</Label>
+                <Input
+                  type="number"
+                  placeholder="50"
+                  value={extraMonthlyPayment}
+                  onChange={(event) => setExtraMonthlyPayment(event.target.value)}
+                  className="bg-abyss border-graphite text-on-surface"
+                />
+                <p className="text-xs text-muted-gray">Sumalo sobre los pagos estimados que ya exige tu calendario actual.</p>
+              </div>
+            </div>
+
+            <div className="grid gap-3 border-t border-graphite p-5 md:grid-cols-3">
+              <Card className="border-graphite bg-abyss p-4 shadow-vault-sm">
+                <p className="text-xs uppercase tracking-[0.18em] text-medium-gray">Sin extra</p>
+                <p className="mt-2 text-2xl font-semibold text-on-surface">{planSummary.monthsWithoutExtra} meses</p>
+              </Card>
+              <Card className="border-graphite bg-abyss p-4 shadow-vault-sm">
+                <p className="text-xs uppercase tracking-[0.18em] text-medium-gray">Con extra</p>
+                <p className="mt-2 text-2xl font-semibold text-on-surface">{planSummary.monthsWithExtra} meses</p>
+              </Card>
+              <Card className="border-graphite bg-abyss p-4 shadow-vault-sm">
+                <p className="text-xs uppercase tracking-[0.18em] text-medium-gray">Mejora estimada</p>
+                <p className="mt-2 text-2xl font-semibold text-success">{planSummary.monthsImproved} meses</p>
+              </Card>
+            </div>
+          </Card>
+
+          <Card className="border-graphite bg-surface shadow-vault">
+            <div className="border-b border-graphite p-5">
+              <p className="text-xs uppercase tracking-[0.22em] text-medium-gray">Orden recomendado</p>
+              <h2 className="mt-3 text-2xl font-semibold text-on-surface">
+                {strategy === 'snowball' ? 'Empieza por la mas pequena' : 'Empieza por la de mayor interes'}
+              </h2>
+            </div>
+            <div className="space-y-3 p-5">
+              {planSummary.order.map((entry, index) => (
+                <div key={entry.id} className="rounded-2xl border border-graphite bg-abyss p-4 shadow-vault-sm">
+                  <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                    <div>
+                      <p className="text-sm font-semibold text-on-surface">{index + 1}. {entry.history}</p>
+                      <p className="mt-1 text-xs text-muted-gray">
+                        Restante ${asMoney(entry.remainingAmount)} · Interes {entry.interest.toFixed(2)}%
+                      </p>
+                    </div>
+                    <Badge variant="secondary" className={index === 0 ? 'bg-primary/15 text-primary' : 'bg-surface-container-high text-on-surface'}>
+                      {index === 0 ? 'Prioridad actual' : 'Despues'}
+                    </Badge>
+                  </div>
+                  <div className="mt-4 grid gap-3 md:grid-cols-3">
+                    <div>
+                      <p className="text-xs uppercase tracking-[0.16em] text-medium-gray">Pago base</p>
+                      <p className="mt-2 text-lg font-semibold text-on-surface">${asMoney(entry.estimatedMinimum)}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs uppercase tracking-[0.16em] text-medium-gray">Extra sugerido</p>
+                      <p className="mt-2 text-lg font-semibold text-success">${asMoney(entry.recommendedExtra)}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs uppercase tracking-[0.16em] text-medium-gray">Tiempo estimado</p>
+                      <p className="mt-2 text-lg font-semibold text-on-surface">{entry.estimatedMonths} meses</p>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </Card>
+        </section>
       ) : null}
 
       {debts.length === 0 ? (
