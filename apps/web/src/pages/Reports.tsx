@@ -601,68 +601,68 @@ export default function Reports() {
                 Aun no hay movimientos suficientes este mes para dibujar el timeline financiero.
               </div>
             ) : (
-              <div className="relative">
-                <div className="absolute bottom-0 left-[18px] top-0 hidden w-px bg-gradient-to-b from-primary/35 via-secondary/20 to-transparent sm:block" />
-                <div className="space-y-3">
+              <div className="space-y-4">
                   {report.currentTimeline.map((entry, index) => (
                     <div
                       key={entry.id}
-                      className="group grid gap-3 rounded-[24px] border border-graphite bg-[linear-gradient(135deg,rgba(255,255,255,0.02),rgba(255,255,255,0))] p-4 transition-all hover:border-primary/30 hover:bg-surface-container-low sm:grid-cols-[auto_minmax(0,1fr)_auto]"
+                      className="relative"
                     >
-                      <div className="hidden sm:flex sm:flex-col sm:items-center">
-                        <div className={`flex size-9 items-center justify-center rounded-2xl border ${getTimelineTone(entry.kind)}`}>
-                          <span className="text-[10px] font-semibold uppercase tracking-[0.14em]">
-                            {entry.dayLabel.split(' ')[0]}
-                          </span>
+                      <div className="hidden sm:block">
+                        <div className={`absolute left-0 top-5 flex size-10 items-center justify-center rounded-2xl border ${getTimelineTone(entry.kind)}`}>
+                          <span className="text-[10px] font-semibold uppercase tracking-[0.14em]">{entry.dayLabel.split(' ')[0]}</span>
                         </div>
+                        <div className="absolute left-10 top-10 h-px w-10 bg-gradient-to-r from-primary/35 to-transparent" />
                         {index < report.currentTimeline.length - 1 ? (
-                          <div className="mt-2 h-full w-px bg-gradient-to-b from-primary/30 to-transparent" />
+                          <div className="absolute left-5 top-[52px] h-8 w-px bg-gradient-to-b from-primary/30 via-secondary/20 to-transparent" />
                         ) : null}
                       </div>
 
-                      <div className="min-w-0">
-                        <div className="flex flex-wrap items-center gap-2">
-                          <Badge variant="secondary" className={`border ${getTimelineTone(entry.kind)}`}>
-                            {entry.kind === 'salary'
-                              ? 'Salario'
-                              : entry.kind === 'expense'
-                                ? 'Gasto'
-                                : entry.kind === 'want'
-                                  ? 'Gusto'
-                                  : entry.kind === 'saving'
-                                    ? 'Ahorro'
-                                    : entry.kind === 'debt-payment'
-                                      ? 'Pago'
-                                      : 'Evento'}
-                          </Badge>
-                          <span className="text-xs uppercase tracking-[0.16em] text-medium-gray">{entry.dayLabel}</span>
-                        </div>
-                        <p className="mt-2 text-sm font-semibold text-on-surface">{entry.title}</p>
-                        <p className="mt-1 text-sm text-muted-gray">{entry.description}</p>
-                      </div>
+                      <div className="rounded-[24px] border border-graphite bg-[linear-gradient(135deg,rgba(255,255,255,0.02),rgba(255,255,255,0))] p-4 transition-all hover:border-primary/30 hover:bg-surface-container-low sm:ml-16">
+                        <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-start">
+                          <div className="min-w-0">
+                            <div className="flex flex-wrap items-center gap-2">
+                              <Badge variant="secondary" className={`border ${getTimelineTone(entry.kind)}`}>
+                                {entry.kind === 'salary'
+                                  ? 'Salario'
+                                  : entry.kind === 'expense'
+                                    ? 'Gasto'
+                                    : entry.kind === 'want'
+                                      ? 'Gusto'
+                                      : entry.kind === 'saving'
+                                        ? 'Ahorro'
+                                        : entry.kind === 'debt-payment'
+                                          ? 'Pago'
+                                          : 'Evento'}
+                              </Badge>
+                              <span className="text-xs uppercase tracking-[0.16em] text-medium-gray">{entry.dayLabel}</span>
+                            </div>
+                            <p className="mt-2 text-sm font-semibold text-on-surface">{entry.title}</p>
+                            <p className="mt-1 text-sm text-muted-gray">{entry.description}</p>
+                          </div>
 
-                      <div className="sm:text-right">
-                        <p
-                          className={`text-base font-semibold ${
-                            entry.signedAmount > 0
-                              ? 'text-emerald-200'
-                              : entry.signedAmount < 0
-                                ? 'text-rose-200'
-                                : 'text-on-surface'
-                          }`}
-                        >
-                          {entry.signedAmount > 0 ? '+' : entry.signedAmount < 0 ? '-' : ''}
-                          {formatCurrency(Math.abs(entry.amount))}
-                        </p>
-                        <p className="mt-1 text-xs text-muted-gray">
-                          {entry.kind === 'event'
-                            ? 'No descuenta saldo directo'
-                            : `Saldo: ${formatCurrency(entry.balanceAfter ?? 0)}`}
-                        </p>
+                          <div className="sm:text-right">
+                            <p
+                              className={`text-base font-semibold ${
+                                entry.signedAmount > 0
+                                  ? 'text-emerald-200'
+                                  : entry.signedAmount < 0
+                                    ? 'text-rose-200'
+                                    : 'text-on-surface'
+                              }`}
+                            >
+                              {entry.signedAmount > 0 ? '+' : entry.signedAmount < 0 ? '-' : ''}
+                              {formatCurrency(Math.abs(entry.amount))}
+                            </p>
+                            <p className="mt-1 text-xs text-muted-gray">
+                              {entry.kind === 'event'
+                                ? 'No descuenta saldo directo'
+                                : `Saldo: ${formatCurrency(entry.balanceAfter ?? 0)}`}
+                            </p>
+                          </div>
+                        </div>
                       </div>
                     </div>
                   ))}
-                </div>
               </div>
             )}
           </CardContent>
