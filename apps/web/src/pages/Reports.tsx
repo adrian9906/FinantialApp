@@ -582,6 +582,93 @@ export default function Reports() {
         </Card>
       </section>
 
+      <section className="grid gap-4">
+        <Card className="border-graphite bg-surface shadow-vault">
+          <CardHeader className="gap-4 sm:flex-row sm:items-start sm:justify-between">
+            <div>
+              <CardTitle className="text-on-surface">Timeline financiero</CardTitle>
+              <CardDescription className="text-muted-gray">
+                Una lectura visual del flujo del mes con salario, compras, ahorro, pagos y eventos en una sola vista.
+              </CardDescription>
+            </div>
+            <Badge variant="secondary" className="bg-surface-container-high text-on-surface">
+              Flujo de {report.currentLabel}
+            </Badge>
+          </CardHeader>
+          <CardContent>
+            {report.currentTimeline.length === 0 ? (
+              <div className="rounded-2xl border border-dashed border-graphite bg-abyss/70 p-8 text-center text-sm text-muted-gray">
+                Aun no hay movimientos suficientes este mes para dibujar el timeline financiero.
+              </div>
+            ) : (
+              <div className="relative">
+                <div className="absolute bottom-0 left-[18px] top-0 hidden w-px bg-gradient-to-b from-primary/35 via-secondary/20 to-transparent sm:block" />
+                <div className="space-y-3">
+                  {report.currentTimeline.map((entry, index) => (
+                    <div
+                      key={entry.id}
+                      className="group grid gap-3 rounded-[24px] border border-graphite bg-[linear-gradient(135deg,rgba(255,255,255,0.02),rgba(255,255,255,0))] p-4 transition-all hover:border-primary/30 hover:bg-surface-container-low sm:grid-cols-[auto_minmax(0,1fr)_auto]"
+                    >
+                      <div className="hidden sm:flex sm:flex-col sm:items-center">
+                        <div className={`flex size-9 items-center justify-center rounded-2xl border ${getTimelineTone(entry.kind)}`}>
+                          <span className="text-[10px] font-semibold uppercase tracking-[0.14em]">
+                            {entry.dayLabel.split(' ')[0]}
+                          </span>
+                        </div>
+                        {index < report.currentTimeline.length - 1 ? (
+                          <div className="mt-2 h-full w-px bg-gradient-to-b from-primary/30 to-transparent" />
+                        ) : null}
+                      </div>
+
+                      <div className="min-w-0">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <Badge variant="secondary" className={`border ${getTimelineTone(entry.kind)}`}>
+                            {entry.kind === 'salary'
+                              ? 'Salario'
+                              : entry.kind === 'expense'
+                                ? 'Gasto'
+                                : entry.kind === 'want'
+                                  ? 'Gusto'
+                                  : entry.kind === 'saving'
+                                    ? 'Ahorro'
+                                    : entry.kind === 'debt-payment'
+                                      ? 'Pago'
+                                      : 'Evento'}
+                          </Badge>
+                          <span className="text-xs uppercase tracking-[0.16em] text-medium-gray">{entry.dayLabel}</span>
+                        </div>
+                        <p className="mt-2 text-sm font-semibold text-on-surface">{entry.title}</p>
+                        <p className="mt-1 text-sm text-muted-gray">{entry.description}</p>
+                      </div>
+
+                      <div className="sm:text-right">
+                        <p
+                          className={`text-base font-semibold ${
+                            entry.signedAmount > 0
+                              ? 'text-emerald-200'
+                              : entry.signedAmount < 0
+                                ? 'text-rose-200'
+                                : 'text-on-surface'
+                          }`}
+                        >
+                          {entry.signedAmount > 0 ? '+' : entry.signedAmount < 0 ? '-' : ''}
+                          {formatCurrency(Math.abs(entry.amount))}
+                        </p>
+                        <p className="mt-1 text-xs text-muted-gray">
+                          {entry.kind === 'event'
+                            ? 'No descuenta saldo directo'
+                            : `Saldo: ${formatCurrency(entry.balanceAfter ?? 0)}`}
+                        </p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      </section>
+
       <section className="grid gap-4 xl:grid-cols-3">
         <Card className="border-graphite bg-surface shadow-vault">
           <CardHeader>
