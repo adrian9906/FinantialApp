@@ -108,9 +108,6 @@ export function GlobalSearchDialog() {
             Busca gastos, gustos, deseos, deudas y recordatorios con filtros reales.
           </p>
         </div>
-        <Badge variant="secondary" className="hidden shrink-0 bg-surface-container-high text-on-surface sm:inline-flex">
-          / buscar
-        </Badge>
       </button>
 
       <Dialog open={open} onOpenChange={handleOpenChange}>

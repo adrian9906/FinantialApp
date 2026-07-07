@@ -6,11 +6,26 @@ import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { ChartContainer, ChartLegend, ChartLegendContent, ChartTooltip, ChartTooltipContent, type ChartConfig } from '@/components/ui/chart'
 import { useNavigate } from 'react-router-dom'
-import { ArrowRight, Bell, Calendar, Building2, CheckCircle2, Coffee, Landmark, PiggyBank, Plus, RotateCcw, Sparkles, Wallet } from 'lucide-react'
+import { AlertTriangle, ArrowRight, Bell, Building2, Calendar, CheckCircle2, ChevronRight, Coffee, Landmark, PiggyBank, Plus, RotateCcw, ShieldAlert, Sparkles, TrendingDown, TrendingUp, Wallet } from 'lucide-react'
+import { buildFinancialScore, buildSmartAlerts } from '@/lib/financialInsights'
 import { useMonthlyOverview } from '@/lib/useMonthlyOverview'
 import { buildRecurringPlanningSuggestions, buildRepeatPlanDrafts } from '@/lib/productivity'
 import { formatFormulaLabel, usePreferencesStore } from '@/store/preferencesStore'
 import { Bar, BarChart, CartesianGrid, Pie, PieChart, XAxis, YAxis } from 'recharts'
+
+function getScoreToneClasses(status: ReturnType<typeof buildFinancialScore>['status']) {
+  if (status === 'fuerte') return 'border-emerald-500/30 bg-emerald-500/10 text-emerald-200'
+  if (status === 'estable') return 'border-sky-500/30 bg-sky-500/10 text-sky-200'
+  if (status === 'atencion') return 'border-amber-500/30 bg-amber-500/10 text-amber-200'
+  return 'border-rose-500/30 bg-rose-500/10 text-rose-200'
+}
+
+function getAlertToneClasses(level: ReturnType<typeof buildSmartAlerts>[number]['level']) {
+  if (level === 'success') return 'border-emerald-500/25 bg-emerald-500/10'
+  if (level === 'warning') return 'border-amber-500/25 bg-amber-500/10'
+  if (level === 'critical') return 'border-rose-500/25 bg-rose-500/10'
+  return 'border-primary/20 bg-primary/10'
+}
 
 export default function Dashboard() {
   const navigate = useNavigate()
@@ -19,6 +34,7 @@ export default function Dashboard() {
   const reminders = useFinanceStore((state) => state.reminders)
   const events = useFinanceStore((state) => state.events)
   const debts = useFinanceStore((state) => state.debts)
+  const wishlist = useFinanceStore((state) => state.wishlist)
   const monthlyPlanningHistory = useFinanceStore((state) => state.monthlyPlanningHistory)
   const addTransaction = useFinanceStore((state) => state.addTransaction)
   const restoreMonthlyPlan = useFinanceStore((state) => state.restoreMonthlyPlan)
@@ -68,6 +84,14 @@ export default function Dashboard() {
   const smartPlanning = useMemo(
     () => buildRecurringPlanningSuggestions(monthlyPlanningHistory),
     [monthlyPlanningHistory],
+  )
+  const financialScore = useMemo(
+    () => buildFinancialScore({ overview, debts, reminders }),
+    [debts, overview, reminders],
+  )
+  const smartAlerts = useMemo(
+    () => buildSmartAlerts({ overview, debts, reminders, wishlist }),
+    [debts, overview, reminders, wishlist],
   )
   const recurringPreview = smartPlanning.recurringItems.slice(0, 6)
   const latestHistory = smartPlanning.latestHistory
@@ -269,6 +293,153 @@ export default function Dashboard() {
             </div>
           </div>
         </div>
+      </section>
+
+      <section className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,0.95fr)_minmax(0,1.05fr)]">
+        <Card className="overflow-hidden border-graphite bg-surface shadow-vault">
+          <CardHeader className="gap-4">
+            <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+              <div>
+                <CardTitle className="text-on-surface">Score financiero personal</CardTitle>
+                <CardDescription className="text-muted-gray">
+                  Un puntaje de 0 a 100 basado en ahorro, presupuesto, deuda y recordatorios.
+                </CardDescription>
+              </div>
+              <Badge variant="secondary" className={getScoreToneClasses(financialScore.status)}>
+                {financialScore.status}
+              </Badge>
+            </div>
+          </CardHeader>
+          <CardContent className="space-y-5">
+            <div className="grid gap-4 md:grid-cols-[auto_minmax(0,1fr)] md:items-center">
+              <div className="relative mx-auto flex size-40 items-center justify-center rounded-full border border-primary/20 bg-[radial-gradient(circle_at_top,rgba(124,58,237,0.24),transparent_52%),var(--color-surface-container-low)] shadow-vault">
+                <div
+                  className="absolute inset-2 rounded-full"
+                  style={{
+                    background: `conic-gradient(var(--color-primary) ${financialScore.score}%, rgba(255,255,255,0.06) 0)`,
+                    mask: 'radial-gradient(farthest-side, transparent calc(100% - 12px), black calc(100% - 11px))',
+                    WebkitMask: 'radial-gradient(farthest-side, transparent calc(100% - 12px), black calc(100% - 11px))',
+                  }}
+                />
+                <div className="relative z-10 text-center">
+                  <p className="text-[42px] font-semibold leading-none text-on-surface">{financialScore.score}</p>
+                  <p className="mt-2 text-xs uppercase tracking-[0.24em] text-muted-gray">de 100</p>
+                </div>
+              </div>
+
+              <div className="space-y-4">
+                <div>
+                  <p className="text-sm font-semibold text-on-surface">{financialScore.headline}</p>
+                  <p className="mt-1 text-sm text-muted-gray">
+                    El score cambia cuando ahorras mejor, respetas el plan, bajas deuda o mantienes tus recordatorios bajo control.
+                  </p>
+                </div>
+
+                <div className="grid gap-3 sm:grid-cols-2">
+                  {financialScore.factors.map((factor) => (
+                    <div key={factor.key} className="rounded-2xl border border-graphite bg-surface-container-low p-4">
+                      <div className="flex items-center justify-between gap-3">
+                        <p className="text-sm font-semibold text-on-surface">{factor.label}</p>
+                        <Badge
+                          variant="secondary"
+                          className={
+                            factor.tone === 'good'
+                              ? 'bg-emerald-500/10 text-emerald-200'
+                              : factor.tone === 'warn'
+                                ? 'bg-amber-500/10 text-amber-200'
+                                : factor.tone === 'danger'
+                                  ? 'bg-rose-500/10 text-rose-200'
+                                  : 'bg-surface-container-high text-on-surface'
+                          }
+                        >
+                          {factor.current}/{factor.max}
+                        </Badge>
+                      </div>
+                      <p className="mt-2 text-xs text-muted-gray">{factor.summary}</p>
+                    </div>
+                  ))}
+                </div>
+
+                <div className="rounded-2xl border border-graphite bg-surface-container-low p-4">
+                  <div className="flex items-center gap-2 text-sm font-semibold text-on-surface">
+                    <Sparkles className="size-4 text-primary" />
+                    Por que sube o baja el score
+                  </div>
+                  <div className="mt-3 space-y-3">
+                    {financialScore.changes.map((change) => (
+                      <div key={change.label} className="flex items-start gap-3">
+                        <div className={`mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-xl ${change.direction === 'up' ? 'bg-emerald-500/10 text-emerald-300' : 'bg-rose-500/10 text-rose-300'}`}>
+                          {change.direction === 'up' ? <TrendingUp className="size-4" /> : <TrendingDown className="size-4" />}
+                        </div>
+                        <div>
+                          <p className="text-sm font-medium text-on-surface">{change.label}</p>
+                          <p className="text-xs text-muted-gray">{change.detail}</p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="border-graphite bg-surface shadow-vault">
+          <CardHeader className="gap-4">
+            <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+              <div>
+                <CardTitle className="text-on-surface">Centro de alertas inteligentes</CardTitle>
+                <CardDescription className="text-muted-gray">
+                  Alertas utiles con recomendacion concreta, sin ruido innecesario.
+                </CardDescription>
+              </div>
+              <Badge variant="secondary" className="w-fit bg-primary/10 text-primary">
+                Bandeja priorizada
+              </Badge>
+            </div>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            {smartAlerts.length === 0 ? (
+              <div className="rounded-2xl border border-dashed border-graphite bg-surface-container-low p-6 text-center">
+                <div className="mx-auto flex size-12 items-center justify-center rounded-2xl bg-emerald-500/10 text-emerald-300">
+                  <CheckCircle2 className="size-5" />
+                </div>
+                <p className="mt-4 text-sm font-semibold text-on-surface">Todo bajo control</p>
+                <p className="mt-1 text-xs text-muted-gray">
+                  Hoy no detectamos alertas urgentes. Puedes seguir enfocandote en tus objetivos del mes.
+                </p>
+              </div>
+            ) : (
+              smartAlerts.map((alert) => (
+                <div
+                  key={alert.id}
+                  className={`rounded-2xl border p-4 transition-all ${getAlertToneClasses(alert.level)}`}
+                >
+                  <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-2">
+                        <div className="flex size-9 items-center justify-center rounded-xl bg-black/10 text-on-surface">
+                          {alert.level === 'critical' ? <ShieldAlert className="size-4" /> : alert.level === 'warning' ? <AlertTriangle className="size-4" /> : <Sparkles className="size-4" />}
+                        </div>
+                        <p className="text-sm font-semibold text-on-surface">{alert.title}</p>
+                      </div>
+                      <p className="mt-2 text-xs text-muted-gray">{alert.description}</p>
+                    </div>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => navigate(alert.href)}
+                      className="border-graphite bg-abyss text-on-surface hover:bg-surface-container"
+                    >
+                      {alert.actionLabel}
+                      <ChevronRight className="size-4" />
+                    </Button>
+                  </div>
+                </div>
+              ))
+            )}
+          </CardContent>
+        </Card>
       </section>
 
       <section className="grid grid-cols-1 xl:grid-cols-12 gap-4">
