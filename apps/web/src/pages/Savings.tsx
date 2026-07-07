@@ -1,6 +1,8 @@
 import { useState } from 'react'
-import { parseSavingDescription } from '@plata/shared'
+import { buildSavingWithdrawalDescription, parseSavingDescription } from '@plata/shared'
 import { useFinanceStore } from '@/store/financeStore'
+import { buildExpenseDescription } from '@/lib/expense-utils'
+import { buildWantDescription } from '@/lib/want-utils'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { ExportExcelButton } from '@/components/reports/ExportExcelButton'
@@ -8,10 +10,11 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { DatePickerField } from '@/components/ui/date-picker-field'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog'
-import { Plus, Trash2, PiggyBank, Pencil } from 'lucide-react'
+import { Plus, Trash2, PiggyBank, Pencil, ArrowUpRight } from 'lucide-react'
 import { useMonthlyOverview } from '@/lib/useMonthlyOverview'
 import { Badge } from '@/components/ui/badge'
 import { exportSavingsReport } from '@/lib/reportExports'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 
 export default function Savings() {
   const transactions = useFinanceStore((state) => state.transactions)
@@ -25,11 +28,30 @@ export default function Savings() {
   const [formError, setFormError] = useState<string | null>(null)
   const [isSaving, setIsSaving] = useState(false)
   const [isExporting, setIsExporting] = useState(false)
+  const [withdrawOpen, setWithdrawOpen] = useState(false)
+  const [withdrawError, setWithdrawError] = useState<string | null>(null)
+  const [isWithdrawing, setIsWithdrawing] = useState(false)
+  const [withdrawForm, setWithdrawForm] = useState({
+    amount: '',
+    target: 'expense' as 'expense' | 'want',
+    itemName: '',
+    date: '',
+  })
 
   function resetForm() {
     setForm({ amount: '', date: '' })
     setEditId(null)
     setFormError(null)
+  }
+
+  function resetWithdrawForm() {
+    setWithdrawForm({
+      amount: String(Math.max(0, overview.totalSavings)),
+      target: 'expense',
+      itemName: '',
+      date: '',
+    })
+    setWithdrawError(null)
   }
 
   function handleOpen(entry?: (typeof transactions)[number]) {
@@ -85,6 +107,51 @@ export default function Savings() {
   const pct = overview.budgetSavings > 0 ? Math.min(100, Math.round((overview.totalSavings / overview.budgetSavings) * 100)) : 0
   const remaining = overview.budgetSavings - overview.totalSavings
   const budgetFull = remaining <= 0
+  const availableSavings = Math.max(0, overview.totalSavings)
+
+  async function handleWithdraw() {
+    if (isWithdrawing) return
+
+    const amount = Number(withdrawForm.amount)
+    if (!Number.isFinite(amount) || amount <= 0) {
+      setWithdrawError('El monto debe ser mayor que cero.')
+      return
+    }
+    if (amount > availableSavings) {
+      setWithdrawError(`Solo puedes sacar hasta $${availableSavings.toLocaleString()} de tus ahorros.`)
+      return
+    }
+    if (!withdrawForm.itemName.trim()) {
+      setWithdrawError('Escribe un concepto para registrar el movimiento.')
+      return
+    }
+
+    const movementDate = withdrawForm.date || new Date().toISOString().slice(0, 10)
+    setIsWithdrawing(true)
+
+    try {
+      await addTransaction({
+        amount: -amount,
+        type: 'saving',
+        description: buildSavingWithdrawalDescription(withdrawForm.target, withdrawForm.itemName),
+        date: movementDate,
+      })
+
+      await addTransaction({
+        amount,
+        type: withdrawForm.target,
+        description: withdrawForm.target === 'expense'
+          ? buildExpenseDescription('essentials', withdrawForm.itemName, 'checked')
+          : buildWantDescription('outings', withdrawForm.itemName, 'checked'),
+        date: movementDate,
+      })
+
+      resetWithdrawForm()
+      setWithdrawOpen(false)
+    } finally {
+      setIsWithdrawing(false)
+    }
+  }
 
   async function handleExport() {
     setIsExporting(true)
@@ -104,6 +171,17 @@ export default function Savings() {
         </div>
         <div className="flex flex-col gap-3 sm:flex-row">
           <ExportExcelButton loading={isExporting} onClick={handleExport} />
+          <Button
+            variant="secondary"
+            disabled={availableSavings <= 0}
+            onClick={() => {
+              resetWithdrawForm()
+              setWithdrawOpen(true)
+            }}
+            className="bg-surface-container-high text-on-surface hover:bg-surface-container-higher disabled:opacity-40 disabled:cursor-not-allowed"
+          >
+            <ArrowUpRight className="size-4" /> Sacar dinero
+          </Button>
           <Button onClick={() => handleOpen()} disabled={budgetFull} className="bg-tertiary-container text-white hover:brightness-110 shadow-vault disabled:opacity-40 disabled:cursor-not-allowed">
             <Plus className="size-4" /> Agregar ahorro
           </Button>
@@ -150,13 +228,19 @@ export default function Savings() {
                   <p className="text-sm font-medium text-on-surface">
                     {(() => {
                       const savingDetails = parseSavingDescription(transaction.description)
+                      if (savingDetails.kind === 'withdrawal') {
+                        const baseLabel = savingDetails.target === 'want' ? 'Retirado hacia gustos' : 'Retirado hacia gastos'
+                        return savingDetails.label ? `${baseLabel}: ${savingDetails.label}` : baseLabel
+                      }
                       if (savingDetails.kind !== 'transfer') return 'Ahorro registrado'
                       return savingDetails.source === 'want' ? 'Transferido desde gustos' : 'Transferido desde gastos'
                     })()}
                   </p>
                   <p className="text-xs text-muted-gray">{transaction.date}</p>
                 </div>
-                <span className="text-sm font-medium text-success md:text-right">+${transaction.amount.toLocaleString()}</span>
+                <span className={`text-sm font-medium md:text-right ${transaction.amount >= 0 ? 'text-success' : 'text-error'}`}>
+                  {transaction.amount >= 0 ? '+' : '-'}${Math.abs(transaction.amount).toLocaleString()}
+                </span>
                 <div className="opacity-100 transition-opacity md:text-right md:opacity-0 md:group-hover:opacity-100">
                   <div className="flex justify-end gap-1">
                     <Button variant="ghost" size="icon" className="text-muted-gray hover:text-primary" onClick={() => handleOpen(transaction)}>
@@ -198,6 +282,99 @@ export default function Savings() {
           <DialogFooter>
             <Button variant="ghost" disabled={isSaving} onClick={() => { resetForm(); setOpen(false) }} className="text-muted-gray">Cancelar</Button>
             <Button loading={isSaving} onClick={() => void handleSave()} className="bg-primary-container text-white hover:brightness-110 shadow-vault">Guardar</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={withdrawOpen} onOpenChange={(nextOpen) => { if (!isWithdrawing) setWithdrawOpen(nextOpen) }}>
+        <DialogContent className="border-graphite bg-surface sm:max-w-3xl">
+          <DialogHeader>
+            <DialogTitle className="text-on-surface">Sacar dinero de ahorros</DialogTitle>
+            <DialogDescription>
+              Usa esta opcion cuando necesites mover dinero guardado a un gasto o a un gusto.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="grid gap-4 lg:grid-cols-2">
+              <div className="space-y-2">
+                <Label className="text-medium-gray">Monto</Label>
+                <Input
+                  type="number"
+                  placeholder="80"
+                  value={withdrawForm.amount}
+                  onChange={(e) => {
+                    setWithdrawError(null)
+                    setWithdrawForm((current) => ({ ...current, amount: e.target.value }))
+                  }}
+                  className="bg-abyss border-graphite text-on-surface"
+                />
+                <p className="text-xs text-muted-gray">Disponible en ahorro: ${availableSavings.toLocaleString()}</p>
+              </div>
+
+              <div className="space-y-2">
+                <Label className="text-medium-gray">Pasarlo a</Label>
+                <Select
+                  value={withdrawForm.target}
+                  onValueChange={(value) => {
+                    setWithdrawError(null)
+                    setWithdrawForm((current) => ({ ...current, target: value as 'expense' | 'want' }))
+                  }}
+                >
+                  <SelectTrigger className="bg-abyss border-graphite text-on-surface">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent className="border-graphite bg-surface">
+                    <SelectItem value="expense">Gasto</SelectItem>
+                    <SelectItem value="want">Gusto</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <Label className="text-medium-gray">Concepto</Label>
+              <Input
+                placeholder={withdrawForm.target === 'expense' ? 'Emergencia, medicina, reparacion...' : 'Salida, capricho, compra...'}
+                value={withdrawForm.itemName}
+                onChange={(e) => {
+                  setWithdrawError(null)
+                  setWithdrawForm((current) => ({ ...current, itemName: e.target.value }))
+                }}
+                className="bg-abyss border-graphite text-on-surface"
+              />
+            </div>
+
+            <DatePickerField
+              label="Fecha"
+              value={withdrawForm.date}
+              onChange={(value) => {
+                setWithdrawError(null)
+                setWithdrawForm((current) => ({ ...current, date: value }))
+              }}
+              description="La misma fecha se usa para la salida del ahorro y para el gasto o gusto destino."
+            />
+            {withdrawError ? <p className="text-sm text-error">{withdrawError}</p> : null}
+          </div>
+          <DialogFooter>
+            <Button
+              variant="ghost"
+              disabled={isWithdrawing}
+              onClick={() => {
+                resetWithdrawForm()
+                setWithdrawOpen(false)
+              }}
+              className="text-muted-gray"
+            >
+              Cancelar
+            </Button>
+            <Button
+              loading={isWithdrawing}
+              disabled={isWithdrawing || availableSavings <= 0}
+              onClick={() => void handleWithdraw()}
+              className="bg-primary-container text-white hover:brightness-110 shadow-vault"
+            >
+              Sacar dinero
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

@@ -193,8 +193,23 @@ export async function exportMonthlyReport(params: {
   })
   const currentSummary = monthlySummaries.find((entry) => entry.month === currentMonthKey)
   const previousSummary = monthlySummaries.find((entry) => entry.month === previousMonthKey)
+  const filteredSummaries = monthlySummaries.filter(
+    (entry) => entry.month === currentMonthKey || entry.month === previousMonthKey,
+  )
   const comparisonRows = buildMonthComparison(currentSummary, previousSummary)
-  const rankings = buildMonthlyRankings(transactions, currentMonthKey)
+  const currentRankings = buildMonthlyRankings(transactions, currentMonthKey)
+  const previousRankings = buildMonthlyRankings(transactions, previousMonthKey)
+  const filteredTransactions = transactions.filter((transaction) => {
+    const monthKey = transaction.date.slice(0, 7)
+    return monthKey === currentMonthKey || monthKey === previousMonthKey
+  })
+  const filteredEvents = events.filter((event) => {
+    const monthKey = event.date.slice(0, 7)
+    return monthKey === currentMonthKey || monthKey === previousMonthKey
+  })
+  const filteredHistory = monthlyPlanningHistory.filter(
+    (entry) => entry.month === currentMonthKey || entry.month === previousMonthKey,
+  )
   const reservedForPurchasedWishlist = wishlist.reduce(
     (sum, item) => sum + (isWishlistPurchased(item) ? getWishlistReservedAmount(item) : 0),
     0,
@@ -228,7 +243,7 @@ export async function exportMonthlyReport(params: {
     {
       name: 'Tendencias',
       columns: ['Mes', 'Salario', 'Gastos', 'Gustos', 'Ahorros', 'Deuda pagada', 'Deuda pendiente', 'Saldo libre'],
-      rows: monthlySummaries.map((summary) => [
+      rows: filteredSummaries.map((summary) => [
         summary.label,
         toCurrency(summary.salary),
         toCurrency(summary.expenses),
@@ -240,9 +255,9 @@ export async function exportMonthlyReport(params: {
       ]),
     },
     {
-      name: 'Top categorias',
+      name: 'Top categorias actual',
       columns: ['Categoria', 'Tipo', 'Monto total', 'Repeticiones'],
-      rows: rankings.topCategoriesByAmount.map((entry) => [
+      rows: currentRankings.topCategoriesByAmount.map((entry) => [
         entry.label,
         entry.type === 'expense' ? 'gasto' : 'gusto',
         toCurrency(entry.totalAmount),
@@ -250,9 +265,9 @@ export async function exportMonthlyReport(params: {
       ]),
     },
     {
-      name: 'Top productos',
+      name: 'Top productos anterior',
       columns: ['Producto', 'Categoria', 'Tipo', 'Monto total', 'Repeticiones'],
-      rows: rankings.topProductsByAmount.map((entry) => [
+      rows: previousRankings.topProductsByAmount.map((entry) => [
         entry.label,
         entry.category,
         entry.type === 'expense' ? 'gasto' : 'gusto',
@@ -263,17 +278,17 @@ export async function exportMonthlyReport(params: {
     {
       name: 'Movimientos',
       columns: ['Fecha', 'Tipo', 'Descripcion', 'Monto'],
-      rows: transactions.map((transaction) => [transaction.date, transaction.type, transaction.description ?? '', toCurrency(transaction.amount)]),
+      rows: filteredTransactions.map((transaction) => [transaction.date, transaction.type, transaction.description ?? '', toCurrency(transaction.amount)]),
     },
     {
       name: 'Eventos',
       columns: ['Nombre', 'Fecha', 'Monto'],
-      rows: events.map((event) => [event.name, event.date, toCurrency(event.amount)]),
+      rows: filteredEvents.map((event) => [event.name, event.date, toCurrency(event.amount)]),
     },
     {
       name: 'Cierres',
       columns: ['Mes', 'Etiqueta', 'Gastos guardados', 'Gustos guardados', 'Creado'],
-      rows: monthlyPlanningHistory.map((entry) => [entry.month, entry.label, entry.expenses.length, entry.wants.length, entry.createdAt]),
+      rows: filteredHistory.map((entry) => [entry.month, entry.label, entry.expenses.length, entry.wants.length, entry.createdAt]),
     },
   ]
 

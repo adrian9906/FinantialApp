@@ -9,9 +9,16 @@ export type SavingDescription =
     kind: 'transfer'
     source: 'expense' | 'want'
   }
+  | {
+    kind: 'withdrawal'
+    target: 'expense' | 'want'
+    label?: string
+  }
 
 const EXPENSE_TRANSFER_PREFIX = 'transfer::expense'
 const WANT_TRANSFER_PREFIX = 'transfer::want'
+const EXPENSE_WITHDRAWAL_PREFIX = 'withdrawal::expense'
+const WANT_WITHDRAWAL_PREFIX = 'withdrawal::want'
 
 export function buildExpenseTransferSavingDescription() {
   return EXPENSE_TRANSFER_PREFIX
@@ -19,6 +26,12 @@ export function buildExpenseTransferSavingDescription() {
 
 export function buildWantTransferSavingDescription() {
   return WANT_TRANSFER_PREFIX
+}
+
+export function buildSavingWithdrawalDescription(target: 'expense' | 'want', label?: string) {
+  const prefix = target === 'want' ? WANT_WITHDRAWAL_PREFIX : EXPENSE_WITHDRAWAL_PREFIX
+  const trimmedLabel = label?.trim()
+  return trimmedLabel ? `${prefix}::${trimmedLabel}` : prefix
 }
 
 export function parseSavingDescription(description?: string): SavingDescription {
@@ -37,6 +50,22 @@ export function parseSavingDescription(description?: string): SavingDescription 
     return {
       kind: 'transfer',
       source: 'want',
+    }
+  }
+
+  if (description === EXPENSE_WITHDRAWAL_PREFIX || description.startsWith(`${EXPENSE_WITHDRAWAL_PREFIX}::`)) {
+    return {
+      kind: 'withdrawal',
+      target: 'expense',
+      label: description.slice(`${EXPENSE_WITHDRAWAL_PREFIX}::`.length) || undefined,
+    }
+  }
+
+  if (description === WANT_WITHDRAWAL_PREFIX || description.startsWith(`${WANT_WITHDRAWAL_PREFIX}::`)) {
+    return {
+      kind: 'withdrawal',
+      target: 'want',
+      label: description.slice(`${WANT_WITHDRAWAL_PREFIX}::`.length) || undefined,
     }
   }
 

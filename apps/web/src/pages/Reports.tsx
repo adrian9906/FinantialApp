@@ -81,7 +81,6 @@ export default function Reports() {
   const monthlyPlanningHistory = useFinanceStore((state) => state.monthlyPlanningHistory)
   const formula = usePreferencesStore((state) => state.formula)
   const [isExporting, setIsExporting] = useState(false)
-  const [trendRange, setTrendRange] = useState<3 | 6 | 12>(6)
 
   const report = useMemo(() => {
     const currentMonthKey = getMonthKey(new Date())
@@ -108,7 +107,8 @@ export default function Reports() {
     const previousEvents = events.filter((event) => event.date.slice(0, 7) === previousMonthKey)
     const currentSnapshot = getLatestCloseSnapshot(monthlyPlanningHistory, currentMonthKey)
     const previousSnapshot = getLatestCloseSnapshot(monthlyPlanningHistory, previousMonthKey)
-    const rankings = buildMonthlyRankings(transactions, currentMonthKey)
+    const currentRankings = buildMonthlyRankings(transactions, currentMonthKey)
+    const previousRankings = buildMonthlyRankings(transactions, previousMonthKey)
 
     const metrics: ReportMetric[] = [
       {
@@ -226,7 +226,10 @@ export default function Reports() {
       })
     }
 
-    const trendSeries = monthlySummaries.slice(-trendRange).map((entry) => ({
+    const trendSeries = monthlySummaries
+      .filter((entry) => entry.month === previousMonthKey || entry.month === currentMonthKey)
+      .sort((left, right) => left.month.localeCompare(right.month))
+      .map((entry) => ({
       label: entry.shortLabel,
       salario: entry.salary,
       gastos: entry.expenses,
@@ -234,7 +237,7 @@ export default function Reports() {
       ahorros: entry.savings,
       deuda: entry.debtRemaining,
       libre: entry.freeBalance,
-    }))
+      }))
 
     const trendSignals = [
       { label: 'Gastos', direction: getTrendDirection(trendSeries.map((entry) => entry.gastos)) },
@@ -261,12 +264,12 @@ export default function Reports() {
       reservedForPurchasedWishlist,
       currentSnapshot,
       previousSnapshot,
-      rankings,
-      monthlySummaries,
+      currentRankings,
+      previousRankings,
       trendSeries,
       trendSignals,
     }
-  }, [debts, events, formula, monthlyPlanningHistory, salaries, transactions, trendRange, wishlist])
+  }, [debts, events, formula, monthlyPlanningHistory, salaries, transactions, wishlist])
 
   const comparisonConfig = {
     actual: { label: shortMonthFormatter.format(new Date()), color: 'var(--color-primary)' },
@@ -448,24 +451,14 @@ export default function Reports() {
         <Card className="border-graphite bg-surface shadow-vault">
           <CardHeader className="gap-4 sm:flex-row sm:items-start sm:justify-between">
             <div>
-              <CardTitle className="text-on-surface">Tendencias de 3, 6 y 12 meses</CardTitle>
+              <CardTitle className="text-on-surface">Tendencia entre ambos meses</CardTitle>
               <CardDescription className="text-muted-gray">
-                Evolucion de gastos, gustos, ahorro, deuda pendiente y saldo libre segun el rango que quieras mirar.
+                Comparacion directa entre el mes anterior y el mes actual para ver hacia donde se mueve cada bloque.
               </CardDescription>
             </div>
-            <div className="flex flex-wrap gap-2">
-              {[3, 6, 12].map((range) => (
-                <Button
-                  key={range}
-                  type="button"
-                  variant="secondary"
-                  className={trendRange === range ? 'bg-primary text-primary-foreground hover:bg-primary/90' : 'bg-surface-container-high text-on-surface hover:bg-surface-container-higher'}
-                  onClick={() => setTrendRange(range as 3 | 6 | 12)}
-                >
-                  {range} meses
-                </Button>
-              ))}
-            </div>
+            <Badge variant="secondary" className="bg-surface-container-high text-on-surface">
+              {report.previousLabel} vs {report.currentLabel}
+            </Badge>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="flex flex-wrap gap-2">
@@ -543,13 +536,13 @@ export default function Reports() {
       <section className="grid gap-4 xl:grid-cols-3">
         <Card className="border-graphite bg-surface shadow-vault">
           <CardHeader>
-            <CardTitle className="text-on-surface">Top categorias</CardTitle>
+            <CardTitle className="text-on-surface">Top categorias del mes actual</CardTitle>
             <CardDescription className="text-muted-gray">
               Las categorias que mas dinero consumieron en {report.currentLabel}.
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-3">
-            {report.rankings.topCategoriesByAmount.length > 0 ? report.rankings.topCategoriesByAmount.map((entry, index) => (
+            {report.currentRankings.topCategoriesByAmount.length > 0 ? report.currentRankings.topCategoriesByAmount.map((entry, index) => (
               <div key={`${entry.type}-${entry.label}`} className="rounded-2xl border border-graphite bg-abyss/85 p-4">
                 <div className="flex items-start justify-between gap-3">
                   <div>
@@ -571,13 +564,13 @@ export default function Reports() {
 
         <Card className="border-graphite bg-surface shadow-vault">
           <CardHeader>
-            <CardTitle className="text-on-surface">Top productos</CardTitle>
+            <CardTitle className="text-on-surface">Top productos del mes anterior</CardTitle>
             <CardDescription className="text-muted-gray">
-              Lo mas costoso del mes agrupado por nombre de item.
+              Lo mas costoso agrupado por nombre de item en {report.previousLabel}.
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-3">
-            {report.rankings.topProductsByAmount.length > 0 ? report.rankings.topProductsByAmount.map((entry, index) => (
+            {report.previousRankings.topProductsByAmount.length > 0 ? report.previousRankings.topProductsByAmount.map((entry, index) => (
               <div key={`${entry.type}-${entry.category}-${entry.label}`} className="rounded-2xl border border-graphite bg-abyss/85 p-4">
                 <div className="flex items-start justify-between gap-3">
                   <div>
@@ -592,7 +585,7 @@ export default function Reports() {
                 </div>
               </div>
             )) : (
-              <p className="text-sm text-muted-gray">Todavia no hay items comprados este mes para el ranking.</p>
+              <p className="text-sm text-muted-gray">No hay items suficientes en el mes anterior para este ranking.</p>
             )}
           </CardContent>
         </Card>
@@ -601,13 +594,13 @@ export default function Reports() {
           <CardHeader>
             <CardTitle className="text-on-surface">Lo mas repetido</CardTitle>
             <CardDescription className="text-muted-gray">
-              Patrones de compra frecuentes para detectar habitos del mes.
+              Patrones comparados entre el mes anterior y el actual.
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="space-y-3">
-              <p className="text-xs uppercase tracking-[0.2em] text-medium-gray">Categorias repetidas</p>
-              {report.rankings.topCategoriesByCount.slice(0, 3).map((entry) => (
+              <p className="text-xs uppercase tracking-[0.2em] text-medium-gray">Categorias repetidas este mes</p>
+              {report.currentRankings.topCategoriesByCount.slice(0, 3).map((entry) => (
                 <div key={`repeat-category-${entry.type}-${entry.label}`} className="flex items-center justify-between gap-3 rounded-2xl border border-graphite bg-abyss/85 px-4 py-3">
                   <div>
                     <p className="text-sm font-medium text-on-surface">{entry.label}</p>
@@ -621,8 +614,8 @@ export default function Reports() {
             </div>
 
             <div className="space-y-3">
-              <p className="text-xs uppercase tracking-[0.2em] text-medium-gray">Productos repetidos</p>
-              {report.rankings.topProductsByCount.slice(0, 3).map((entry) => (
+              <p className="text-xs uppercase tracking-[0.2em] text-medium-gray">Productos repetidos mes anterior</p>
+              {report.previousRankings.topProductsByCount.slice(0, 3).map((entry) => (
                 <div key={`repeat-product-${entry.type}-${entry.label}`} className="flex items-center justify-between gap-3 rounded-2xl border border-graphite bg-abyss/85 px-4 py-3">
                   <div>
                     <p className="text-sm font-medium text-on-surface">{entry.label}</p>
