@@ -1,5 +1,6 @@
 import {
   getMonthlyOverview,
+  type AppEvent,
   type AllocationFormula,
   type Debt,
   type MonthlyPlanningHistory,
@@ -49,6 +50,18 @@ export type RankedProduct = {
 
 export type TrendDirection = 'up' | 'down' | 'stable'
 
+export type FinancialTimelineEntry = {
+  id: string
+  date: string
+  dayLabel: string
+  kind: 'salary' | 'expense' | 'want' | 'saving' | 'debt-payment' | 'event'
+  title: string
+  description: string
+  amount: number
+  signedAmount: number
+  balanceAfter: number | null
+}
+
 function getMonthKeyFromDate(value: Date | string) {
   return new Date(value).toISOString().slice(0, 7)
 }
@@ -75,6 +88,11 @@ export function formatShortMonthLabel(monthKey: string) {
 function getMonthEnd(monthKey: string) {
   const [year, month] = monthKey.split('-').map(Number)
   return new Date(Date.UTC(year, month, 0, 23, 59, 59, 999))
+}
+
+function getMonthStart(monthKey: string) {
+  const [year, month] = monthKey.split('-').map(Number)
+  return new Date(Date.UTC(year, month - 1, 1))
 }
 
 function getMonthSalaryMap(salaries: Salary[]) {
@@ -177,6 +195,10 @@ function getTransactionMeta(transaction: Transaction) {
   }
 }
 
+function formatTimelineDay(dateValue: string) {
+  return new Intl.DateTimeFormat('es-ES', { day: '2-digit', month: 'short' }).format(new Date(dateValue))
+}
+
 export function buildMonthlySummaries(params: {
   salaries: Salary[]
   transactions: Transaction[]
@@ -237,6 +259,131 @@ export function buildMonthlySummaries(params: {
       cycleEndsAt,
       daysRemainingInCycle,
       recommendedDailyAvailable: daysRemainingInCycle > 0 ? Math.max(0, Math.round((Math.max(0, overview.grossSalary - overview.totalExpenses - overview.totalWants - overview.totalSavings - debtPaid) / daysRemainingInCycle) * 100) / 100) : 0,
+    }
+  })
+}
+
+export function buildFinancialTimeline(params: {
+  monthKey: string
+  salaries: Salary[]
+  transactions: Transaction[]
+  debts: Debt[]
+  events: AppEvent[]
+}) {
+  const { monthKey, salaries, transactions, debts, events } = params
+  const salaryMap = getMonthSalaryMap(salaries)
+  const effectiveSalary = getEffectiveSalaryForMonth(monthKey, salaryMap)
+  const startOfMonth = getMonthStart(monthKey).toISOString()
+  const monthTransactions = transactions.filter((transaction) => transaction.date.slice(0, 7) === monthKey)
+  const monthEvents = events.filter((event) => event.date.slice(0, 7) === monthKey)
+  const monthDebtPayments = debts.flatMap((debt) =>
+    (debt.payments ?? [])
+      .filter((payment) => payment.date.slice(0, 7) === monthKey)
+      .map((payment, index) => ({
+        id: `${debt.id}:payment:${payment.date}:${index}`,
+        date: payment.date,
+        debtHistory: debt.history,
+        amount: payment.amount,
+      })),
+  )
+
+  const entries: FinancialTimelineEntry[] = []
+
+  if (effectiveSalary.amount > 0) {
+    entries.push({
+      id: `salary:${monthKey}`,
+      date: startOfMonth,
+      dayLabel: formatTimelineDay(startOfMonth),
+      kind: 'salary',
+      title: 'Salario activo del ciclo',
+      description: effectiveSalary.effectiveMonth
+        ? `Base mensual vigente desde ${formatMonthLabel(effectiveSalary.effectiveMonth)}.`
+        : 'Base mensual del ciclo.',
+      amount: effectiveSalary.amount,
+      signedAmount: effectiveSalary.amount,
+      balanceAfter: null,
+    })
+  }
+
+  monthTransactions.forEach((transaction) => {
+    if (transaction.type === 'saving') {
+      entries.push({
+        id: transaction.id,
+        date: transaction.date,
+        dayLabel: formatTimelineDay(transaction.date),
+        kind: 'saving',
+        title: 'Movimiento de ahorro',
+        description: transaction.description || 'Aporte al ahorro del mes.',
+        amount: transaction.amount,
+        signedAmount: -transaction.amount,
+        balanceAfter: null,
+      })
+      return
+    }
+
+    const meta = getTransactionMeta(transaction)
+    entries.push({
+      id: transaction.id,
+      date: transaction.date,
+      dayLabel: formatTimelineDay(transaction.date),
+      kind: transaction.type,
+      title: meta.itemName,
+      description: `${meta.type === 'expense' ? 'Gasto' : 'Gusto'} · ${toDisplayCategory(meta.category)}`,
+      amount: transaction.amount,
+      signedAmount: -transaction.amount,
+      balanceAfter: null,
+    })
+  })
+
+  monthDebtPayments.forEach((payment) => {
+    entries.push({
+      id: payment.id,
+      date: payment.date,
+      dayLabel: formatTimelineDay(payment.date),
+      kind: 'debt-payment',
+      title: 'Pago de deuda',
+      description: payment.debtHistory || 'Abono registrado',
+      amount: payment.amount,
+      signedAmount: -payment.amount,
+      balanceAfter: null,
+    })
+  })
+
+  monthEvents.forEach((event) => {
+    entries.push({
+      id: event.id,
+      date: event.date,
+      dayLabel: formatTimelineDay(event.date),
+      kind: 'event',
+      title: event.name,
+      description: event.amount > 0 ? `Evento planificado · ${event.amount}` : 'Evento planificado',
+      amount: event.amount,
+      signedAmount: 0,
+      balanceAfter: null,
+    })
+  })
+
+  const sorted = entries.sort((left, right) => {
+    const byDate = new Date(left.date).getTime() - new Date(right.date).getTime()
+    if (byDate !== 0) return byDate
+    const priority = ['salary', 'expense', 'want', 'saving', 'debt-payment', 'event']
+    return priority.indexOf(left.kind) - priority.indexOf(right.kind)
+  })
+
+  let runningBalance = 0
+
+  return sorted.map((entry) => {
+    if (entry.kind === 'event') {
+      return {
+        ...entry,
+        balanceAfter: runningBalance,
+      }
+    }
+
+    runningBalance += entry.signedAmount
+    return {
+      ...entry,
+      balanceAfter: runningBalance,
     }
   })
 }

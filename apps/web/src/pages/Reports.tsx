@@ -23,6 +23,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { ChartContainer, ChartTooltip, ChartTooltipContent, type ChartConfig } from '@/components/ui/chart'
 import { exportMonthlyReport } from '@/lib/reportExports'
 import {
+  buildFinancialTimeline,
   buildMonthComparison,
   buildMonthlyRankings,
   buildMonthlySummaries,
@@ -82,6 +83,15 @@ export default function Reports() {
   const formula = usePreferencesStore((state) => state.formula)
   const [isExporting, setIsExporting] = useState(false)
 
+  function getTimelineTone(kind: ReturnType<typeof buildFinancialTimeline>[number]['kind']) {
+    if (kind === 'salary') return 'border-emerald-500/25 bg-emerald-500/10 text-emerald-200'
+    if (kind === 'expense') return 'border-rose-500/25 bg-rose-500/10 text-rose-200'
+    if (kind === 'want') return 'border-secondary/25 bg-secondary/10 text-secondary'
+    if (kind === 'saving') return 'border-sky-500/25 bg-sky-500/10 text-sky-200'
+    if (kind === 'debt-payment') return 'border-amber-500/25 bg-amber-500/10 text-amber-200'
+    return 'border-primary/20 bg-primary/10 text-primary'
+  }
+
   const report = useMemo(() => {
     const currentMonthKey = getMonthKey(new Date())
     const previousMonthKey = getPreviousMonthKey(currentMonthKey)
@@ -109,6 +119,13 @@ export default function Reports() {
     const previousSnapshot = getLatestCloseSnapshot(monthlyPlanningHistory, previousMonthKey)
     const currentRankings = buildMonthlyRankings(transactions, currentMonthKey)
     const previousRankings = buildMonthlyRankings(transactions, previousMonthKey)
+    const currentTimeline = buildFinancialTimeline({
+      monthKey: currentMonthKey,
+      salaries,
+      transactions,
+      debts,
+      events,
+    })
 
     const metrics: ReportMetric[] = [
       {
@@ -280,6 +297,7 @@ export default function Reports() {
       previousSnapshot,
       currentRankings,
       previousRankings,
+      currentTimeline,
       trendSeries,
       trendSignals,
     }
