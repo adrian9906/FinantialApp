@@ -25,8 +25,10 @@ export function ImageUploadField({ value, onChange }: ImageUploadFieldProps) {
   const [isBroken, setIsBroken] = useState(false)
 
   useEffect(() => {
-    setIsBroken(false)
-
+    const Broken = () => {
+      setIsBroken(false)
+    }
+    Broken()
     if (!value && inputRef.current) {
       inputRef.current.value = ''
     }
