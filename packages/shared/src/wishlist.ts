@@ -86,7 +86,7 @@ export function buildPurchaseProjection(
 
   const timelineLabel =
     totalDays < 31
-      ? `${totalDays} dia${totalDays === 1 ? '' : 's'} para completar la meta`
+      ? `${totalDays} día${totalDays === 1 ? '' : 's'} para completar la meta`
       : `${Math.ceil(exactMonths)} mes${Math.ceil(exactMonths) === 1 ? '' : 'es'} para completar la meta`
 
   return {

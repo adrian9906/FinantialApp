@@ -1,17 +1,17 @@
 import { useMemo, useState } from 'react'
 import { Calendar, CalendarDays, ChevronLeft, ChevronRight, Pencil, Plus, Timer, Trash2, Wallet } from 'lucide-react'
 
+import { ExportExcelButton } from '@/components/reports/ExportExcelButton'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
-import { ExportExcelButton } from '@/components/reports/ExportExcelButton'
 import { DatePickerField } from '@/components/ui/date-picker-field'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { exportEventsReport } from '@/lib/reportExports'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { exportEventsReport } from '@/lib/reportExports'
 import { useMonthlyOverview } from '@/lib/useMonthlyOverview'
 import { useFinanceStore } from '@/store/financeStore'
 
@@ -70,7 +70,7 @@ export default function Events() {
 
   const sortedEvents = useMemo(
     () => [...events].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()),
-    [events]
+    [events],
   )
 
   const totalReserved = sortedEvents.reduce((sum, event) => sum + event.amount, 0)
@@ -159,7 +159,7 @@ export default function Events() {
   }
 
   return (
-    <div className="space-y-6 animate-in fade-in duration-500">
+    <div className="animate-in space-y-6 fade-in duration-500">
       <header className="flex flex-col justify-between gap-4 sm:flex-row sm:items-end">
         <div>
           <h1 className="text-[28px] font-semibold tracking-tight text-on-surface md:text-[36px]">Eventos</h1>
@@ -167,9 +167,12 @@ export default function Events() {
             Los eventos salen del dinero que todavia queda en `Gustos`: primero se resta lo ya gastado ahi y despues se reserva lo que planifiques aqui.
           </p>
         </div>
-        <div className="flex flex-col gap-3 sm:flex-row">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
           <ExportExcelButton loading={isExporting} onClick={handleExport} />
-          <Button onClick={() => handleOpen()} className="border border-graphite bg-primary-container text-white shadow-vault hover:bg-primary-container/80">
+          <Button
+            onClick={() => handleOpen()}
+            className="w-full border border-graphite bg-primary-container text-white shadow-vault hover:bg-primary-container/80 sm:w-auto"
+          >
             <Plus className="size-4" />
             Nuevo evento
           </Button>
@@ -221,28 +224,28 @@ export default function Events() {
       <Tabs
         value={viewMode}
         onValueChange={(value) => setViewMode(value as 'list' | 'calendar')}
-        className="flex min-h-[860px] flex-col overflow-hidden rounded-2xl bg-surface shadow-vault"
+        className="flex min-h-[720px] flex-col overflow-hidden rounded-2xl bg-surface shadow-vault sm:min-h-[860px]"
       >
-        <div className="sticky top-0 z-10  px-5 py-4 backdrop-blur">
-          <TabsList className="grid w-full max-w-sm grid-cols-2 bg-abyss">
+        <div className="sticky top-0 z-10 px-4 py-4 backdrop-blur sm:px-5">
+          <TabsList className="grid w-full grid-cols-2 bg-abyss sm:max-w-sm">
             <TabsTrigger value="calendar">Calendario</TabsTrigger>
             <TabsTrigger value="list">Lista</TabsTrigger>
           </TabsList>
         </div>
 
-        <div className="flex-1 p-5">
+        <div className="flex-1 p-4 sm:p-5">
           <TabsContent value="calendar" className="mt-0 h-full data-[state=active]:flex data-[state=active]:flex-col">
             <div className="flex h-full flex-col rounded-2xl bg-surface">
               <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
                 <div>
                   <p className="text-xs uppercase tracking-[0.22em] text-medium-gray">Vista calendario</p>
-                  <h2 className="mt-2 text-2xl font-semibold text-on-surface">
+                  <h2 className="mt-2 text-[30px] font-semibold text-on-surface sm:text-2xl">
                     {MONTH_LABELS[calendarMonth.getMonth()]} {calendarMonth.getFullYear()}
                   </h2>
                   <p className="mt-1 text-sm text-muted-gray">Pulsa un dia con eventos para ver cuanto dinero apartaste y si lleva notificacion.</p>
                 </div>
 
-                <div className="inline-flex items-center gap-1 rounded-xl border border-graphite bg-abyss p-1">
+                <div className="inline-flex w-full items-center justify-between gap-1 rounded-xl border border-graphite bg-abyss p-1 sm:w-auto sm:justify-start">
                   <Button
                     type="button"
                     variant="ghost"
@@ -252,7 +255,7 @@ export default function Events() {
                   >
                     <ChevronLeft className="size-4" />
                   </Button>
-                  <div className="min-w-36 text-center text-sm font-semibold text-on-surface">
+                  <div className="min-w-0 flex-1 px-2 text-center text-sm font-semibold text-on-surface sm:min-w-36 sm:flex-none">
                     {MONTH_LABELS[calendarMonth.getMonth()]} {calendarMonth.getFullYear()}
                   </div>
                   <Button
@@ -267,61 +270,69 @@ export default function Events() {
                 </div>
               </div>
 
-              <div className="mt-6 grid grid-cols-7 gap-2 text-center text-[11px] uppercase tracking-[0.18em] text-muted-gray">
-                {WEEKDAY_LABELS.map((day) => (
-                  <span key={day}>{day}</span>
-                ))}
-              </div>
+              <div className="-mx-1 mt-6 overflow-x-auto px-1 pb-1">
+                <div className="min-w-[320px]">
+                  <div className="grid grid-cols-7 gap-1.5 text-center text-[10px] uppercase tracking-[0.14em] text-muted-gray sm:gap-2 sm:text-[11px] sm:tracking-[0.18em]">
+                    {WEEKDAY_LABELS.map((day) => (
+                      <span key={day}>{day}</span>
+                    ))}
+                  </div>
 
-              <div className="mt-3 grid flex-1 grid-cols-7 gap-2">
-                {monthMatrix.map((date) => {
-                  const dateKey = toDateKey(date)
-                  const dayEvents = eventMap[dateKey] ?? []
-                  const isCurrentMonth = date.getMonth() === calendarMonth.getMonth()
-                  const totalDayAmount = dayEvents.reduce((sum, event) => sum + event.amount, 0)
+                  <div className="mt-2 grid grid-cols-7 gap-1.5 sm:mt-3 sm:gap-2">
+                    {monthMatrix.map((date) => {
+                      const dateKey = toDateKey(date)
+                      const dayEvents = eventMap[dateKey] ?? []
+                      const isCurrentMonth = date.getMonth() === calendarMonth.getMonth()
+                      const totalDayAmount = dayEvents.reduce((sum, event) => sum + event.amount, 0)
 
-                  return (
-                    <div
-                      key={dateKey}
-                      className={`min-h-28 rounded-2xl border p-3 transition-colors ${isCurrentMonth
-                        ? 'border-graphite bg-abyss/80'
-                        : 'border-transparent bg-abyss/35 text-muted-gray/55'
-                        }`}
-                    >
-                      <div className="flex items-start justify-between gap-2">
-                        <span className={`text-sm font-medium ${isCurrentMonth ? 'text-on-surface' : 'text-muted-gray/60'}`}>
-                          {date.getDate()}
-                        </span>
-                        {dayEvents.length > 0 ? (
-                          <Badge variant="outline" className="border-primary/30 bg-primary/10 text-primary">
-                            {dayEvents.length}
-                          </Badge>
-                        ) : null}
-                      </div>
+                      return (
+                        <div
+                          key={dateKey}
+                          className={`min-h-[76px] rounded-[18px] border p-1.5 transition-colors sm:min-h-28 sm:rounded-2xl sm:p-3 ${
+                            isCurrentMonth ? 'border-graphite bg-abyss/80' : 'border-transparent bg-abyss/35 text-muted-gray/55'
+                          }`}
+                        >
+                          <div className="flex items-start justify-between gap-1 sm:gap-2">
+                            <span className={`text-xs font-semibold sm:text-sm sm:font-medium ${isCurrentMonth ? 'text-on-surface' : 'text-muted-gray/60'}`}>
+                              {date.getDate()}
+                            </span>
+                            {dayEvents.length > 0 ? (
+                              <Badge
+                                variant="outline"
+                                className="h-5 min-w-5 rounded-full border-primary/30 bg-primary/10 px-1.5 text-[10px] leading-none text-primary sm:h-auto sm:min-w-0 sm:rounded-md sm:px-2 sm:text-xs"
+                              >
+                                {dayEvents.length}
+                              </Badge>
+                            ) : null}
+                          </div>
 
-                      {dayEvents.length > 0 ? (
-                        <div className="mt-3 space-y-2">
-                          <p className="text-xs font-medium text-on-surface">${totalDayAmount.toLocaleString()} reservados</p>
-                          {dayEvents.slice(0, 2).map((event) => (
-                            <div key={event.id} className="rounded-xl border border-graphite bg-surface px-2 py-1.5">
-                              <p className="truncate text-xs font-medium text-on-surface">{event.name}</p>
-                              <p className="mt-1 text-[11px] text-muted-gray">
-                                ${event.amount.toLocaleString()} {event.isNotification ? '• con aviso' : '• sin aviso'}
+                          {dayEvents.length > 0 ? (
+                            <div className="mt-2 space-y-1 sm:mt-3 sm:space-y-2">
+                              <p className="text-[10px] font-medium leading-4 text-on-surface sm:text-xs">
+                                ${totalDayAmount.toLocaleString()}
                               </p>
+                              <div className="space-y-1 sm:space-y-2">
+                                {dayEvents.slice(0, 2).map((event) => (
+                                  <div key={event.id} className="rounded-lg border border-graphite bg-surface px-1.5 py-1 sm:rounded-xl sm:px-2 sm:py-1.5">
+                                    <p className="truncate text-[10px] font-medium text-on-surface sm:text-xs">{event.name}</p>
+                                    <p className="mt-0.5 hidden text-[11px] text-muted-gray sm:block">
+                                      ${event.amount.toLocaleString()} {event.isNotification ? '- con aviso' : '- sin aviso'}
+                                    </p>
+                                  </div>
+                                ))}
+                              </div>
+                              {dayEvents.length > 2 ? <p className="text-[10px] text-muted-gray sm:text-[11px]">+{dayEvents.length - 2} mas</p> : null}
                             </div>
-                          ))}
-                          {dayEvents.length > 2 ? (
-                            <p className="text-[11px] text-muted-gray">+{dayEvents.length - 2} evento(s) mas</p>
-                          ) : null}
+                          ) : (
+                            <div className="mt-2 text-center text-[10px] text-muted-gray sm:mt-4 sm:rounded-xl sm:border sm:border-dashed sm:border-graphite sm:px-2 sm:py-3 sm:text-[11px]">
+                              Libre
+                            </div>
+                          )}
                         </div>
-                      ) : (
-                        <div className="mt-4 rounded-xl border border-dashed border-graphite px-2 py-3 text-center text-[11px] text-muted-gray">
-                          Libre
-                        </div>
-                      )}
-                    </div>
-                  )
-                })}
+                      )
+                    })}
+                  </div>
+                </div>
               </div>
             </div>
           </TabsContent>
@@ -382,7 +393,12 @@ export default function Events() {
         </div>
       </Tabs>
 
-      <Dialog open={open} onOpenChange={(nextOpen) => { if (!isSaving) setOpen(nextOpen) }}>
+      <Dialog
+        open={open}
+        onOpenChange={(nextOpen) => {
+          if (!isSaving) setOpen(nextOpen)
+        }}
+      >
         <DialogContent className="border-graphite bg-surface sm:max-w-4xl">
           <DialogHeader>
             <DialogTitle className="text-on-surface">{editId ? 'Editar evento' : 'Agregar evento'}</DialogTitle>
@@ -425,9 +441,7 @@ export default function Events() {
                     }}
                     className="border-graphite bg-abyss text-on-surface"
                   />
-                  <p className="text-xs text-muted-gray">
-                    Disponible para este formulario: ${availableForCurrentForm.toLocaleString()}
-                  </p>
+                  <p className="text-xs text-muted-gray">Disponible para este formulario: ${availableForCurrentForm.toLocaleString()}</p>
                   {exceedsBudget ? (
                     <p className="text-xs text-red-300">
                       Ese monto se pasa del presupuesto. Solo puedes reservar hasta ${availableForCurrentForm.toLocaleString()}.

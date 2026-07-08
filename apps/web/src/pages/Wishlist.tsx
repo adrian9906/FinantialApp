@@ -214,7 +214,7 @@ export default function Wishlist() {
         <div className="space-y-2">
           <h1 className="text-[28px] font-semibold tracking-tight text-on-surface md:text-[36px]">Deseos</h1>
           <p className="max-w-2xl text-sm text-muted-gray">
-            Organiza cada producto con foto, suma dinero externo si hace falta y mira cuando podrias comprarlo segun tu ahorro real mas aportes extra.
+            Organiza cada producto con foto, suma dinero externo si hace falta y mira cuando podrías comprarlo según tu ahorro real más aportes extra.
           </p>
         </div>
 
@@ -256,10 +256,10 @@ export default function Wishlist() {
           <p className="mt-3 text-3xl font-semibold text-on-surface">{formatCurrency(currentFreeSavedAmount)}</p>
           <p className="mt-2 text-sm text-muted-gray">
             {overview.assignedSavingsGoals > 0
-              ? `${formatCurrency(overview.assignedSavingsGoals)} estan apartados en bolsillos de ahorro y no cuentan para deseos.`
+              ? `${formatCurrency(overview.assignedSavingsGoals)} están apartados en bolsillos de ahorro y no cuentan para deseos.`
               : overview.reservedForPurchasedWishlist > 0
                 ? `${formatCurrency(overview.reservedForPurchasedWishlist)} ya se descontaron por deseos marcados como comprados.`
-                : 'Este total se compara automaticamente contra cada producto.'}
+                : 'Este total se compara automáticamente contra cada producto.'}
           </p>
         </Card>
 
@@ -296,12 +296,12 @@ export default function Wishlist() {
             const canBePurchased = purchased || effectiveSavedAmount >= item.price
             const projection = purchased
               ? {
-                  remaining: 0,
-                  progress: 100,
-                  timelineLabel: 'Ya lo compraste.',
-                  purchaseDateLabel: `Descontado del ahorro: ${formatCurrency(reservedAmount)}`,
-                  isReady: true,
-                }
+                remaining: 0,
+                progress: 100,
+                timelineLabel: 'Ya lo compraste.',
+                purchaseDateLabel: `Descontado del ahorro: ${formatCurrency(reservedAmount)}`,
+                isReady: true,
+              }
               : buildPurchaseProjection(item.price, effectiveSavedAmount, averageMonthlySavings, (date) => dateFormatter.format(date))
 
             return (
@@ -336,8 +336,8 @@ export default function Wishlist() {
                         {purchased
                           ? `Ya se descontaron ${formatCurrency(reservedAmount)} de tus ahorros.`
                           : canBePurchased
-                            ? `Ya puedes comprarlo. De tus ahorros saldrian ${formatCurrency(Math.max(0, item.price - externalContribution))}.`
-                            : `Aun no alcanza el ahorro disponible mas el aporte externo para cubrir ${formatCurrency(item.price)}.`}
+                            ? `Ya puedes comprarlo. De tus ahorros saldrían ${formatCurrency(Math.max(0, item.price - externalContribution))}.`
+                            : `Aun no alcanza el ahorro disponible más el aporte externo para cubrir ${formatCurrency(item.price)}.`}
                       </p>
                     </div>
                     <Checkbox
@@ -406,12 +406,12 @@ export default function Wishlist() {
             const canBePurchased = purchased || effectiveSavedAmount >= item.price
             const projection = purchased
               ? {
-                  remaining: 0,
-                  progress: 100,
-                  timelineLabel: 'Ya lo compraste.',
-                  purchaseDateLabel: `Descontado del ahorro: ${formatCurrency(reservedAmount)}`,
-                  isReady: true,
-                }
+                remaining: 0,
+                progress: 100,
+                timelineLabel: 'Ya lo compraste.',
+                purchaseDateLabel: `Descontado del ahorro: ${formatCurrency(reservedAmount)}`,
+                isReady: true,
+              }
               : buildPurchaseProjection(item.price, effectiveSavedAmount, averageMonthlySavings, (date) => dateFormatter.format(date))
 
             return (
@@ -471,7 +471,7 @@ export default function Wishlist() {
                               ? `Ya se descontaron ${formatCurrency(reservedAmount)} de tus ahorros.`
                               : canBePurchased
                                 ? `Marca el check para descontar ${formatCurrency(Math.max(0, item.price - externalContribution))} de tus ahorros.`
-                                : 'Todavia no tienes ahorro suficiente, incluso contando el aporte externo.'}
+                                : 'Todavía no tienes ahorro suficiente, incluso contando el aporte externo.'}
                           </p>
                         </div>
                         <Checkbox
@@ -485,7 +485,7 @@ export default function Wishlist() {
                       <p className="rounded-xl border border-graphite bg-abyss p-4 text-sm text-muted-gray">
                         {purchased
                           ? `Este deseo ya fue comprado y se descontaron ${formatCurrency(reservedAmount)} de tus ahorros.`
-                          : `Si mantienes este ritmo de ahorro, podras comprarlo el ${projection.purchaseDateLabel.replace('Compra posible: ', '')}.`}
+                          : `Si mantienes este ritmo de ahorro, podrás comprarlo el ${projection.purchaseDateLabel.replace('Compra posible: ', '')}.`}
                       </p>
 
                       <div className="flex justify-end gap-1">
@@ -510,7 +510,7 @@ export default function Wishlist() {
           <DialogHeader>
             <DialogTitle className="text-on-surface">{editId ? 'Editar articulo' : 'Agregar deseo'}</DialogTitle>
             <DialogDescription>
-              Define el producto aqui. El progreso y la fecha de compra se calculan automaticamente usando tu ahorro total real.
+              Define el producto aquí. El progreso y la fecha de compra se calculan automáticamente usando tu ahorro total real.
             </DialogDescription>
           </DialogHeader>
 
@@ -547,7 +547,7 @@ export default function Wishlist() {
                   className="border-graphite bg-abyss text-on-surface"
                 />
                 <p className="text-xs text-muted-gray">
-                  Usa este campo si parte del dinero saldra de ingresos extra y no del ahorro calculado por la formula.
+                  Usa este campo si parte del dinero saldrá de ingresos extra y no del ahorro calculado por la fórmula.
                 </p>
               </div>
 
@@ -596,7 +596,7 @@ export default function Wishlist() {
                     averageMonthlySavings,
                     (date) => dateFormatter.format(date),
                   ).purchaseDateLabel
-                  : 'Sin fecha estimada todavia.'}
+                  : 'Sin fecha estimada todavía.'}
               </p>
             </Card>
           </div>
@@ -613,7 +613,7 @@ export default function Wishlist() {
             >
               Cancelar
             </Button>
-            <Button loading={isSaving} onClick={() => void handleSave()} className="bg-primary-container text-white hover:brightness-110 shadow-vault">
+            <Button loading={isSaving} onClick={() => void handleSave()} className="bg-primary-container text-white hover:bg-primary-container/80 shadow-vault">
               Guardar
             </Button>
           </DialogFooter>

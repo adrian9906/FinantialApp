@@ -51,25 +51,25 @@ const themeOptions: Array<{
   description: string
   preview: string
 }> = [
-  {
-    id: 'obsidian',
-    label: 'Obsidiana',
-    description: 'El look original, profundo y violeta.',
-    preview: 'linear-gradient(135deg, #171717 0%, #7c3aed 100%)',
-  },
-  {
-    id: 'midnight',
-    label: 'Midnight',
-    description: 'Mas frio, azul y tecnico.',
-    preview: 'linear-gradient(135deg, #0b1322 0%, #4d74df 100%)',
-  },
-  {
-    id: 'ember',
-    label: 'Ember',
-    description: 'Oscuro calido con energia cobre.',
-    preview: 'linear-gradient(135deg, #15100d 0%, #d97544 100%)',
-  },
-]
+    {
+      id: 'obsidian',
+      label: 'Obsidiana',
+      description: 'El look original, profundo y violeta.',
+      preview: 'linear-gradient(135deg, #171717 0%, #7c3aed 100%)',
+    },
+    {
+      id: 'midnight',
+      label: 'Midnight',
+      description: 'Más frío, azul y técnico.',
+      preview: 'linear-gradient(135deg, #0b1322 0%, #4d74df 100%)',
+    },
+    {
+      id: 'ember',
+      label: 'Ember',
+      description: 'Oscuro cálido con energía cobre.',
+      preview: 'linear-gradient(135deg, #15100d 0%, #d97544 100%)',
+    },
+  ]
 
 const appearanceOptions: Array<{
   id: AppAppearance
@@ -77,19 +77,19 @@ const appearanceOptions: Array<{
   description: string
   icon: typeof MoonStar
 }> = [
-  {
-    id: 'dark',
-    label: 'Oscuro',
-    description: 'La app mantiene su presencia intensa y nocturna.',
-    icon: MoonStar,
-  },
-  {
-    id: 'light',
-    label: 'Claro',
-    description: 'Superficies luminosas con mejor contraste diurno.',
-    icon: SunMedium,
-  },
-]
+    {
+      id: 'dark',
+      label: 'Oscuro',
+      description: 'La app mantiene su presencia intensa y nocturna.',
+      icon: MoonStar,
+    },
+    {
+      id: 'light',
+      label: 'Claro',
+      description: 'Superficies luminosas con mejor contraste diurno.',
+      icon: SunMedium,
+    },
+  ]
 
 const backgroundOptions: Array<{
   id: AppBackground
@@ -97,34 +97,34 @@ const backgroundOptions: Array<{
   description: string
   preview: string
 }> = [
-  {
-    id: 'grid',
-    label: 'Hexagonos',
-    description: 'Usa el componente HexagonBackground con una textura tecnica mas viva.',
-    preview:
-      'radial-gradient(circle at 20% 18%, rgba(124,58,237,0.24), transparent 26%), linear-gradient(135deg, #171717 0%, #2a1c49 100%)',
-  },
-  {
-    id: 'nebula',
-    label: 'Nebula',
-    description: 'Capas suaves con halos y profundidad.',
-    preview:
-      'radial-gradient(circle at 20% 20%, rgba(124,58,237,0.38), transparent 32%), radial-gradient(circle at 80% 18%, rgba(206,189,255,0.22), transparent 24%), linear-gradient(135deg, #121212 0%, #1f1834 100%)',
-  },
-  {
-    id: 'carbon',
-    label: 'Carbon',
-    description: 'Plano, sobrio y con menos distraccion visual.',
-    preview: 'linear-gradient(135deg, #101010 0%, #202020 100%)',
-  },
-  {
-    id: 'aurora',
-    label: 'Aurora',
-    description: 'Toques de color mas vivos en el fondo principal.',
-    preview:
-      'radial-gradient(circle at 15% 15%, rgba(74,222,128,0.28), transparent 22%), radial-gradient(circle at 80% 10%, rgba(124,58,237,0.3), transparent 28%), linear-gradient(135deg, #101010 0%, #16221d 100%)',
-  },
-]
+    {
+      id: 'grid',
+      label: 'Hexagonos',
+      description: 'Usa el componente HexagonBackground con una textura técnica más viva.',
+      preview:
+        'radial-gradient(circle at 20% 18%, rgba(124,58,237,0.24), transparent 26%), linear-gradient(135deg, #171717 0%, #2a1c49 100%)',
+    },
+    {
+      id: 'nebula',
+      label: 'Nebula',
+      description: 'Capas suaves con halos y profundidad.',
+      preview:
+        'radial-gradient(circle at 20% 20%, rgba(124,58,237,0.38), transparent 32%), radial-gradient(circle at 80% 18%, rgba(206,189,255,0.22), transparent 24%), linear-gradient(135deg, #121212 0%, #1f1834 100%)',
+    },
+    {
+      id: 'carbon',
+      label: 'Carbon',
+      description: 'Plano, sobrio y con menos distracción visual.',
+      preview: 'linear-gradient(135deg, #101010 0%, #202020 100%)',
+    },
+    {
+      id: 'aurora',
+      label: 'Aurora',
+      description: 'Toques de color más vivos en el fondo principal.',
+      preview:
+        'radial-gradient(circle at 15% 15%, rgba(74,222,128,0.28), transparent 22%), radial-gradient(circle at 80% 10%, rgba(124,58,237,0.3), transparent 28%), linear-gradient(135deg, #101010 0%, #16221d 100%)',
+    },
+  ]
 
 function cloneFormula(formula: AllocationFormula): AllocationFormula {
   return {
@@ -266,11 +266,10 @@ function FormulaCard({
               key={preset.id}
               type="button"
               onClick={() => setDraftFormula(cloneFormula(preset.formula))}
-              className={`rounded-2xl border p-4 text-left transition-all ${
-                selected
-                  ? 'border-primary/40 bg-primary/10 shadow-vault'
-                  : 'border-graphite bg-surface-container-low hover:border-outline-variant hover:bg-surface-container'
-              }`}
+              className={`rounded-2xl border p-4 text-left transition-all ${selected
+                ? 'border-primary/40 bg-primary/10 shadow-vault'
+                : 'border-graphite bg-surface-container-low hover:border-outline-variant hover:bg-surface-container'
+                }`}
             >
               <div className="flex items-center justify-between gap-3">
                 <p className="text-sm font-semibold text-on-surface">{preset.label}</p>
@@ -324,7 +323,7 @@ function FormulaCard({
             disabled={!isFormulaValid || !formulaChanged}
             className="bg-primary-container text-primary-foreground shadow-vault hover:brightness-110"
           >
-            Guardar formula
+            Guardar fórmula
           </Button>
           {!isFormulaValid ? (
             <p className="self-center text-xs text-warning">
@@ -363,12 +362,12 @@ function SummaryCard({
 
       <div className="mt-6 space-y-3">
         <div className="rounded-2xl border border-graphite bg-surface-container-low p-4">
-          <p className="text-xs uppercase tracking-[0.22em] text-medium-gray">Formula actual</p>
+          <p className="text-xs uppercase tracking-[0.22em] text-medium-gray">Fórmula actual</p>
           <p className="mt-2 text-xl font-semibold text-on-surface">{formatFormulaLabel(formula)}</p>
           <p className="mt-1 text-sm text-muted-gray">
             {formula.rolloverSavings
               ? 'Con traspaso del ahorro sobrante a gustos.'
-              : 'Sin traspaso automatico entre categorias.'}
+              : 'Sin traspaso automático entre categorías.'}
           </p>
         </div>
 
@@ -429,11 +428,10 @@ function AppearanceCard({
               key={option.id}
               type="button"
               onClick={() => setAppearance(option.id)}
-              className={`flex items-center gap-4 rounded-2xl border p-4 text-left transition-all ${
-                selected
-                  ? 'border-primary/40 bg-primary/10 shadow-vault'
-                  : 'border-graphite bg-surface-container-low hover:border-outline-variant hover:bg-surface-container'
-              }`}
+              className={`flex items-center gap-4 rounded-2xl border p-4 text-left transition-all ${selected
+                ? 'border-primary/40 bg-primary/10 shadow-vault'
+                : 'border-graphite bg-surface-container-low hover:border-outline-variant hover:bg-surface-container'
+                }`}
             >
               <div className="flex size-12 shrink-0 items-center justify-center rounded-2xl border border-graphite bg-surface-container-high">
                 <Icon className="size-5 text-on-surface" />
@@ -482,11 +480,10 @@ function ThemeCard({
               key={option.id}
               type="button"
               onClick={() => setTheme(option.id)}
-              className={`flex items-center gap-4 rounded-2xl border p-4 text-left transition-all ${
-                selected
-                  ? 'border-primary/40 bg-primary/10 shadow-vault'
-                  : 'border-graphite bg-surface-container-low hover:border-outline-variant hover:bg-surface-container'
-              }`}
+              className={`flex items-center gap-4 rounded-2xl border p-4 text-left transition-all ${selected
+                ? 'border-primary/40 bg-primary/10 shadow-vault'
+                : 'border-graphite bg-surface-container-low hover:border-outline-variant hover:bg-surface-container'
+                }`}
             >
               <div
                 className="h-14 w-14 shrink-0 rounded-2xl border border-graphite"
@@ -519,7 +516,7 @@ function BackgroundCard({
       <SectionIntro
         eyebrow="Fondo"
         title="Color y atmosfera"
-        description="Controla la presencia del fondo principal para hacerlo mas sobrio o mas expresivo."
+        description="Controla la presencia del fondo principal para hacerlo más sobrio o más expresivo."
         icon={
           <div className="flex size-11 items-center justify-center rounded-2xl bg-tertiary-container/10 text-tertiary-container shadow-vault-sm">
             <Sparkles className="size-5" />
@@ -536,11 +533,10 @@ function BackgroundCard({
               key={option.id}
               type="button"
               onClick={() => setBackground(option.id)}
-              className={`rounded-2xl border p-4 text-left transition-all ${
-                selected
-                  ? 'border-primary/40 bg-primary/10 shadow-vault'
-                  : 'border-graphite bg-surface-container-low hover:border-outline-variant hover:bg-surface-container'
-              }`}
+              className={`rounded-2xl border p-4 text-left transition-all ${selected
+                ? 'border-primary/40 bg-primary/10 shadow-vault'
+                : 'border-graphite bg-surface-container-low hover:border-outline-variant hover:bg-surface-container'
+                }`}
             >
               <div
                 className="h-24 rounded-2xl border border-graphite"
@@ -631,7 +627,7 @@ function MonthlyResetCard() {
         <SectionIntro
           eyebrow="Cierre mensual"
           title="Reset de listas"
-          description="Guarda una foto de tus gastos y gustos del mes, vacia las listas activas y te deja listo para planificar el proximo mes desde cero."
+          description="Guarda una foto de tus gastos y gustos del mes, vacia las listas activas y te deja listo para planificar el próximo mes desde cero."
           icon={
             <div className="flex size-11 items-center justify-center rounded-2xl bg-warning/10 text-warning shadow-vault-sm">
               <Archive className="size-5" />
@@ -710,7 +706,7 @@ function MonthlyResetCard() {
         <div className="mt-6 space-y-3">
           {monthlyPlanningHistory.length === 0 ? (
             <div className="rounded-2xl border border-dashed border-graphite bg-surface-container-low p-6 text-sm text-muted-gray">
-              Aun no has guardado ningun historial mensual. Cuando hagas el reset del mes, aparecera aqui para reutilizarlo.
+              Aun no has guardado ningún historial mensual. Cuando hagas el reset del mes, aparecera aquí para reutilizarlo.
             </div>
           ) : (
             monthlyPlanningHistory.map((history) => (
@@ -811,7 +807,7 @@ export default function Settings() {
   function handleResetPreferences() {
     resetPreferences()
     setDraftFormula(cloneFormula(defaultFormula))
-    toast.success('Se restauraron los ajustes visuales y la formula original.')
+    toast.success('Se restauraron los ajustes visuales y la fórmula original.')
   }
 
   return (
@@ -822,7 +818,7 @@ export default function Settings() {
             Settings
           </h1>
           <p className="max-w-3xl text-sm text-muted-gray">
-            Ajusta la formula de presupuesto, la paleta general y el fondo para que Plata App
+            Ajusta la fórmula de presupuesto, la paleta general y el fondo para que Plata App
             se adapte mejor a tu forma de planificar.
           </p>
         </div>

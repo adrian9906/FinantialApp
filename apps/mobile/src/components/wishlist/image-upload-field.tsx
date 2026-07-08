@@ -161,7 +161,7 @@ export function ImageUploadField({
               Toca aqui para subir una foto
             </Text>
             <Text style={{ color: palette.textMuted, fontSize: 12, lineHeight: 18 }}>
-              Se mostrara en la vista de tarjetas para reconocer el producto mas rapido.
+              Se mostrara en la vista de tarjetas para reconocer el producto más rápido.
             </Text>
           </View>
         </View>

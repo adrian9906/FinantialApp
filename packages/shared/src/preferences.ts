@@ -22,25 +22,25 @@ export const formulaPresets: Array<{
   description: string
   formula: AllocationFormula
 }> = [
-  {
-    id: 'balanced',
-    label: '50 / 25 / 25',
-    description: 'Balance clasico para necesidades, gustos y ahorro.',
-    formula: { expenses: 50, wants: 25, savings: 25, rolloverSavings: true },
-  },
-  {
-    id: 'focused-growth',
-    label: '60 / 15 / 25',
-    description: 'Da mas espacio a gastos fijos y mantiene ahorro estable.',
-    formula: { expenses: 60, wants: 15, savings: 25, rolloverSavings: true },
-  },
-  {
-    id: 'save-first',
-    label: '45 / 20 / 35',
-    description: 'Prioriza ahorro agresivo sin dejar fuera el disfrute.',
-    formula: { expenses: 45, wants: 20, savings: 35, rolloverSavings: false },
-  },
-]
+    {
+      id: 'balanced',
+      label: '50 / 25 / 25',
+      description: 'Balance clásico para necesidades, gustos y ahorro.',
+      formula: { expenses: 50, wants: 25, savings: 25, rolloverSavings: true },
+    },
+    {
+      id: 'focused-growth',
+      label: '60 / 15 / 25',
+      description: 'Da más espacio a gastos fijos y mantiene ahorro estable.',
+      formula: { expenses: 60, wants: 15, savings: 25, rolloverSavings: true },
+    },
+    {
+      id: 'save-first',
+      label: '45 / 20 / 35',
+      description: 'Prioriza ahorro agresivo sin dejar fuera el disfrute.',
+      formula: { expenses: 45, wants: 20, savings: 35, rolloverSavings: false },
+    },
+  ]
 
 export function clampPercentage(value: number) {
   if (!Number.isFinite(value)) return 0

@@ -27,7 +27,7 @@ export const themeOptions: Array<{ id: AppTheme; label: string; description: str
   {
     id: 'ember',
     label: 'Ember',
-    description: 'Acentos calidos para una presencia mas energica.',
+    description: 'Acentos calidos para una presencia más enérgica.',
   },
 ]
 
@@ -45,11 +45,11 @@ export const backgroundOptions: Array<{ id: AppBackground; label: string; descri
   {
     id: 'carbon',
     label: 'Carbon',
-    description: 'Textura discreta y mas tecnica.',
+    description: 'Textura discreta y más técnica.',
   },
   {
     id: 'aurora',
     label: 'Aurora',
-    description: 'Tonos luminosos con energia flotante.',
+    description: 'Tonos luminosos con energía flotante.',
   },
 ]

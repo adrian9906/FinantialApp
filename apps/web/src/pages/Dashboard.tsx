@@ -492,13 +492,13 @@ export default function Dashboard() {
           <CardHeader className="gap-4">
             <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
               <div>
-                <CardTitle className="text-on-surface">Acciones rapidas</CardTitle>
+                <CardTitle className="text-on-surface">Acciones rápidas</CardTitle>
                 <CardDescription className="text-muted-gray">
-                  Atajos utiles para las tareas que mas repites durante el mes.
+                  Atajos útiles para las tareas que más repites durante el mes.
                 </CardDescription>
               </div>
               <Badge variant="secondary" className="w-fit bg-primary/10 text-primary">
-                Menos friccion diaria
+                Menos fricción diaria
               </Badge>
             </div>
           </CardHeader>
@@ -639,7 +639,7 @@ export default function Dashboard() {
 
             {recurringPreview.length === 0 ? (
               <div className="rounded-2xl border border-dashed border-graphite bg-surface-container-low p-5 text-sm text-muted-gray">
-                Cuando cierres varios meses, aqui veras productos que se repiten y podras reconstruir la lista mas rapido.
+                Cuando cierres varios meses, aquí verás productos que se repiten y podrás reconstruir la lista más rápido.
               </div>
             ) : (
               <div className="grid gap-3">
@@ -659,7 +659,7 @@ export default function Dashboard() {
                         </Badge>
                       </div>
                       <p className="mt-1 text-xs text-muted-gray">
-                        Categoria {item.category} · {item.months.map((month) => month.slice(5, 7)).join(' / ')}
+                        Categoría {item.category} · {item.months.map((month) => month.slice(5, 7)).join(' / ')}
                       </p>
                     </div>
                     <div className="text-sm font-semibold text-on-surface">
@@ -743,7 +743,7 @@ export default function Dashboard() {
             <p className="text-sm text-muted-gray">
               Configura tu salario mensual para empezar a registrar datos en la base de datos.
             </p>
-            <Button onClick={() => navigate('/salary')} className="bg-primary-container text-white hover:brightness-110 shadow-vault">
+            <Button onClick={() => navigate('/salary')} className="bg-primary-container text-white hover:bg-primary-container/80 shadow-vault">
               <Plus className="size-4" />
               Configurar salario
             </Button>

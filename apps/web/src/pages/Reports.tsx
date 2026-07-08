@@ -243,7 +243,7 @@ export default function Reports() {
 
     if (currentEvents.length > previousEvents.length) {
       findings.push({
-        title: 'Este mes tiene mas movimiento en agenda',
+        title: 'Este mes tiene más movimiento en agenda',
         body: `Hay ${currentEvents.length} evento(s) registrados frente a ${previousEvents.length} del mes anterior.`,
         tone: 'neutral',
       })
@@ -252,7 +252,7 @@ export default function Reports() {
     if ((currentSummary?.daysRemainingInCycle ?? 0) > 0) {
       findings.push({
         title: 'El salario actual debe aguantar hasta el cierre de mes',
-        body: `Quedan ${currentSummary?.daysRemainingInCycle} dia(s) hasta ${new Date(currentSummary?.cycleEndsAt ?? new Date().toISOString()).toLocaleDateString('es-ES')}. Tu saldo libre recomendado es ${formatCurrency(currentSummary?.recommendedDailyAvailable ?? 0)} por dia.`,
+        body: `Quedan ${currentSummary?.daysRemainingInCycle} día(s) hasta ${new Date(currentSummary?.cycleEndsAt ?? new Date().toISOString()).toLocaleDateString('es-ES')}. Tu saldo libre recomendado es ${formatCurrency(currentSummary?.recommendedDailyAvailable ?? 0)} por dia.`,
         tone: (currentSummary?.freeBalance ?? 0) > 0 ? 'neutral' : 'warn',
       })
     }
@@ -261,13 +261,13 @@ export default function Reports() {
       .filter((entry) => entry.month === previousMonthKey || entry.month === currentMonthKey)
       .sort((left, right) => left.month.localeCompare(right.month))
       .map((entry) => ({
-      label: entry.shortLabel,
-      salario: entry.salary,
-      gastos: entry.expenses,
-      gustos: entry.wants,
-      ahorros: entry.savings,
-      deuda: entry.debtRemaining,
-      libre: entry.freeBalance,
+        label: entry.shortLabel,
+        salario: entry.salary,
+        gastos: entry.expenses,
+        gustos: entry.wants,
+        ahorros: entry.savings,
+        deuda: entry.debtRemaining,
+        libre: entry.freeBalance,
       }))
 
     const trendSignals = [
@@ -341,14 +341,14 @@ export default function Reports() {
           <div className="space-y-3">
             <Badge variant="secondary" className="w-fit border-primary/20 bg-primary/10 text-primary">
               <ReceiptText className="size-3.5" />
-              Informe mensual automatico
+              Informe mensual automático
             </Badge>
             <div>
               <h1 className="text-[28px] font-semibold tracking-tight text-on-surface md:text-[40px]">
-                Reports
+                Reportes
               </h1>
               <p className="mt-2 max-w-3xl text-sm leading-6 text-muted-gray">
-                Tu tablero mensual con comparador entre meses, tendencias, rankings de compra y lectura rapida del estado financiero.
+                Tu tablero mensual con comparador entre meses, tendencias, rankings de compra y lectura rápida del estado financiero.
               </p>
             </div>
           </div>
@@ -445,7 +445,7 @@ export default function Reports() {
 
         <Card className="border-graphite bg-surface shadow-vault">
           <CardHeader>
-            <CardTitle className="text-on-surface">Variacion absoluta y porcentual</CardTitle>
+            <CardTitle className="text-on-surface">Variación absoluta y porcentual</CardTitle>
             <CardDescription className="text-muted-gray">
               Tabla compacta con cambios exactos para cada bloque financiero.
             </CardDescription>
@@ -485,7 +485,7 @@ export default function Reports() {
             <div>
               <CardTitle className="text-on-surface">Tendencia entre ambos meses</CardTitle>
               <CardDescription className="text-muted-gray">
-                Comparacion directa entre el mes anterior y el mes actual para ver hacia donde se mueve cada bloque.
+                Comparación directa entre el mes anterior y el mes actual para ver hacia donde se mueve cada bloque.
               </CardDescription>
             </div>
             <Badge variant="secondary" className="bg-surface-container-high text-on-surface">
@@ -519,7 +519,7 @@ export default function Reports() {
 
         <Card className="border-graphite bg-surface shadow-vault">
           <CardHeader>
-            <CardTitle className="text-on-surface">Lectura rapida</CardTitle>
+            <CardTitle className="text-on-surface">Lectura rápida</CardTitle>
             <CardDescription className="text-muted-gray">
               Estado actual de deuda, deseos comprados y cierre de lista.
             </CardDescription>
@@ -543,24 +543,24 @@ export default function Reports() {
               </div>
               <p className="mt-3 text-2xl font-semibold text-on-surface">{formatCurrency(report.reservedForPurchasedWishlist)}</p>
               <p className="mt-1 text-xs text-muted-gray">
-                Este monto ya salio del ahorro real por deseos marcados como comprados.
+                Este monto ya salió del ahorro real por deseos marcados como comprados.
               </p>
             </div>
 
-              <div className="rounded-2xl border border-graphite bg-abyss/85 p-4">
-                <div className="flex items-center gap-2 text-muted-gray">
-                  <Target className="size-4" />
-                  <span className="text-xs uppercase tracking-[0.2em]">Cierre mensual</span>
-                </div>
+            <div className="rounded-2xl border border-graphite bg-abyss/85 p-4">
+              <div className="flex items-center gap-2 text-muted-gray">
+                <Target className="size-4" />
+                <span className="text-xs uppercase tracking-[0.2em]">Cierre mensual</span>
+              </div>
               <p className="mt-3 text-lg font-semibold text-on-surface">
                 {report.currentSnapshot?.label ?? 'Aun no hay cierre guardado'}
               </p>
               <p className="mt-1 text-xs text-muted-gray">
                 {report.currentSnapshot
                   ? `${report.currentSnapshot.expenses.length} gasto(s) y ${report.currentSnapshot.wants.length} gusto(s) guardados en el reset mensual.`
-                  : 'Haz el reset mensual cuando cierres el mes para alimentar este bloque automaticamente.'}
-                </p>
-              </div>
+                  : 'Haz el reset mensual cuando cierres el mes para alimentar este bloque automáticamente.'}
+              </p>
+            </div>
 
             <div className="rounded-2xl border border-graphite bg-abyss/85 p-4">
               <div className="flex items-center gap-2 text-muted-gray">
@@ -569,12 +569,12 @@ export default function Reports() {
               </div>
               <p className="mt-3 text-lg font-semibold text-on-surface">
                 {report.currentSummary?.daysRemainingInCycle
-                  ? `${report.currentSummary.daysRemainingInCycle} dia(s) hasta fin de mes`
+                  ? `${report.currentSummary.daysRemainingInCycle} día(s) hasta fin de mes`
                   : 'Mes cerrado'}
               </p>
               <p className="mt-1 text-xs text-muted-gray">
                 {report.currentSummary?.daysRemainingInCycle
-                  ? `Para aguantar hasta ${new Date(report.currentSummary.cycleEndsAt).toLocaleDateString('es-ES')} te conviene no pasar de ${formatCurrency(report.currentSummary.recommendedDailyAvailable)} por dia de saldo libre.`
+                  ? `Para aguantar hasta ${new Date(report.currentSummary.cycleEndsAt).toLocaleDateString('es-ES')} te conviene no pasar de ${formatCurrency(report.currentSummary.recommendedDailyAvailable)} por día de saldo libre.`
                   : 'Este bloque se recalcula solo en el mes actual, cuando aun falta para el proximo cobro.'}
               </p>
             </div>
@@ -598,71 +598,70 @@ export default function Reports() {
           <CardContent>
             {report.currentTimeline.length === 0 ? (
               <div className="rounded-2xl border border-dashed border-graphite bg-abyss/70 p-8 text-center text-sm text-muted-gray">
-                Aun no hay movimientos suficientes este mes para dibujar el timeline financiero.
+                Aún no hay movimientos suficientes este mes para dibujar el timeline financiero.
               </div>
             ) : (
               <div className="space-y-4">
-                  {report.currentTimeline.map((entry, index) => (
-                    <div
-                      key={entry.id}
-                      className="relative"
-                    >
-                      <div className="hidden sm:block">
-                        <div className={`absolute left-0 top-5 flex size-10 items-center justify-center rounded-2xl border ${getTimelineTone(entry.kind)}`}>
-                          <span className="text-[10px] font-semibold uppercase tracking-[0.14em]">{entry.dayLabel.split(' ')[0]}</span>
-                        </div>
-                        <div className="absolute left-10 top-10 h-px w-10 bg-gradient-to-r from-primary/35 to-transparent" />
-                        {index < report.currentTimeline.length - 1 ? (
-                          <div className="absolute left-5 top-[52px] h-8 w-px bg-gradient-to-b from-primary/30 via-secondary/20 to-transparent" />
-                        ) : null}
+                {report.currentTimeline.map((entry, index) => (
+                  <div
+                    key={entry.id}
+                    className="relative"
+                  >
+                    <div className="hidden sm:block">
+                      <div className={`absolute left-0 top-5 flex size-10 items-center justify-center rounded-2xl border ${getTimelineTone(entry.kind)}`}>
+                        <span className="text-[10px] font-semibold uppercase tracking-[0.14em]">{entry.dayLabel.split(' ')[0]}</span>
                       </div>
+                      <div className="absolute left-10 top-10 h-px w-10 bg-gradient-to-r from-primary/35 to-transparent" />
+                      {index < report.currentTimeline.length - 1 ? (
+                        <div className="absolute left-5 top-[52px] h-8 w-px bg-gradient-to-b from-primary/30 via-secondary/20 to-transparent" />
+                      ) : null}
+                    </div>
 
-                      <div className="rounded-[24px] border border-graphite bg-[linear-gradient(135deg,rgba(255,255,255,0.02),rgba(255,255,255,0))] p-4 transition-all hover:border-primary/30 hover:bg-surface-container-low sm:ml-16">
-                        <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-start">
-                          <div className="min-w-0">
-                            <div className="flex flex-wrap items-center gap-2">
-                              <Badge variant="secondary" className={`border ${getTimelineTone(entry.kind)}`}>
-                                {entry.kind === 'salary'
-                                  ? 'Salario'
-                                  : entry.kind === 'expense'
-                                    ? 'Gasto'
-                                    : entry.kind === 'want'
-                                      ? 'Gusto'
-                                      : entry.kind === 'saving'
-                                        ? 'Ahorro'
-                                        : entry.kind === 'debt-payment'
-                                          ? 'Pago'
-                                          : 'Evento'}
-                              </Badge>
-                              <span className="text-xs uppercase tracking-[0.16em] text-medium-gray">{entry.dayLabel}</span>
-                            </div>
-                            <p className="mt-2 text-sm font-semibold text-on-surface">{entry.title}</p>
-                            <p className="mt-1 text-sm text-muted-gray">{entry.description}</p>
+                    <div className="rounded-[24px] border border-graphite bg-[linear-gradient(135deg,rgba(255,255,255,0.02),rgba(255,255,255,0))] p-4 transition-all hover:border-primary/30 hover:bg-surface-container-low sm:ml-16">
+                      <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-start">
+                        <div className="min-w-0">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <Badge variant="secondary" className={`border ${getTimelineTone(entry.kind)}`}>
+                              {entry.kind === 'salary'
+                                ? 'Salario'
+                                : entry.kind === 'expense'
+                                  ? 'Gasto'
+                                  : entry.kind === 'want'
+                                    ? 'Gusto'
+                                    : entry.kind === 'saving'
+                                      ? 'Ahorro'
+                                      : entry.kind === 'debt-payment'
+                                        ? 'Pago'
+                                        : 'Evento'}
+                            </Badge>
+                            <span className="text-xs uppercase tracking-[0.16em] text-medium-gray">{entry.dayLabel}</span>
                           </div>
+                          <p className="mt-2 text-sm font-semibold text-on-surface">{entry.title}</p>
+                          <p className="mt-1 text-sm text-muted-gray">{entry.description}</p>
+                        </div>
 
-                          <div className="sm:text-right">
-                            <p
-                              className={`text-base font-semibold ${
-                                entry.signedAmount > 0
-                                  ? 'text-emerald-200'
-                                  : entry.signedAmount < 0
-                                    ? 'text-rose-200'
-                                    : 'text-on-surface'
+                        <div className="sm:text-right">
+                          <p
+                            className={`text-base font-semibold ${entry.signedAmount > 0
+                              ? 'text-emerald-200'
+                              : entry.signedAmount < 0
+                                ? 'text-rose-200'
+                                : 'text-on-surface'
                               }`}
-                            >
-                              {entry.signedAmount > 0 ? '+' : entry.signedAmount < 0 ? '-' : ''}
-                              {formatCurrency(Math.abs(entry.amount))}
-                            </p>
-                            <p className="mt-1 text-xs text-muted-gray">
-                              {entry.kind === 'event'
-                                ? 'No descuenta saldo directo'
-                                : `Saldo: ${formatCurrency(entry.balanceAfter ?? 0)}`}
-                            </p>
-                          </div>
+                          >
+                            {entry.signedAmount > 0 ? '+' : entry.signedAmount < 0 ? '-' : ''}
+                            {formatCurrency(Math.abs(entry.amount))}
+                          </p>
+                          <p className="mt-1 text-xs text-muted-gray">
+                            {entry.kind === 'event'
+                              ? 'No descuenta saldo directo'
+                              : `Saldo: ${formatCurrency(entry.balanceAfter ?? 0)}`}
+                          </p>
                         </div>
                       </div>
                     </div>
-                  ))}
+                  </div>
+                ))}
               </div>
             )}
           </CardContent>
@@ -672,9 +671,9 @@ export default function Reports() {
       <section className="grid gap-4 xl:grid-cols-3">
         <Card className="border-graphite bg-surface shadow-vault">
           <CardHeader>
-            <CardTitle className="text-on-surface">Top categorias del mes actual</CardTitle>
+            <CardTitle className="text-on-surface">Top categorías del mes actual</CardTitle>
             <CardDescription className="text-muted-gray">
-              Las categorias que mas dinero consumieron en {report.currentLabel}.
+              Las categorías que más dinero consumieron en {report.currentLabel}.
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-3">
@@ -693,7 +692,7 @@ export default function Reports() {
                 </div>
               </div>
             )) : (
-              <p className="text-sm text-muted-gray">Todavia no hay movimientos este mes para calcular categorias.</p>
+              <p className="text-sm text-muted-gray">Todavía no hay movimientos este mes para calcular categorías.</p>
             )}
           </CardContent>
         </Card>
@@ -702,7 +701,7 @@ export default function Reports() {
           <CardHeader>
             <CardTitle className="text-on-surface">Top productos del mes anterior</CardTitle>
             <CardDescription className="text-muted-gray">
-              Lo mas costoso agrupado por nombre de item en {report.previousLabel}.
+              Lo más costoso agrupado por nombre de item en {report.previousLabel}.
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-3">
@@ -728,14 +727,14 @@ export default function Reports() {
 
         <Card className="border-graphite bg-surface shadow-vault">
           <CardHeader>
-            <CardTitle className="text-on-surface">Lo mas repetido</CardTitle>
+            <CardTitle className="text-on-surface">Lo más repetido</CardTitle>
             <CardDescription className="text-muted-gray">
               Patrones comparados entre el mes anterior y el actual.
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="space-y-3">
-              <p className="text-xs uppercase tracking-[0.2em] text-medium-gray">Categorias repetidas este mes</p>
+              <p className="text-xs uppercase tracking-[0.2em] text-medium-gray">Categorías repetidas este mes</p>
               {report.currentRankings.topCategoriesByCount.slice(0, 3).map((entry) => (
                 <div key={`repeat-category-${entry.type}-${entry.label}`} className="flex items-center justify-between gap-3 rounded-2xl border border-graphite bg-abyss/85 px-4 py-3">
                   <div>
@@ -770,9 +769,9 @@ export default function Reports() {
       <section className="grid gap-4 xl:grid-cols-[0.8fr_1.2fr]">
         <Card className="border-graphite bg-surface shadow-vault">
           <CardHeader>
-            <CardTitle className="text-on-surface">Desviacion contra presupuesto</CardTitle>
+            <CardTitle className="text-on-surface">Desviación contra presupuesto</CardTitle>
             <CardDescription className="text-muted-gray">
-              Mide que tan lejos esta el comportamiento real frente a la formula del mes.
+              Mide que tan lejos esta el comportamiento real frente a la fórmula del mes.
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
@@ -825,22 +824,20 @@ export default function Reports() {
             {report.findings.map((finding) => (
               <div
                 key={finding.title}
-                className={`rounded-2xl border p-4 ${
-                  finding.tone === 'good'
-                    ? 'border-emerald-500/20 bg-emerald-500/8'
-                    : finding.tone === 'warn'
-                      ? 'border-amber-500/20 bg-amber-500/8'
-                      : 'border-graphite bg-abyss/70'
-                }`}
+                className={`rounded-2xl border p-4 ${finding.tone === 'good'
+                  ? 'border-emerald-500/20 bg-emerald-500/8'
+                  : finding.tone === 'warn'
+                    ? 'border-amber-500/20 bg-amber-500/8'
+                    : 'border-graphite bg-abyss/70'
+                  }`}
               >
                 <div className="flex items-start gap-3">
-                  <div className={`mt-0.5 flex size-9 shrink-0 items-center justify-center rounded-xl ${
-                    finding.tone === 'good'
-                      ? 'bg-emerald-500/12 text-emerald-200'
-                      : finding.tone === 'warn'
-                        ? 'bg-amber-500/12 text-amber-200'
-                        : 'bg-surface-container-high text-on-surface'
-                  }`}>
+                  <div className={`mt-0.5 flex size-9 shrink-0 items-center justify-center rounded-xl ${finding.tone === 'good'
+                    ? 'bg-emerald-500/12 text-emerald-200'
+                    : finding.tone === 'warn'
+                      ? 'bg-amber-500/12 text-amber-200'
+                      : 'bg-surface-container-high text-on-surface'
+                    }`}>
                     {finding.tone === 'warn' ? <AlertTriangle className="size-4" /> : finding.tone === 'good' ? <TrendingUp className="size-4" /> : <Sparkles className="size-4" />}
                   </div>
                   <div>
@@ -859,7 +856,7 @@ export default function Reports() {
           <CardHeader>
             <CardTitle className="text-on-surface">Historial de cierre</CardTitle>
             <CardDescription className="text-muted-gray">
-              Ultimo cierre guardado contra el mes anterior para reutilizar listas.
+              Último cierre guardado contra el mes anterior para reutilizar listas.
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-3">
@@ -878,7 +875,7 @@ export default function Reports() {
             ))}
             {!report.currentSnapshot && !report.previousSnapshot ? (
               <p className="text-sm text-muted-gray">
-                Todavia no existe historial mensual. Usa el reset del mes cuando cierres compras para que esta seccion tenga memoria.
+                Todavía no existe historial mensual. Usa el reset del mes cuando cierres compras para que esta sección tenga memoria.
               </p>
             ) : null}
           </CardContent>
@@ -888,7 +885,7 @@ export default function Reports() {
           <CardHeader>
             <CardTitle className="text-on-surface">Siguientes pasos sugeridos</CardTitle>
             <CardDescription className="text-muted-gray">
-              Accesos rapidos para corregir lo que el informe detecta.
+              Accesos rápidos para corregir lo que el informe detecta.
             </CardDescription>
           </CardHeader>
           <CardContent className="grid gap-3">

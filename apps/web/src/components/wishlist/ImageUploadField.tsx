@@ -127,7 +127,7 @@ export function ImageUploadField({ value, onChange }: ImageUploadFieldProps) {
               Arrastra una foto aqui o haz clic para subirla
             </p>
             <p className="text-sm text-muted-foreground">
-              Se usara para la vista en tarjetas y para reconocer el producto mas rapido.
+              Se usara para la vista en tarjetas y para reconocer el producto más rápido.
             </p>
           </div>
         </div>

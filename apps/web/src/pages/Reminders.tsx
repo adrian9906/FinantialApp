@@ -215,7 +215,7 @@ export default function Reminders() {
           </div>
           <DialogFooter>
             <Button variant="ghost" disabled={isSaving} onClick={() => { resetForm(); setOpen(false) }} className="text-muted-gray">Cancelar</Button>
-            <Button loading={isSaving} onClick={() => void handleSave()} className="bg-primary-container text-white hover:brightness-110 shadow-vault">Guardar</Button>
+            <Button loading={isSaving} onClick={() => void handleSave()} className="bg-primary-container text-white hover:bg-primary-container/80 shadow-vault">Guardar</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

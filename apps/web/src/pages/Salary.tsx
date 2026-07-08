@@ -115,7 +115,7 @@ export default function Salary() {
             Matriz de Ingresos
           </h1>
           <p className="text-sm text-muted-gray max-w-2xl">
-            Cada salario se guarda en SQLite y alimenta la formula {formatFormulaLabel(formula)} del resto de la app.
+            Cada salario se guarda y alimenta la formula {formatFormulaLabel(formula)} del resto de la app.
           </p>
         </div>
         <ExportExcelButton loading={isExporting} onClick={handleExport} />
@@ -290,7 +290,7 @@ export default function Salary() {
                       type="button"
                       variant={isSelected ? 'default' : 'outline'}
                       className={isSelected
-                        ? 'border-primary-container bg-primary-container text-white hover:brightness-110'
+                        ? 'border-primary-container bg-primary-container text-white hover:bg-primary-container/80'
                         : 'border-graphite bg-surface text-muted-gray hover:bg-surface-container hover:text-on-surface'}
                       onClick={() => setMonth(value)}
                     >
@@ -303,7 +303,7 @@ export default function Salary() {
           </div>
           <DialogFooter>
             <Button variant="ghost" disabled={isSaving} onClick={() => setOpen(false)} className="text-muted-gray">Cancelar</Button>
-            <Button loading={isSaving} onClick={() => void handleSave()} className="bg-primary-container text-white hover:brightness-110 shadow-vault">Guardar</Button>
+            <Button loading={isSaving} onClick={() => void handleSave()} className="bg-primary-container text-white hover:bg-primary-container/80 shadow-vault">Guardar</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

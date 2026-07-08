@@ -213,7 +213,7 @@ export default function Debts() {
         <div>
           <h1 className="text-[28px] font-semibold tracking-tight text-on-surface md:text-[36px]">Deudas</h1>
           <p className="max-w-3xl text-sm text-muted-gray">
-            Cada abono que registres aqui se descuenta automaticamente del salario disponible. Si marcas una deuda como saldada, se paga el restante completo.
+            Cada abono que registres aqui se descuenta automáticamente del salario disponible. Si marcas una deuda como saldada, se paga el restante completo.
           </p>
         </div>
         <div className="flex flex-col gap-3 sm:flex-row">
@@ -280,7 +280,7 @@ export default function Debts() {
               <p className="text-xs uppercase tracking-[0.22em] text-medium-gray">Plan de pago de deudas</p>
               <h2 className="mt-3 text-2xl font-semibold text-on-surface">Simula estrategia y pago extra</h2>
               <p className="mt-2 text-sm text-muted-gray">
-                Compara bola de nieve y avalancha para ver el orden recomendado, el tiempo estimado y cuanto mejoras si aprietas un poco mas cada mes.
+                Compara bola de nieve y avalancha para ver el orden recomendado, el tiempo estimado y cuanto mejoras si aprietas un poco más cada mes.
               </p>
             </div>
 
@@ -298,8 +298,8 @@ export default function Debts() {
                 </Select>
                 <p className="text-xs text-muted-gray">
                   {strategy === 'snowball'
-                    ? 'Prioriza la deuda mas pequena para liberar victorias rapidas.'
-                    : 'Prioriza la deuda con mas interes para reducir el costo financiero.'}
+                    ? 'Prioriza la deuda más pequeña para liberar victorias rápidas.'
+                    : 'Prioriza la deuda con más interés para reducir el costo financiero.'}
                 </p>
               </div>
 
@@ -336,7 +336,7 @@ export default function Debts() {
             <div className="border-b border-graphite p-5">
               <p className="text-xs uppercase tracking-[0.22em] text-medium-gray">Orden recomendado</p>
               <h2 className="mt-3 text-2xl font-semibold text-on-surface">
-                {strategy === 'snowball' ? 'Empieza por la mas pequena' : 'Empieza por la de mayor interes'}
+                {strategy === 'snowball' ? 'Empieza por la más pequeña' : 'Empieza por la de mayor interés'}
               </h2>
             </div>
             <div className="space-y-3 p-5">
@@ -346,11 +346,11 @@ export default function Debts() {
                     <div>
                       <p className="text-sm font-semibold text-on-surface">{index + 1}. {entry.history}</p>
                       <p className="mt-1 text-xs text-muted-gray">
-                        Restante ${asMoney(entry.remainingAmount)} · Interes {entry.interest.toFixed(2)}%
+                        Restante ${asMoney(entry.remainingAmount)} · Interés {entry.interest.toFixed(2)}%
                       </p>
                     </div>
                     <Badge variant="secondary" className={index === 0 ? 'bg-primary/15 text-primary' : 'bg-surface-container-high text-on-surface'}>
-                      {index === 0 ? 'Prioridad actual' : 'Despues'}
+                      {index === 0 ? 'Prioridad actual' : 'Después'}
                     </Badge>
                   </div>
                   <div className="mt-4 grid gap-3 md:grid-cols-3">
@@ -412,7 +412,7 @@ export default function Debts() {
                           </Badge>
                           {debt.interest !== undefined ? (
                             <Badge variant="secondary" className="bg-surface-container-high text-muted-gray">
-                              Interes: {debt.interest}%
+                              Interés: {debt.interest}%
                             </Badge>
                           ) : null}
                         </div>
@@ -443,7 +443,7 @@ export default function Debts() {
                         <div className="h-full rounded-full bg-primary transition-all duration-700" style={{ width: `${asPercent(debt.progress)}%` }} />
                       </div>
                       <p className="mt-2 text-xs text-muted-gray">
-                        Todo lo que abonas aqui se descuenta automaticamente del salario disponible de la app.
+                        Todo lo que abonas aquí se descuenta automáticamente del salario disponible de la app.
                       </p>
                     </div>
                   </div>
@@ -488,7 +488,7 @@ export default function Debts() {
                 />
               </div>
               <div className="space-y-2">
-                <Label className="text-medium-gray">Interes (opcional)</Label>
+                <Label className="text-medium-gray">Interés (opcional)</Label>
                 <Input
                   type="number"
                   value={form.interest}
@@ -509,7 +509,7 @@ export default function Debts() {
                   className="bg-abyss border-graphite text-on-surface"
                 />
                 <p className="text-xs text-muted-gray">
-                  Si aqui pones 100, esa deuda nace con $100 abonados y se descuentan automaticamente del salario disponible.
+                  Si aquí pones 100, esa deuda nace con $100 abonados y se descuentan automáticamente del salario disponible.
                 </p>
               </div>
             ) : null}

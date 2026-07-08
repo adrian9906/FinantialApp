@@ -97,14 +97,14 @@ export function GlobalSearchDialog() {
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className="group flex w-full items-center gap-3 rounded-2xl border border-graphite bg-surface/90 px-4 py-3 text-left shadow-vault transition-all hover:border-primary/35 hover:bg-surface-container-high"
+        className="group flex w-full items-start gap-3 rounded-2xl border border-graphite bg-surface/90 px-4 py-3 text-left shadow-vault transition-all hover:border-primary/35 hover:bg-surface-container-high sm:items-center"
       >
-        <div className="flex size-10 items-center justify-center rounded-2xl bg-primary/10 text-primary">
+        <div className="mt-0.5 flex size-10 shrink-0 items-center justify-center rounded-2xl bg-primary/10 text-primary sm:mt-0">
           <Search className="size-4" />
         </div>
         <div className="min-w-0 flex-1">
           <p className="text-sm font-semibold text-on-surface">Busqueda global</p>
-          <p className="truncate text-xs text-muted-gray">
+          <p className="line-clamp-2 text-xs leading-5 text-muted-gray sm:line-clamp-1">
             Busca gastos, gustos, deseos, deudas y recordatorios con filtros reales.
           </p>
         </div>

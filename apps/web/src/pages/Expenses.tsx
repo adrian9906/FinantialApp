@@ -367,35 +367,35 @@ export default function Expenses() {
       <header className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
         <div>
           <h1 className="text-[28px] font-semibold tracking-tight text-on-surface md:text-[36px]">Gastos</h1>
-          <p className="max-w-2xl text-sm text-muted-gray">
-            Convierte los gastos esenciales en una lista de compras organizada por categorias. Cada producto sigue guardandose en Prisma como una transaccion de gasto.
+          <p className="max-w-2xl text-sm leading-7 text-muted-gray">
+            Convierte los gastos esenciales en una lista de compras organizada por categorías. Cada producto se guarda como una transacción de gasto.
           </p>
         </div>
-        <div className="flex flex-col gap-3 sm:flex-row">
-          <ExportExcelButton loading={isExporting} onClick={handleExport} />
-          <Button onClick={() => handleOpen()} className="bg-primary-container text-white shadow-vault hover:bg-primary-container/80">
+        <div className="flex flex-col gap-3 sm:flex-row lg:w-auto">
+          <ExportExcelButton loading={isExporting} onClick={handleExport} className="w-full sm:w-auto" />
+          <Button onClick={() => handleOpen()} className="w-full bg-primary-container text-white shadow-vault hover:bg-primary-container/80 sm:w-auto">
             <Plus className="size-4" /> Agregar producto
           </Button>
         </div>
       </header>
 
-      <div className="relative overflow-hidden rounded-xl bg-surface p-6 shadow-vault">
+      <div className="relative overflow-hidden rounded-xl bg-surface p-4 shadow-vault sm:p-6">
         <div className="absolute right-0 top-0 h-40 w-40 rounded-bl-full bg-primary/8 blur-2xl" />
         <div className="relative z-10 grid gap-4 lg:grid-cols-[1.4fr_0.6fr]">
           <div>
-            <div className="mb-2 flex items-center justify-between gap-3">
+            <div className="mb-2 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
               <p className="text-xs uppercase tracking-wider text-muted-gray">Presupuesto mensual (50%)</p>
-              <Badge variant="secondary" className={remaining >= 0 ? 'bg-success/10 text-success' : 'bg-error/10 text-error'}>
+              <Badge variant="secondary" className={`w-fit ${remaining >= 0 ? 'bg-success/10 text-success' : 'bg-error/10 text-error'}`}>
                 {remaining >= 0 ? `$${remaining.toLocaleString()} disponible` : `$${Math.abs(remaining).toLocaleString()} excedido`}
               </Badge>
             </div>
-            <h2 className="mb-3 text-[28px] font-semibold text-on-surface">
+            <h2 className="mb-3 break-words text-[28px] font-semibold leading-tight text-on-surface sm:text-[30px]">
               ${overview.totalExpenses.toLocaleString()} <span className="text-base font-normal text-muted-gray">/ ${overview.budgetExpenses.toLocaleString()}</span>
             </h2>
             <div className="h-2 w-full overflow-hidden rounded-full bg-surface-container-highest">
               <div className="h-full rounded-full bg-primary transition-all duration-1000" style={{ width: `${pct}%` }} />
             </div>
-            <div className="mt-4 flex flex-wrap items-center gap-3">
+            <div className="mt-4 flex flex-col items-start gap-3 sm:flex-row sm:flex-wrap sm:items-center">
               <Button
                 variant="secondary"
                 disabled={remaining <= 0}
@@ -404,17 +404,17 @@ export default function Expenses() {
                   setTransferError(null)
                   setTransferOpen(true)
                 }}
-                className="bg-tertiary-container text-white hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-40"
+                className="w-full bg-tertiary-container text-white hover:bg-tertiary-container/80 disabled:cursor-not-allowed disabled:opacity-40 sm:w-auto"
               >
                 Pasar dinero a ahorros
               </Button>
-              <p className="text-xs text-muted-gray">
+              <p className="text-xs leading-6 text-muted-gray">
                 Si ese dinero ya no lo vas a gastar este mes, puedes moverlo a ahorro en un toque.
               </p>
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 gap-3 min-[420px]:grid-cols-2">
             <Card className="border-graphite bg-abyss p-4 shadow-vault-sm">
               <p className="text-xs uppercase tracking-[0.18em] text-medium-gray">Productos</p>
               <p className="mt-2 text-2xl font-semibold text-on-surface">{expenseCount}</p>
@@ -446,7 +446,7 @@ export default function Expenses() {
 
             return (
               <Card key={key} className="border-graphite bg-surface shadow-vault">
-                <div className="flex items-start justify-between gap-3 border-b border-graphite p-5">
+                <div className="flex flex-col gap-4 border-b border-graphite p-4 sm:flex-row sm:items-start sm:justify-between sm:p-5">
                   <div className="min-w-0">
                     <div className="flex items-center gap-3">
                       <div className={`flex size-11 items-center justify-center rounded-xl bg-abyss ${meta.accent} shadow-vault-sm`}>
@@ -454,16 +454,16 @@ export default function Expenses() {
                       </div>
                       <div>
                         <h3 className="text-lg font-semibold text-on-surface">{meta.label}</h3>
-                        <p className="text-xs text-muted-gray">{meta.hint}</p>
+                        <p className="text-xs leading-5 text-muted-gray">{meta.hint}</p>
                       </div>
                     </div>
                   </div>
-                  <Badge variant="secondary" className={meta.badge}>
+                  <Badge variant="secondary" className={`w-fit ${meta.badge}`}>
                     {items.length} items
                   </Badge>
                 </div>
 
-                <div className="grid grid-cols-2 gap-3 border-b border-graphite px-5 py-4">
+                <div className="grid grid-cols-1 gap-3 border-b border-graphite px-4 py-4 sm:grid-cols-2 sm:px-5">
                   <div className="rounded-xl bg-abyss p-3 shadow-vault-sm">
                     <p className="text-xs uppercase tracking-[0.16em] text-medium-gray">Total</p>
                     <p className="mt-2 text-lg font-semibold text-on-surface">${total.toLocaleString()}</p>
@@ -475,7 +475,7 @@ export default function Expenses() {
                 </div>
 
                 <ScrollArea className="h-[360px]">
-                  <div className="space-y-3 p-4">
+                  <div className="space-y-3 p-3 sm:p-4">
                     {items.length === 0 ? (
                       <div className="rounded-xl border border-dashed border-graphite bg-abyss/70 p-5 text-sm text-muted-gray">
                         Aun no hay productos en esta categoria.
@@ -506,20 +506,20 @@ export default function Expenses() {
                               </div>
 
                               <div className="min-w-0 flex-1">
-                                <div className="flex items-start justify-between gap-3">
+                                <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between sm:gap-3">
                                   <div>
                                     <p className={`text-sm font-medium ${isChecked ? 'text-muted-gray line-through' : 'text-on-surface'}`}>
                                       {item.itemName}
                                     </p>
                                     <p className="mt-1 text-xs text-muted-gray">{item.date}</p>
                                   </div>
-                                  <span className={`text-sm font-semibold ${isChecked ? 'text-muted-gray' : 'text-error'}`}>
+                                  <span className={`text-sm font-semibold ${isChecked ? 'text-muted-gray' : 'text-error'} sm:text-right`}>
                                     ${item.amount.toLocaleString()}
                                   </span>
                                 </div>
 
-                                <div className="mt-3 flex items-center justify-between gap-3">
-                                  <span className="text-xs text-muted-gray">
+                                <div className="mt-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                                  <span className="text-xs leading-5 text-muted-gray">
                                     {isChecked ? 'Marcado como comprado' : 'Pendiente por comprar'}
                                   </span>
                                   <div className="flex gap-1">
@@ -558,7 +558,7 @@ export default function Expenses() {
       )}
 
       <Dialog open={open} onOpenChange={(nextOpen) => { if (!isSaving) setOpen(nextOpen) }}>
-        <DialogContent className="border-graphite bg-surface sm:max-w-4xl">
+        <DialogContent className="max-h-[88dvh] overflow-y-auto border-graphite bg-surface sm:max-w-4xl">
           <DialogHeader>
             <DialogTitle className="text-on-surface">{editId ? 'Editar producto' : 'Agregar producto'}</DialogTitle>
             <DialogDescription>Guarda cada producto esencial como un gasto individual, organizado por categoria.</DialogDescription>

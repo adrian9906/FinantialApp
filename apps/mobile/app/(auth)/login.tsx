@@ -84,12 +84,12 @@ export default function LoginScreen() {
     }
 
     if (registerForm.password.length < 6) {
-      setError('La contrasena debe tener al menos 6 caracteres.')
+      setError('La contraseña debe tener al menos 6 caracteres.')
       return
     }
 
     if (registerForm.password !== registerForm.confirmPassword) {
-      setError('Las contrasenas no coinciden.')
+      setError('Las contraseñas no coinciden.')
       return
     }
 
@@ -138,7 +138,7 @@ export default function LoginScreen() {
                     {view === 'login' ? 'Entra a tu espacio financiero' : 'Crea tu cuenta de Plata App'}
                   </CardTitle>
                   <CardDescription className="text-sm leading-6">
-                    Inicia sesion, crea tu cuenta o entra como invitado para guardar todo solo en este telefono.
+                    Inicia sesión, crea tu cuenta o entra como invitado para guardar todo solo en este teléfono.
                   </CardDescription>
                 </CardHeader>
               </Card>
@@ -168,7 +168,7 @@ export default function LoginScreen() {
                       </View>
 
                       <View className="gap-2">
-                        <Text className="text-sm font-semibold">Contrasena</Text>
+                        <Text className="text-sm font-semibold">Contraseña</Text>
                         <View className="relative">
                           <Input
                             value={loginForm.password}
@@ -220,7 +220,7 @@ export default function LoginScreen() {
                       </View>
 
                       <View className="gap-2">
-                        <Text className="text-sm font-semibold">Contrasena</Text>
+                        <Text className="text-sm font-semibold">Contraseña</Text>
                         <View className="relative">
                           <Input
                             value={registerForm.password}
@@ -237,12 +237,12 @@ export default function LoginScreen() {
                       </View>
 
                       <View className="gap-2">
-                        <Text className="text-sm font-semibold">Confirmar contrasena</Text>
+                        <Text className="text-sm font-semibold">Confirmar contraseña</Text>
                         <View className="relative">
                           <Input
                             value={registerForm.confirmPassword}
                             onChangeText={(confirmPassword) => setRegisterForm((state) => ({ ...state, confirmPassword }))}
-                            placeholder="Repite la contrasena"
+                            placeholder="Repite la contraseña"
                             secureTextEntry={!showConfirmPassword}
                             autoCapitalize="none"
                             className="pr-10"

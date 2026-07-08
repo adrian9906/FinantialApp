@@ -20,7 +20,7 @@ const GOAL_CATEGORY_LABELS = {
   emergency: 'Emergencia',
   travel: 'Viaje',
   rent: 'Renta',
-  phone: 'Telefono',
+  phone: 'Teléfono',
   custom: 'Personalizada',
 } as const
 
@@ -279,7 +279,7 @@ export default function Savings() {
       <header className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
         <div>
           <h1 className="text-[28px] md:text-[36px] font-semibold text-on-surface tracking-tight">Ahorros</h1>
-          <p className="text-sm text-muted-gray">Esta vista opera directo sobre el modelo `Ahorro`.</p>
+          <p className="text-sm text-muted-gray">Página de gestión de ahorros.</p>
         </div>
         <div className="flex flex-col gap-3 sm:flex-row">
           <ExportExcelButton loading={isExporting} onClick={handleExport} />
@@ -301,7 +301,7 @@ export default function Savings() {
           >
             <ArrowUpRight className="size-4" /> Sacar dinero
           </Button>
-          <Button onClick={() => handleOpen()} disabled={budgetFull} className="bg-tertiary-container text-white hover:brightness-110 shadow-vault disabled:opacity-40 disabled:cursor-not-allowed">
+          <Button onClick={() => handleOpen()} disabled={budgetFull} className="bg-tertiary-container text-white hover:bg-tertiary-container/80 shadow-vault disabled:opacity-40 disabled:cursor-not-allowed">
             <Plus className="size-4" /> Agregar ahorro
           </Button>
         </div>
@@ -331,7 +331,7 @@ export default function Savings() {
             <p className="text-xs uppercase tracking-[0.22em] text-medium-gray">Metas por objetivo</p>
             <h2 className="mt-3 text-2xl font-semibold text-on-surface">Bolsillos de ahorro</h2>
             <p className="mt-2 text-sm text-muted-gray">
-              Separa tu ahorro en emergencia, viaje, renta, telefono o cualquier meta personalizada con aporte mensual.
+              Separa tu ahorro en emergencia, viaje, renta, teléfono o cualquier meta personalizada con aporte mensual.
             </p>
           </div>
           <div className="grid gap-3 p-5 md:grid-cols-2">
@@ -405,7 +405,7 @@ export default function Savings() {
             <Card className="border-dashed border-graphite bg-surface/80 p-8 shadow-vault md:col-span-2">
               <div className="flex flex-col items-center gap-3 text-center text-sm text-muted-gray">
                 <PiggyBank className="size-8 text-primary" />
-                <p>Aun no tienes bolsillos de ahorro. Crea metas como emergencia, viaje, renta o telefono.</p>
+                <p>Aun no tienes bolsillos de ahorro. Crea metas como emergencia, viaje, renta o teléfono.</p>
               </div>
             </Card>
           )}
@@ -487,7 +487,7 @@ export default function Savings() {
           </div>
           <DialogFooter>
             <Button variant="ghost" disabled={isSaving} onClick={() => { resetForm(); setOpen(false) }} className="text-muted-gray">Cancelar</Button>
-            <Button loading={isSaving} onClick={() => void handleSave()} className="bg-primary-container text-white hover:brightness-110 shadow-vault">Guardar</Button>
+            <Button loading={isSaving} onClick={() => void handleSave()} className="bg-primary-container text-white hover:bg-primary-container/80 shadow-vault">Guardar</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -577,7 +577,7 @@ export default function Savings() {
               loading={isWithdrawing}
               disabled={isWithdrawing || availableSavings <= 0}
               onClick={() => void handleWithdraw()}
-              className="bg-primary-container text-white hover:brightness-110 shadow-vault"
+              className="bg-primary-container text-white hover:bg-primary-container/80 shadow-vault"
             >
               Sacar dinero
             </Button>
@@ -623,7 +623,7 @@ export default function Savings() {
                     <SelectItem value="emergency">Emergencia</SelectItem>
                     <SelectItem value="travel">Viaje</SelectItem>
                     <SelectItem value="rent">Renta</SelectItem>
-                    <SelectItem value="phone">Telefono</SelectItem>
+                    <SelectItem value="phone">Teléfono</SelectItem>
                     <SelectItem value="custom">Personalizada</SelectItem>
                   </SelectContent>
                 </Select>
@@ -693,7 +693,7 @@ export default function Savings() {
             <Button
               loading={isGoalSaving}
               onClick={() => void handleSaveGoal()}
-              className="bg-primary-container text-white hover:brightness-110 shadow-vault"
+              className="bg-primary-container text-white hover:bg-primary-container/80 shadow-vault"
             >
               Guardar meta
             </Button>

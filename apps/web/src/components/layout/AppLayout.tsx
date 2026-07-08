@@ -78,32 +78,50 @@ export function Sidebar() {
 
   return (
     <>
-      <Button
-        variant="ghost"
-        size="icon"
-        className="fixed top-4 left-4 z-50 lg:hidden text-on-surface hover:text-primary"
-        onClick={() => setOpen(!open)}
-        aria-label="Abrir menu"
-      >
-        {open ? <X data-icon="inline-start" /> : <Menu data-icon="inline-start" />}
-      </Button>
+      {!open && (
+        <div className="fixed inset-x-0 top-0 z-30 bg-[color:color-mix(in_srgb,var(--surface)_92%,transparent)] backdrop-blur-xl lg:hidden">
+          <div className="flex items-center gap-3 px-3 py-3">
+            <Button
+              variant="ghost"
+              size="icon"
+              className="shrink-0 rounded-xl bg-surface/85 text-on-surface shadow-vault-sm hover:bg-surface-container-high hover:text-primary"
+              onClick={() => setOpen(true)}
+              aria-label="Abrir menu"
+            >
+              <Menu data-icon="inline-start" />
+            </Button>
+
+            <div className="min-w-0">
+              <p className="text-sm font-semibold text-on-surface">Plata App</p>
+              <p className="truncate text-xs text-muted-gray">Tu control financiero del mes</p>
+            </div>
+          </div>
+        </div>
+      )}
 
       <aside
         className={cn(
-          'fixed inset-y-0 left-0 z-40 flex w-64 flex-col border-r border-graphite bg-surface shadow-vault transition-transform duration-200 lg:translate-x-0',
+          'fixed inset-y-0 left-0 z-50 flex w-64 flex-col border-r border-graphite bg-surface shadow-vault transition-transform duration-200 lg:translate-x-0',
           open ? 'translate-x-0' : '-translate-x-full'
         )}
       >
-        <div className="mb-2 flex items-center gap-3 px-5 py-5">
+        <div className="mb-2 flex items-center justify-between gap-3 px-5 py-5">
           <div className="flex size-10 items-center justify-center rounded-full bg-primary-container shadow-vault">
             <span className="text-sm font-bold text-white">P</span>
           </div>
-          <div>
-            <h1 className="text-[18px] font-semibold leading-tight tracking-tight text-on-surface">
-              Plata App
-            </h1>
-            <p className="text-[12px] text-muted-gray">Control financiero {formatFormulaLabel(formula)}</p>
+          <div className="min-w-0 flex-1">
+            <h1 className="text-[18px] font-semibold leading-tight tracking-tight text-on-surface">Plata App</h1>
+            <p className="truncate text-[12px] text-muted-gray">Control financiero {formatFormulaLabel(formula)}</p>
           </div>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="shrink-0 rounded-xl border border-graphite text-on-surface hover:bg-surface-container-high hover:text-primary lg:hidden"
+            onClick={() => setOpen(false)}
+            aria-label="Cerrar menu"
+          >
+            <X data-icon="inline-start" />
+          </Button>
         </div>
         <nav className="flex flex-1 flex-col gap-1 px-3">
           {navItems.map((item) => (
@@ -180,7 +198,7 @@ export function Sidebar() {
         <button
           type="button"
           aria-label="Cerrar menu lateral"
-          className="fixed inset-0 z-30 bg-black/50 lg:hidden"
+          className="fixed inset-0 z-40 bg-black/50 lg:hidden"
           onClick={() => setOpen(false)}
         />
       )}
@@ -213,7 +231,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
 
       <Sidebar />
       <main className="pointer-events-none relative z-10 min-h-dvh flex-1 lg:pl-64">
-        <div className="pointer-events-auto mx-auto w-full max-w-full px-3 py-5 sm:px-6 md:max-w-[94%] lg:max-w-[90%] lg:px-8 lg:py-8">
+        <div className="pointer-events-auto mx-auto w-full max-w-full px-3 pb-5 pt-24 sm:px-6 sm:pb-6 sm:pt-28 md:max-w-[94%] lg:max-w-[90%] lg:px-8 lg:py-8">
           <div className="mb-5">
             <GlobalSearchDialog />
           </div>

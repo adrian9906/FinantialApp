@@ -179,7 +179,7 @@ function AuthCardHeader({ currentView, onSwitchView }: AuthCardHeaderProps) {
         </h2>
         <p className="text-sm text-muted-gray">
           {currentView === 'login'
-            ? 'Usa tu correo y contrasena para continuar.'
+            ? 'Usa tu correo y contraseña para continuar.'
             : 'Crea una cuenta para guardar tus datos en la base de datos y entrar desde futuras sesiones.'}
         </p>
       </div>
@@ -223,7 +223,7 @@ function PasswordField({
           type="button"
           onClick={onToggle}
           className="absolute right-3 top-1/2 inline-flex size-8 -translate-y-1/2 items-center justify-center rounded-full text-muted-gray transition-colors hover:text-on-surface"
-          aria-label={visible ? 'Ocultar contrasena' : 'Mostrar contrasena'}
+          aria-label={visible ? 'Ocultar contraseña' : 'Mostrar contraseña'}
         >
           {visible ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
         </button>
@@ -290,7 +290,7 @@ function LoginForm({
       </div>
 
       <PasswordField
-        label="Contrasena"
+        label="Contraseña"
         value={form.password}
         placeholder="********"
         autoComplete="current-password"
@@ -374,7 +374,7 @@ function RegisterForm({
 
       <div className="grid gap-5 sm:grid-cols-2">
         <PasswordField
-          label="Contrasena"
+          label="Contraseña"
           value={form.password}
           placeholder="Minimo 6 caracteres"
           autoComplete="new-password"
@@ -384,9 +384,9 @@ function RegisterForm({
         />
 
         <PasswordField
-          label="Confirmar contrasena"
+          label="Confirmar contraseña"
           value={form.confirmPassword}
-          placeholder="Repite la contrasena"
+          placeholder="Repite la contraseña"
           autoComplete="new-password"
           visible={passwordVisibility.confirmPassword}
           onToggle={onToggleConfirmPassword}
@@ -559,12 +559,12 @@ export default function Login() {
     }
 
     if (state.registerForm.password.length < 6) {
-      toast.error('La contrasena debe tener al menos 6 caracteres.')
+      toast.error('La contraseña debe tener al menos 6 caracteres.')
       return
     }
 
     if (state.registerForm.password !== state.registerForm.confirmPassword) {
-      toast.error('Las contrasenas no coinciden.')
+      toast.error('Las contraseñas no coinciden.')
       return
     }
 

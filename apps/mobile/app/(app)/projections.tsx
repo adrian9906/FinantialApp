@@ -81,7 +81,7 @@ export default function ProjectionsScreen() {
         {[
           { label: 'Salario actual', value: formatMoney(latestSalary?.amount ?? 0), icon: TrendingUpIcon },
           { label: 'Proyecciones guardadas', value: String(projections.length), icon: TargetIcon },
-          { label: 'Meta mas alta', value: formatMoney(maxGoal), icon: TargetIcon },
+          { label: 'Meta más alta', value: formatMoney(maxGoal), icon: TargetIcon },
         ].map((card) => {
           const Icon = card.icon
           return (
