@@ -134,7 +134,7 @@ function serializeWishlist(entry: {
   cantidad: number
   aportado: number
   comprado: boolean
-  items: Array<{ nombre: string; precio: number; prioridad: string; foto: string | null }>
+  items: Array<{ nombre: string; precio: number; prioridad: string; foto: string | null; tienda: string | null; urlReferencia: string | null; moneda: string | null }>
 }): WishlistItem {
   const item = entry.items[0]
   const isPurchased = entry.comprado || entry.cantidad > 0
@@ -148,6 +148,9 @@ function serializeWishlist(entry: {
     externalContribution: entry.aportado,
     isPurchased,
     image: item?.foto ?? undefined,
+    sourceStore: item?.tienda ?? undefined,
+    sourceUrl: item?.urlReferencia ?? undefined,
+    sourceCurrency: item?.moneda ?? undefined,
   }
 }
 
@@ -785,7 +788,10 @@ async function saveWishlist(userId: string, body: JsonRecord, id?: string) {
   const rawSavedAmount = Number(body.savedAmount ?? 0)
   const externalContribution = Math.max(0, Number(body.externalContribution ?? 0))
   const priority = normalizePriority(body.priority)
-  const image = body.image ? String(body.image) : body.url ? String(body.url) : null
+  const image = body.image ? String(body.image) : null
+  const sourceStore = body.sourceStore ? String(body.sourceStore).trim() : null
+  const sourceUrl = body.sourceUrl ? String(body.sourceUrl).trim() : null
+  const sourceCurrency = body.sourceCurrency ? String(body.sourceCurrency).trim() : null
   const inferredPurchased = rawSavedAmount > 0 && rawSavedAmount >= price
   const isPurchased = typeof body.isPurchased === 'boolean' ? body.isPurchased : inferredPurchased
   const savedAmount = isPurchased ? Math.max(0, rawSavedAmount) : 0
@@ -819,6 +825,9 @@ async function saveWishlist(userId: string, body: JsonRecord, id?: string) {
                   precio: price,
                   prioridad: priority,
                   foto: image,
+                  tienda: sourceStore,
+                  urlReferencia: sourceUrl,
+                  moneda: sourceCurrency,
                 },
               },
             }
@@ -828,6 +837,9 @@ async function saveWishlist(userId: string, body: JsonRecord, id?: string) {
                 precio: price,
                 prioridad: priority,
                 foto: image,
+                tienda: sourceStore,
+                urlReferencia: sourceUrl,
+                moneda: sourceCurrency,
               },
             },
       },
@@ -849,6 +861,9 @@ async function saveWishlist(userId: string, body: JsonRecord, id?: string) {
           precio: price,
           prioridad: priority,
           foto: image,
+          tienda: sourceStore,
+          urlReferencia: sourceUrl,
+          moneda: sourceCurrency,
         },
       },
     },

@@ -409,6 +409,9 @@ export const useFinanceStore = create<FinanceStore>()((set, get) => ({
         externalContribution: data.externalContribution ?? current.externalContribution ?? 0,
         isPurchased: data.isPurchased ?? current.isPurchased ?? false,
         image: data.image ?? current.image,
+        sourceStore: data.sourceStore ?? current.sourceStore,
+        sourceUrl: data.sourceUrl ?? current.sourceUrl,
+        sourceCurrency: data.sourceCurrency ?? current.sourceCurrency,
       }),
     })
     set((state) => ({

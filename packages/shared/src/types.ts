@@ -40,6 +40,24 @@ export interface WishlistItem {
   externalContribution?: number
   isPurchased?: boolean
   image?: string
+  sourceStore?: string
+  sourceUrl?: string
+  sourceCurrency?: string
+}
+
+export interface PriceScoutResult {
+  store: string
+  title: string
+  price: number
+  currency: string
+  image: string
+  url: string
+}
+
+export interface PriceScoutSearchResponse {
+  query: string
+  total: number
+  results: PriceScoutResult[]
 }
 
 export interface MonthlyPlanningItem {

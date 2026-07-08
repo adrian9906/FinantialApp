@@ -158,6 +158,9 @@ model DeseoItem {
   nombre             String
   precio             Float
   foto               String?
+  tienda             String?
+  urlReferencia      String?
+  moneda             String?
   prioridad          String    @default("media")
   fecha              DateTime  @default(now())
   posibleCompraFecha DateTime?
