@@ -2,7 +2,7 @@ import type { PriceScoutResult, PriceScoutSearchResponse } from '@plata/shared'
 
 const DEFAULT_PRICESCOUT_API_BASE_URL = 'https://pricescout-zr56.onrender.com/api'
 const rawPriceScoutApiBaseUrl = import.meta.env.VITE_PRICESCOUT_API_BASE_URL?.trim() || DEFAULT_PRICESCOUT_API_BASE_URL
-const REQUEST_TIMEOUT_MS = 12000
+const REQUEST_TIMEOUT_MS = 60000
 
 export const PRICESCOUT_STORE_OPTIONS = [
   { label: 'Amazon', value: 'amazon' },
@@ -84,7 +84,7 @@ export async function searchPriceScout(
       : []
   } catch (error) {
     if (controller.signal.aborted || signal?.aborted) {
-      throw new Error('La busqueda tardo demasiado. Intenta de nuevo.')
+      throw new Error('La búsqueda tardó demasiado. Intenta de nuevo.')
     }
 
     if (error instanceof Error) {
