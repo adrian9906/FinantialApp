@@ -394,12 +394,12 @@ export default function Wishlist() {
             const canBePurchased = purchased || effectiveSavedAmount >= item.price
             const projection = purchased
               ? {
-                  remaining: 0,
-                  progress: 100,
-                  timelineLabel: 'Ya lo compraste.',
-                  purchaseDateLabel: `Descontado del ahorro: ${formatCurrency(reservedAmount)}`,
-                  isReady: true,
-                }
+                remaining: 0,
+                progress: 100,
+                timelineLabel: 'Ya lo compraste.',
+                purchaseDateLabel: `Descontado del ahorro: ${formatCurrency(reservedAmount)}`,
+                isReady: true,
+              }
               : buildPurchaseProjection(item.price, effectiveSavedAmount, averageMonthlySavings, (date) => dateFormatter.format(date))
 
             return (
@@ -520,12 +520,12 @@ export default function Wishlist() {
             const canBePurchased = purchased || effectiveSavedAmount >= item.price
             const projection = purchased
               ? {
-                  remaining: 0,
-                  progress: 100,
-                  timelineLabel: 'Ya lo compraste.',
-                  purchaseDateLabel: `Descontado del ahorro: ${formatCurrency(reservedAmount)}`,
-                  isReady: true,
-                }
+                remaining: 0,
+                progress: 100,
+                timelineLabel: 'Ya lo compraste.',
+                purchaseDateLabel: `Descontado del ahorro: ${formatCurrency(reservedAmount)}`,
+                isReady: true,
+              }
               : buildPurchaseProjection(item.price, effectiveSavedAmount, averageMonthlySavings, (date) => dateFormatter.format(date))
 
             return (
@@ -651,7 +651,7 @@ export default function Wishlist() {
                   <div>
                     <p className="text-xs uppercase tracking-[0.22em] text-medium-gray">Busqueda asistida</p>
                     <p className="mt-2 text-sm text-muted-gray">
-                      Usa Amazon, Revolico o El Yerro para traer precio, foto y enlace cuando aun no tienes claro el producto.
+                      Usa Amazon y El Yerro Menú para traer precio, foto y enlace cuando aun no tienes claro el producto.
                     </p>
                   </div>
 
@@ -681,10 +681,10 @@ export default function Wishlist() {
                         <Button
                           key={option.value}
                           type="button"
-                          variant={active ? 'secondary' : 'ghost'}
+                          variant={active ? 'default' : 'ghost'}
                           size="sm"
                           onClick={() => toggleStore(option.value)}
-                          className={active ? 'bg-surface-container-high text-on-surface' : 'border border-graphite text-muted-gray hover:text-on-surface'}
+                          className={active ? 'bg-surface-container-high text-primary-container' : 'border border-graphite text-muted-gray hover:text-primary-container/80'}
                         >
                           <Store className="size-3.5" />
                           {option.label}
@@ -852,11 +852,11 @@ export default function Wishlist() {
                 <p className="mt-1 text-sm text-muted-gray">
                   {form.price
                     ? buildPurchaseProjection(
-                        parseMoneyInput(form.price),
-                        currentFreeSavedAmount + parseMoneyInput(form.externalContribution),
-                        averageMonthlySavings,
-                        (date) => dateFormatter.format(date),
-                      ).purchaseDateLabel
+                      parseMoneyInput(form.price),
+                      currentFreeSavedAmount + parseMoneyInput(form.externalContribution),
+                      averageMonthlySavings,
+                      (date) => dateFormatter.format(date),
+                    ).purchaseDateLabel
                     : 'Sin fecha estimada todavia.'}
                 </p>
               </Card>
