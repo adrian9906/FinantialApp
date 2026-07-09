@@ -148,7 +148,7 @@ export default function LoginScreen() {
                   <Tabs value={view} onValueChange={(value) => setView(value as 'login' | 'register')} className="gap-5">
                     <TabsList className="w-full">
                       <TabsTrigger value="login" className="flex-1">
-                        <Text>Iniciar sesion</Text>
+                        <Text>Iniciar sesión</Text>
                       </TabsTrigger>
                       <TabsTrigger value="register" className="flex-1">
                         <Text>Crear cuenta</Text>

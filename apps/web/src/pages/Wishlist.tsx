@@ -721,23 +721,23 @@ export default function Wishlist() {
                             <p className="text-xs text-muted-gray">Desde {formatCurrency(group.lowestPrice)}</p>
                           </div>
 
-                          <div className="space-y-3">
+                          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
                             {group.results.map((result, index) => (
                               <button
                                 key={`${group.store}-${result.url}-${index}`}
                                 type="button"
                                 onClick={() => applySearchResult(result)}
-                                className="flex w-full flex-col gap-3 rounded-2xl border border-graphite bg-surface px-3 py-3 text-left transition-colors hover:border-primary/35 hover:bg-surface-container-high sm:flex-row"
+                                className="flex flex-col rounded-2xl border border-graphite bg-surface text-left transition-colors hover:border-primary/35 hover:bg-surface-container-high"
                               >
-                                <div className="flex h-24 w-full items-center justify-center overflow-hidden rounded-2xl bg-abyss sm:w-24">
+                                <div className="flex h-40 w-full shrink-0 items-center justify-center overflow-hidden rounded-t-2xl bg-abyss">
                                   {result.image ? (
                                     <img src={result.image} alt={result.title} className="h-full w-full object-cover" />
                                   ) : (
-                                    <ImageIcon className="size-6 text-muted-gray" />
+                                    <ImageIcon className="size-8 text-muted-gray" />
                                   )}
                                 </div>
 
-                                <div className="min-w-0 flex-1">
+                                <div className="flex flex-1 flex-col gap-2 p-3">
                                   <div className="flex flex-wrap items-center gap-2">
                                     <Badge variant="outline" className="border-primary/30 bg-primary/10 text-primary">
                                       {result.currency} {result.price.toLocaleString()}
@@ -746,12 +746,10 @@ export default function Wishlist() {
                                       {getStoreLabel(result.store)}
                                     </Badge>
                                   </div>
-                                  <p className="mt-2 line-clamp-2 text-sm font-medium text-on-surface">{result.title}</p>
-                                  <p className="mt-1 text-xs text-muted-gray">{result.url}</p>
-                                </div>
+                                  <p className="line-clamp-2 text-sm font-medium text-on-surface">{result.title}</p>
+                                  <p className="mt-auto truncate text-xs text-muted-gray">{result.url}</p>
 
-                                <div className="flex shrink-0 items-end">
-                                  <span className="inline-flex rounded-xl bg-primary-container px-3 py-2 text-xs font-semibold text-white">
+                                  <span className="mt-2 inline-flex w-full items-center justify-center rounded-xl bg-primary-container px-3 py-2 text-xs font-semibold text-white">
                                     Usar esta opcion
                                   </span>
                                 </div>

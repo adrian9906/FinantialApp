@@ -6,7 +6,7 @@ const REQUEST_TIMEOUT_MS = 60000
 
 export const PRICESCOUT_STORE_OPTIONS = [
   { label: 'Amazon', value: 'amazon' },
-  { label: 'Revolico', value: 'revolico' },
+  // { label: 'Revolico', value: 'revolico' },
   { label: 'El Yerro', value: 'Yerro Menu' },
 ] as const
 
@@ -21,7 +21,7 @@ export function normalizePriceScoutStore(store: string): PriceScoutStoreValue {
   const normalized = store.trim().toLowerCase()
 
   if (normalized === 'amazon') return 'amazon'
-  if (normalized === 'revolico') return 'revolico'
+  // if (normalized === 'revolico') return 'revolico'
   if (normalized === 'el yerro' || normalized === 'yerro menu' || normalized === 'yerro') {
     return 'Yerro Menu'
   }
