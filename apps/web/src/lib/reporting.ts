@@ -225,16 +225,19 @@ export function buildMonthlySummaries(params: {
   return sortedMonths.map<ReportMonthSummary>((monthKey) => {
     const effectiveSalary = getEffectiveSalaryForMonth(monthKey, salaryMap)
     const monthTransactions = transactions.filter((transaction) => transaction.date.slice(0, 7) === monthKey)
+    const debtPaid = sumDebtPaymentsForMonth(debts, monthKey)
+    const monthlyDebtSnapshot = debtPaid > 0
+      ? [{ id: `debt-paid:${monthKey}`, amount: debtPaid, paidAmount: debtPaid } as Debt]
+      : []
     const overview = getMonthlyOverview(
       effectiveSalary.effectiveMonth
         ? [{ id: `effective-salary:${monthKey}`, amount: effectiveSalary.amount, month: effectiveSalary.effectiveMonth }]
         : [],
       monthTransactions,
-      [],
+      monthlyDebtSnapshot,
       formula,
     )
     const history = historyByMonth.get(monthKey)
-    const debtPaid = sumDebtPaymentsForMonth(debts, monthKey)
     const debtRemaining = sumDebtRemainingAtMonthEnd(debts, monthKey)
     const daysRemainingInCycle = getDaysRemainingInCycle(monthKey)
     const cycleEndsAt = getMonthEnd(monthKey).toISOString()
@@ -243,14 +246,14 @@ export function buildMonthlySummaries(params: {
       month: monthKey,
       label: formatMonthLabel(monthKey),
       shortLabel: formatShortMonthLabel(monthKey),
-      salary: overview.grossSalary,
+      salary: overview.totalSalary,
       effectiveSalaryMonth: effectiveSalary.effectiveMonth,
       expenses: overview.totalExpenses,
       wants: overview.totalWants,
       savings: overview.totalSavings,
       debtPaid,
       debtRemaining,
-      freeBalance: Math.max(0, overview.grossSalary - overview.totalExpenses - overview.totalWants - overview.totalSavings - debtPaid),
+      freeBalance: Math.max(0, overview.totalSalary - overview.totalExpenses - overview.totalWants - overview.totalSavings),
       budgetExpenses: overview.budgetExpenses,
       budgetWants: overview.budgetWants,
       budgetSavings: overview.budgetSavings,
@@ -258,7 +261,9 @@ export function buildMonthlySummaries(params: {
       wantItems: history?.wants.length ?? monthTransactions.filter((transaction) => transaction.type === 'want').length,
       cycleEndsAt,
       daysRemainingInCycle,
-      recommendedDailyAvailable: daysRemainingInCycle > 0 ? Math.max(0, Math.round((Math.max(0, overview.grossSalary - overview.totalExpenses - overview.totalWants - overview.totalSavings - debtPaid) / daysRemainingInCycle) * 100) / 100) : 0,
+      recommendedDailyAvailable: daysRemainingInCycle > 0
+        ? Math.max(0, Math.round((Math.max(0, overview.totalSalary - overview.totalExpenses - overview.totalWants - overview.totalSavings) / daysRemainingInCycle) * 100) / 100)
+        : 0,
     }
   })
 }

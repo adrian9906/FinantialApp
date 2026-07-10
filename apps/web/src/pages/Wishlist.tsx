@@ -404,15 +404,30 @@ export default function Wishlist() {
 
             return (
               <article key={item.id} className="overflow-hidden rounded-2xl bg-surface shadow-vault">
-                <div className="relative h-52 bg-abyss">
+                <div className="relative bg-abyss">
                   {item.image ? (
-                    <img src={item.image} alt={item.name} className="h-full w-full object-cover" />
+                    <div className="relative aspect-[4/5] sm:aspect-[16/10]">
+                      <img src={item.image} alt={item.name} className="h-full w-full object-contain object-center" />
+                    </div>
                   ) : (
-                    <div className="flex h-full w-full items-center justify-center bg-[radial-gradient(circle_at_top,rgba(167,139,250,0.18),transparent_55%)]">
+                    <div className="flex aspect-[4/5] w-full items-center justify-center bg-[radial-gradient(circle_at_top,rgba(167,139,250,0.18),transparent_55%)] sm:aspect-[16/10]">
                       <ShoppingCart className="size-10 text-muted-gray" />
                     </div>
                   )}
-                  <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-abyss via-abyss/60 to-transparent px-5 pb-4 pt-10">
+                  <div className="absolute inset-0 bg-gradient-to-t from-abyss via-abyss/45 to-transparent" />
+
+                  <div className="absolute left-4 top-4 sm:hidden">
+                    <div className="rounded-xl border border-white/15 bg-abyss/80 p-2 shadow-lg backdrop-blur">
+                      <Checkbox
+                        checked={purchased}
+                        disabled={isSaving || !canBePurchased}
+                        onCheckedChange={() => void handleTogglePurchased(item)}
+                        aria-label={`Marcar ${item.name} como comprado`}
+                      />
+                    </div>
+                  </div>
+
+                  <div className="absolute inset-x-0 bottom-0 px-5 pb-4 pt-10">
                     <div className="flex flex-wrap items-center gap-2">
                       <Badge variant="outline" className={getPriorityBadgeClass(item.priority)}>
                         Prioridad {getPriorityLabel(item.priority)}
@@ -430,11 +445,29 @@ export default function Wishlist() {
                     </div>
                     <h2 className="mt-2 text-2xl font-semibold text-white">{item.name}</h2>
                     <p className="mt-1 text-sm text-lavender">{formatCurrency(item.price)}</p>
+                    <p className="mt-2 text-xs text-white/80 sm:hidden">
+                      {purchased
+                        ? `Comprado. Se descontaron ${formatCurrency(reservedAmount)} de tus ahorros.`
+                        : canBePurchased
+                          ? `Listo para comprar. Saldrian ${formatCurrency(Math.max(0, item.price - externalContribution))} de tus ahorros.`
+                          : `Aun faltan ${formatCurrency(projection.remaining)} para poder comprarlo.`}
+                    </p>
+                    {item.sourceUrl ? (
+                      <a
+                        href={item.sourceUrl}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="mt-3 inline-flex items-center gap-1 text-xs text-white/85 hover:text-white hover:underline sm:hidden"
+                      >
+                        Ver fuente
+                        <ExternalLink className="size-3" />
+                      </a>
+                    ) : null}
                   </div>
                 </div>
 
                 <div className="space-y-4 p-5">
-                  <div className="flex items-start justify-between gap-3 rounded-xl border border-graphite bg-abyss p-4">
+                  <div className="hidden items-start justify-between gap-3 rounded-xl border border-graphite bg-abyss p-4 sm:flex">
                     <div className="space-y-1">
                       <p className="text-sm font-medium text-on-surface">Marcar como comprado</p>
                       <p className="text-xs text-muted-gray">
@@ -473,7 +506,7 @@ export default function Wishlist() {
                         href={item.sourceUrl}
                         target="_blank"
                         rel="noreferrer"
-                        className="mt-3 inline-flex items-center gap-1 text-xs text-primary hover:underline"
+                        className="mt-3 hidden items-center gap-1 text-xs text-primary hover:underline sm:inline-flex"
                       >
                         Ver fuente
                         <ExternalLink className="size-3" />
