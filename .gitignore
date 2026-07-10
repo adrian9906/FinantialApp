@@ -38,4 +38,6 @@ apps/*/dist
 apps/*/node_modules
 .pnpm-store
 .codebase-memory
-docs/
+docs/roadmap-funcionalidades-plata-app.md
+docs/landing-page-contexto-plata-app.md
+promo/
