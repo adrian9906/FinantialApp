@@ -1,9 +1,11 @@
 import { create } from 'zustand'
 import type { AuthCredentials, AuthMode, AuthUser, RegisterPayload } from '@plata/shared'
 
-import { requestJson } from '@/lib/api'
+import { isNetworkRequestError, requestJson } from '@/lib/api'
+import { clearCachedAuthUser, clearCachedBootstrap, isOnline, persistCachedAuthUser, readCachedAuthUser } from '@/lib/offline'
 
 const GUEST_AUTH_STORAGE_KEY = 'plata-auth-mode'
+const SESSION_TOKEN_KEY = 'plata-session-token'
 
 interface AuthStore {
   authMode: AuthMode
@@ -34,15 +36,21 @@ function persistGuestMode(enabled: boolean) {
 }
 
 function setStoredToken(token: string) {
-  window.localStorage.setItem('plata-session-token', token)
+  window.localStorage.setItem(SESSION_TOKEN_KEY, token)
 }
 
 function removeStoredToken() {
-  window.localStorage.removeItem('plata-session-token')
+  window.localStorage.removeItem(SESSION_TOKEN_KEY)
+}
+
+function hasStoredToken() {
+  if (typeof window === 'undefined') return false
+  return Boolean(window.localStorage.getItem(SESSION_TOKEN_KEY))
 }
 
 function setAuthenticatedUser(set: (partial: Partial<AuthStore>) => void, user: AuthUser) {
   persistGuestMode(false)
+  persistCachedAuthUser(user)
   set({
     authMode: 'authenticated',
     user,
@@ -59,11 +67,23 @@ export const useAuthStore = create<AuthStore>()((set) => ({
   checkSession: async () => {
     set({ isChecking: true })
 
+    const cachedUser = readCachedAuthUser()
+
+    if (!isOnline() && cachedUser && hasStoredToken()) {
+      setAuthenticatedUser(set, cachedUser)
+      return
+    }
+
     try {
       const payload = await requestJson<{ user: AuthUser }>('/auth/me')
       setAuthenticatedUser(set, payload.user)
       return
-    } catch {
+    } catch (error) {
+      if (cachedUser && hasStoredToken() && isNetworkRequestError(error)) {
+        setAuthenticatedUser(set, cachedUser)
+        return
+      }
+
       if (readGuestMode()) {
         set({
           authMode: 'guest',
@@ -77,6 +97,7 @@ export const useAuthStore = create<AuthStore>()((set) => ({
 
     removeStoredToken()
     persistGuestMode(false)
+    clearCachedAuthUser()
     set({
       authMode: 'anonymous',
       user: null,
@@ -112,16 +133,26 @@ export const useAuthStore = create<AuthStore>()((set) => ({
     })
   },
   logout: async () => {
-    const currentMode = useAuthStore.getState().authMode
+    const { authMode: currentMode, user } = useAuthStore.getState()
 
     if (currentMode === 'authenticated') {
-      await requestJson<{ ok: boolean }>('/auth/logout', {
-        method: 'POST',
-      })
+      try {
+        await requestJson<{ ok: boolean }>('/auth/logout', {
+          method: 'POST',
+        })
+      } catch (error) {
+        if (!isNetworkRequestError(error)) {
+          throw error
+        }
+      }
     }
 
     removeStoredToken()
     persistGuestMode(false)
+    clearCachedAuthUser()
+    if (user) {
+      clearCachedBootstrap(user.id)
+    }
     set({
       authMode: 'anonymous',
       user: null,

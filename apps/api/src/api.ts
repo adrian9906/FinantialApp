@@ -1,6 +1,7 @@
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import type {
   AppEvent,
+  BootstrapPayload,
   Debt,
   MonthlyPlanningHistory,
   MonthlyPlanningItem,
@@ -359,6 +360,211 @@ async function loadBootstrap(userId: string) {
     savingsGoals: savingsGoals.map(serializeSavingsGoal),
     reminders: reminders.map(serializeReminder),
   }
+}
+
+function normalizeSyncPayload(body: JsonRecord): BootstrapPayload {
+  return {
+    salaries: Array.isArray(body.salaries) ? body.salaries as Salary[] : [],
+    transactions: Array.isArray(body.transactions) ? body.transactions as Transaction[] : [],
+    debts: Array.isArray(body.debts) ? body.debts as Debt[] : [],
+    wishlist: Array.isArray(body.wishlist) ? body.wishlist as WishlistItem[] : [],
+    monthlyPlanningHistory: Array.isArray(body.monthlyPlanningHistory) ? body.monthlyPlanningHistory as MonthlyPlanningHistory[] : [],
+    events: Array.isArray(body.events) ? body.events as AppEvent[] : [],
+    projections: Array.isArray(body.projections) ? body.projections as Projection[] : [],
+    savingsGoals: Array.isArray(body.savingsGoals) ? body.savingsGoals as SavingsGoal[] : [],
+    reminders: Array.isArray(body.reminders) ? body.reminders as Reminder[] : [],
+  }
+}
+
+async function syncBootstrap(userId: string, body: JsonRecord) {
+  const prisma = await getPrisma()
+  const payload = normalizeSyncPayload(body)
+  const transactions = payload.transactions
+  const expenses = transactions.filter((entry) => entry.type === 'expense')
+  const wants = transactions.filter((entry) => entry.type === 'want')
+  const savings = transactions.filter((entry) => entry.type === 'saving')
+
+  await prisma.$transaction(async (tx) => {
+    await tx.salario.deleteMany({ where: { usuarioId: userId } })
+    await tx.ahorro.deleteMany({ where: { usuarioId: userId } })
+    await tx.gasto.deleteMany({ where: { usuarioId: userId } })
+    await tx.gusto.deleteMany({ where: { usuarioId: userId } })
+    await tx.deuda.deleteMany({ where: { usuarioId: userId } })
+    await tx.deseo.deleteMany({ where: { usuarioId: userId } })
+    await tx.historialMensual.deleteMany({ where: { usuarioId: userId } })
+    await tx.evento.deleteMany({ where: { usuarioId: userId } })
+    await tx.proyeccion.deleteMany({ where: { usuarioId: userId } })
+    await tx.metaAhorro.deleteMany({ where: { usuarioId: userId } })
+    await tx.notificacion.deleteMany({ where: { usuarioId: userId } })
+
+    for (const entry of payload.salaries) {
+      await tx.salario.create({
+        data: {
+          id: entry.id,
+          salario: Number(entry.amount ?? 0),
+          fecha: toMonthDate(String(entry.month ?? toMonthString(new Date()))),
+          usuarioId: userId,
+        },
+      })
+    }
+
+    for (const entry of expenses) {
+      await tx.gasto.create({
+        data: {
+          id: entry.id,
+          cantidad: Number(entry.amount ?? 0),
+          fecha: entry.date ? new Date(entry.date) : new Date(),
+          usuarioId: userId,
+          items: {
+            create: {
+              nombre: String(entry.description ?? 'Gasto'),
+              precio: Number(entry.amount ?? 0),
+              fecha: entry.date ? new Date(entry.date) : new Date(),
+              categoria: 'expense',
+            },
+          },
+        },
+      })
+    }
+
+    for (const entry of wants) {
+      await tx.gusto.create({
+        data: {
+          id: entry.id,
+          cantidad: Number(entry.amount ?? 0),
+          fecha: entry.date ? new Date(entry.date) : new Date(),
+          usuarioId: userId,
+          items: {
+            create: {
+              nombre: String(entry.description ?? 'Gusto'),
+              precio: Number(entry.amount ?? 0),
+              fecha: entry.date ? new Date(entry.date) : new Date(),
+              categoria: 'want',
+            },
+          },
+        },
+      })
+    }
+
+    for (const entry of savings) {
+      await tx.ahorro.create({
+        data: {
+          id: entry.id,
+          cantidad: Number(entry.amount ?? 0),
+          fecha: entry.date ? new Date(entry.date) : new Date(),
+          usuarioId: userId,
+        },
+      })
+    }
+
+    for (const entry of payload.debts) {
+      await tx.deuda.create({
+        data: {
+          id: entry.id,
+          cantidad: Number(entry.amount ?? 0),
+          historial: String(entry.history ?? ''),
+          fechaInicio: entry.startDate ? new Date(entry.startDate) : new Date(),
+          fechaTerminacion: entry.endDate ? new Date(entry.endDate) : new Date(),
+          interes: entry.interest === undefined ? null : Number(entry.interest),
+          usuarioId: userId,
+          pagos: {
+            create: (entry.payments ?? []).map((payment) => ({
+              cantidad: Number(payment.amount ?? 0),
+              fecha: payment.date ? new Date(payment.date) : new Date(),
+            })),
+          },
+        },
+      })
+    }
+
+    for (const entry of payload.wishlist) {
+      await tx.deseo.create({
+        data: {
+          id: entry.id,
+          cantidad: Number(entry.savedAmount ?? 0),
+          aportado: Number(entry.externalContribution ?? 0),
+          comprado: Boolean(entry.isPurchased),
+          usuarioId: userId,
+          items: {
+            create: {
+              nombre: String(entry.name ?? 'Deseo'),
+              precio: Number(entry.price ?? 0),
+              prioridad: normalizePriority(entry.priority),
+              foto: entry.image ?? null,
+              tienda: entry.sourceStore ?? null,
+              urlReferencia: entry.sourceUrl ?? null,
+              moneda: entry.sourceCurrency ?? null,
+            },
+          },
+        },
+      })
+    }
+
+    for (const entry of payload.monthlyPlanningHistory) {
+      await tx.historialMensual.create({
+        data: {
+          id: entry.id,
+          mesReferencia: String(entry.month ?? toMonthString(new Date())),
+          etiqueta: String(entry.label ?? entry.month ?? ''),
+          gastos: (entry.expenses ?? []) as unknown as Prisma.InputJsonValue,
+          gustos: (entry.wants ?? []) as unknown as Prisma.InputJsonValue,
+          usuarioId: userId,
+        },
+      })
+    }
+
+    for (const entry of payload.events) {
+      await tx.evento.create({
+        data: {
+          id: entry.id,
+          nombre: String(entry.name ?? ''),
+          cantidad: Number(entry.amount ?? 0),
+          fecha: entry.date ? new Date(entry.date) : new Date(),
+          isNotificacion: Boolean(entry.isNotification),
+          usuarioId: userId,
+        },
+      })
+    }
+
+    for (const entry of payload.projections) {
+      await tx.proyeccion.create({
+        data: {
+          id: entry.id,
+          salarioMeta: Number(entry.targetSalary ?? 0),
+          usuarioId: userId,
+        },
+      })
+    }
+
+    for (const entry of payload.savingsGoals) {
+      await tx.metaAhorro.create({
+        data: {
+          id: entry.id,
+          nombre: String(entry.name ?? ''),
+          categoria: normalizeSavingsGoalCategory(entry.category),
+          montoObjetivo: Number(entry.targetAmount ?? 0),
+          montoActual: Number(entry.currentAmount ?? 0),
+          aporteMensual: Number(entry.monthlyContribution ?? 0),
+          usuarioId: userId,
+        },
+      })
+    }
+
+    for (const entry of payload.reminders) {
+      await tx.notificacion.create({
+        data: {
+          id: entry.id,
+          titulo: String(entry.title ?? ''),
+          descripcion: entry.description ?? null,
+          fecha: entry.date ? new Date(entry.date) : new Date(),
+          leida: Boolean(entry.completed),
+          usuarioId: userId,
+        },
+      })
+    }
+  })
+
+  return loadBootstrap(userId)
 }
 
 async function createMonthlyReset(
@@ -1113,6 +1319,11 @@ export async function handleApiRequest(req: IncomingMessage, res: ServerResponse
 
     if (pathname === '/api/bootstrap' && method === 'GET') {
       sendJson(res, 200, await loadBootstrap(authenticatedUser.id))
+      return true
+    }
+
+    if (pathname === '/api/bootstrap/sync' && method === 'PUT') {
+      sendJson(res, 200, await syncBootstrap(authenticatedUser.id, await readJsonBody(req)))
       return true
     }
 

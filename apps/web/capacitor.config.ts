@@ -4,11 +4,13 @@ const config: CapacitorConfig = {
   appId: 'com.plata_app.app',
   appName: 'Plata App',
   webDir: 'dist',
-  server: {
-    url: 'https://finantial-app-web.vercel.app/',
-    androidScheme: 'https',
-  },
   plugins: {
+    CapacitorCookies: {
+      enabled: true,
+    },
+    CapacitorHttp: {
+      enabled: true,
+    },
     SplashScreen: {
       androidSplashResourceName: 'splash',
       launchAutoHide: true,

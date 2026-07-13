@@ -38,6 +38,8 @@ import { HexagonBackground } from '@/components/animate-ui/components/background
 import { useAuthStore } from '@/store/authStore'
 import { useFinanceStore } from '@/store/financeStore'
 import { formatFormulaLabel, usePreferencesStore } from '@/store/preferencesStore'
+import { AppTour } from '@/components/onboarding/AppTour'
+import { InstallAppPrompt } from '@/components/onboarding/InstallAppPrompt'
 
 const navItems = [
   { to: '/', icon: LayoutDashboard, label: 'Dashboard' },
@@ -82,6 +84,7 @@ export function Sidebar() {
         <div className="fixed inset-x-0 top-0 z-30 bg-[color:color-mix(in_srgb,var(--surface)_92%,transparent)] backdrop-blur-xl lg:hidden">
           <div className="flex items-center gap-3 px-3 py-3">
             <Button
+              data-tour="mobile-menu"
               variant="ghost"
               size="icon"
               className="shrink-0 rounded-xl bg-surface/85 text-on-surface shadow-vault-sm hover:bg-surface-container-high hover:text-primary"
@@ -105,7 +108,7 @@ export function Sidebar() {
           open ? 'translate-x-0' : '-translate-x-full'
         )}
       >
-        <div className="mb-2 flex items-center justify-between gap-3 px-5 py-5">
+        <div data-tour="sidebar-brand" className="mb-2 flex items-center justify-between gap-3 px-5 py-5">
           <div className="flex size-10 items-center justify-center rounded-full bg-primary-container shadow-vault">
             <span className="text-sm font-bold text-white">P</span>
           </div>
@@ -123,7 +126,7 @@ export function Sidebar() {
             <X data-icon="inline-start" />
           </Button>
         </div>
-        <nav className="flex flex-1 flex-col gap-1 px-3">
+        <nav data-tour="navigation" className="flex flex-1 flex-col gap-1 px-3">
           {navItems.map((item) => (
             <NavLink
               key={item.to}
@@ -148,6 +151,7 @@ export function Sidebar() {
         <div className="mt-auto flex flex-col gap-1 border-t border-graphite px-3 pb-4 pt-3">
           <DropdownMenu>
             <DropdownMenuTrigger
+              data-tour="profile"
               className="mb-2 flex w-full items-center gap-3 rounded-xl border border-graphite bg-abyss px-3 py-3 text-left shadow-vault-sm outline-hidden transition-colors hover:bg-surface-container-high"
               aria-label="Abrir menu de usuario"
             >
@@ -232,8 +236,11 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
       <Sidebar />
       <main className="pointer-events-none relative z-10 min-h-dvh flex-1 lg:pl-64">
         <div className="pointer-events-auto mx-auto w-full max-w-full px-3 pb-5 pt-24 sm:px-6 sm:pb-6 sm:pt-28 md:max-w-[94%] lg:max-w-[90%] lg:px-8 lg:py-8">
-          <div className="mb-5">
-            <GlobalSearchDialog />
+          <div className="mb-5 flex items-center gap-3">
+            <div data-tour="global-search" className="min-w-0 flex-1">
+              <GlobalSearchDialog />
+            </div>
+            <AppTour />
           </div>
 
           {authMode === 'guest' && (
@@ -263,7 +270,9 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
             </div>
           )}
 
-          {children}
+          <InstallAppPrompt />
+
+          <div data-tour="workspace">{children}</div>
         </div>
       </main>
     </div>

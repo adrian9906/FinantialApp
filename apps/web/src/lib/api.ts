@@ -19,6 +19,14 @@ function readSessionToken(): string | null {
   return window.localStorage.getItem(SESSION_TOKEN_KEY)
 }
 
+export function isNetworkRequestError(error: unknown) {
+  if (error instanceof TypeError) return true
+  if (error instanceof DOMException) return true
+
+  const message = error instanceof Error ? error.message.toLowerCase() : ''
+  return message.includes('failed to fetch') || message.includes('network') || message.includes('load failed')
+}
+
 export async function requestJson<T>(path: string, init?: RequestInit): Promise<T> {
   const token = readSessionToken()
   const { headers: initHeaders, ...restInit } = init ?? {}

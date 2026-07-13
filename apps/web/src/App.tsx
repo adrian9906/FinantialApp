@@ -18,6 +18,7 @@ import { useEffect } from 'react'
 import { useFinanceStore } from '@/store/financeStore'
 import { useAuthStore } from '@/store/authStore'
 import { usePreferencesStore } from '@/store/preferencesStore'
+import { persistCachedBootstrap } from '@/lib/offline'
 import Login from '@/pages/Login'
 
 const queryClient = new QueryClient()
@@ -44,8 +45,19 @@ function ProtectedApp() {
   const isChecking = useAuthStore((state) => state.isChecking)
   const hasChecked = useAuthStore((state) => state.hasChecked)
   const checkSession = useAuthStore((state) => state.checkSession)
+  const user = useAuthStore((state) => state.user)
   const hydrate = useFinanceStore((state) => state.hydrate)
+  const syncPendingChanges = useFinanceStore((state) => state.syncPendingChanges)
   const reset = useFinanceStore((state) => state.reset)
+  const salaries = useFinanceStore((state) => state.salaries)
+  const transactions = useFinanceStore((state) => state.transactions)
+  const debts = useFinanceStore((state) => state.debts)
+  const wishlist = useFinanceStore((state) => state.wishlist)
+  const monthlyPlanningHistory = useFinanceStore((state) => state.monthlyPlanningHistory)
+  const events = useFinanceStore((state) => state.events)
+  const projections = useFinanceStore((state) => state.projections)
+  const savingsGoals = useFinanceStore((state) => state.savingsGoals)
+  const reminders = useFinanceStore((state) => state.reminders)
 
   useEffect(() => {
     if (!hasChecked) {
@@ -61,6 +73,37 @@ function ProtectedApp() {
 
     reset()
   }, [authMode, hydrate, reset])
+
+  useEffect(() => {
+    if (authMode !== 'authenticated' || !user) return
+
+    persistCachedBootstrap(user.id, {
+      salaries,
+      transactions,
+      debts,
+      wishlist,
+      monthlyPlanningHistory,
+      events,
+      projections,
+      savingsGoals,
+      reminders,
+    })
+  }, [authMode, user, salaries, transactions, debts, wishlist, monthlyPlanningHistory, events, projections, savingsGoals, reminders])
+
+  useEffect(() => {
+    if (authMode !== 'authenticated') return
+
+    function handleOnline() {
+      void syncPendingChanges().catch(() => {})
+    }
+
+    window.addEventListener('online', handleOnline)
+    void syncPendingChanges().catch(() => {})
+
+    return () => {
+      window.removeEventListener('online', handleOnline)
+    }
+  }, [authMode, syncPendingChanges])
 
   if (isChecking && !hasChecked) {
     return (

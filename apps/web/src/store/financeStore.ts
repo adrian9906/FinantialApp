@@ -15,7 +15,8 @@ import type {
 import { createEmptyBootstrapPayload, normalizeBootstrapPayload } from '@plata/shared'
 
 import { parseExpenseDescription } from '@/lib/expense-utils'
-import { requestJson } from '@/lib/api'
+import { isNetworkRequestError, requestJson } from '@/lib/api'
+import { hasPendingSync, isOnline, markPendingSync, persistCachedBootstrap, readCachedBootstrap } from '@/lib/offline'
 import { parseWantDescription } from '@/lib/want-utils'
 import { useAuthStore } from '@/store/authStore'
 
@@ -29,6 +30,7 @@ interface FinanceStore extends BootstrapPayload {
   hasLoaded: boolean
   loadedKey: string | null
   hydrate: () => Promise<void>
+  syncPendingChanges: () => Promise<boolean>
   reset: () => void
   addSalary: (salary: Omit<Salary, 'id'>) => Promise<void>
   updateSalary: (id: string, data: Partial<Omit<Salary, 'id'>>) => Promise<void>
@@ -199,6 +201,20 @@ function persistGuestSnapshot(snapshot: BootstrapPayload) {
   window.localStorage.setItem(GUEST_FINANCE_STORAGE_KEY, JSON.stringify(snapshot))
 }
 
+function buildSnapshotFromState(state: BootstrapPayload, next?: Partial<BootstrapPayload>): BootstrapPayload {
+  return {
+    salaries: next?.salaries ?? state.salaries,
+    transactions: next?.transactions ?? state.transactions,
+    debts: next?.debts ?? state.debts,
+    wishlist: next?.wishlist ?? state.wishlist,
+    monthlyPlanningHistory: next?.monthlyPlanningHistory ?? state.monthlyPlanningHistory,
+    events: next?.events ?? state.events,
+    projections: next?.projections ?? state.projections,
+    savingsGoals: next?.savingsGoals ?? state.savingsGoals,
+    reminders: next?.reminders ?? state.reminders,
+  }
+}
+
 function getActiveKey() {
   const { authMode, user } = useAuthStore.getState()
 
@@ -211,27 +227,44 @@ function isGuestMode() {
   return useAuthStore.getState().authMode === 'guest'
 }
 
+function getAuthenticatedUserId() {
+  const { authMode, user } = useAuthStore.getState()
+  if (authMode !== 'authenticated' || !user) return null
+  return user.id
+}
+
+function isAuthenticatedOfflineMode() {
+  return Boolean(getAuthenticatedUserId()) && !isOnline()
+}
+
+function isLocalMutationMode() {
+  return isGuestMode() || isAuthenticatedOfflineMode()
+}
+
 function makeId(prefix: string) {
   return `${prefix}-${crypto.randomUUID()}`
 }
 
-function updateGuestState(
+function persistLocalSnapshot(snapshot: BootstrapPayload, dirty = false) {
+  if (isGuestMode()) {
+    persistGuestSnapshot(snapshot)
+    return
+  }
+
+  const userId = getAuthenticatedUserId()
+  if (!userId) return
+
+  persistCachedBootstrap(userId, snapshot)
+  markPendingSync(userId, dirty)
+}
+
+function updateLocalState(
   set: (recipe: (state: FinanceStore) => Partial<FinanceStore>) => void,
   recipe: (state: FinanceStore) => Partial<BootstrapPayload>,
 ) {
   set((state) => {
     const next = recipe(state)
-    persistGuestSnapshot({
-      salaries: next.salaries ?? state.salaries,
-      transactions: next.transactions ?? state.transactions,
-      debts: next.debts ?? state.debts,
-      wishlist: next.wishlist ?? state.wishlist,
-      monthlyPlanningHistory: next.monthlyPlanningHistory ?? state.monthlyPlanningHistory,
-      events: next.events ?? state.events,
-      projections: next.projections ?? state.projections,
-      savingsGoals: next.savingsGoals ?? state.savingsGoals,
-      reminders: next.reminders ?? state.reminders,
-    })
+    persistLocalSnapshot(buildSnapshotFromState(state, next), !isGuestMode())
     return next
   })
 }
@@ -262,14 +295,39 @@ export const useFinanceStore = create<FinanceStore>()((set, get) => ({
       return
     }
 
+    const userId = getAuthenticatedUserId()
+    if (!userId) return
+
+    const cachedSnapshot = normalizeBootstrapSnapshot(readCachedBootstrap(userId))
+
+    if (!isOnline()) {
+      set({
+        ...cachedSnapshot,
+        hasLoaded: true,
+        loadedKey: activeKey,
+      })
+      return
+    }
+
     try {
       const payload = await requestJson<BootstrapPayload>('/bootstrap')
+      persistCachedBootstrap(userId, payload)
+      markPendingSync(userId, false)
       set({
         ...normalizeBootstrapSnapshot(payload),
         hasLoaded: true,
         loadedKey: activeKey,
       })
-    } catch {
+    } catch (error) {
+      if (isNetworkRequestError(error)) {
+        set({
+          ...cachedSnapshot,
+          hasLoaded: true,
+          loadedKey: activeKey,
+        })
+        return
+      }
+
       useAuthStore.getState().logout().catch(() => {})
       set({
         ...getEmptyState(),
@@ -277,6 +335,28 @@ export const useFinanceStore = create<FinanceStore>()((set, get) => ({
         loadedKey: null,
       })
     }
+  },
+  syncPendingChanges: async () => {
+    const userId = getAuthenticatedUserId()
+    if (!userId || !isOnline() || !hasPendingSync(userId)) {
+      return false
+    }
+
+    const snapshot = buildSnapshotFromState(get())
+    const synced = await requestJson<BootstrapPayload>('/bootstrap/sync', {
+      method: 'PUT',
+      body: JSON.stringify(snapshot),
+    })
+
+    persistCachedBootstrap(userId, synced)
+    markPendingSync(userId, false)
+    set({
+      ...normalizeBootstrapSnapshot(synced),
+      hasLoaded: true,
+      loadedKey: `user:${userId}`,
+    })
+
+    return true
   },
   reset: () => {
     set({
@@ -286,8 +366,8 @@ export const useFinanceStore = create<FinanceStore>()((set, get) => ({
     })
   },
   addSalary: async (salary) => {
-    if (isGuestMode()) {
-      updateGuestState(set, (state) => ({
+    if (isLocalMutationMode()) {
+      updateLocalState(set, (state) => ({
         salaries: [{ ...salary, id: makeId('salary') }, ...state.salaries],
       }))
       return
@@ -300,8 +380,8 @@ export const useFinanceStore = create<FinanceStore>()((set, get) => ({
     set((state) => ({ salaries: [created, ...state.salaries] }))
   },
   updateSalary: async (id, data) => {
-    if (isGuestMode()) {
-      updateGuestState(set, (state) => ({
+    if (isLocalMutationMode()) {
+      updateLocalState(set, (state) => ({
         salaries: state.salaries.map((entry) => (entry.id === id ? { ...entry, ...data } : entry)),
       }))
       return
@@ -316,8 +396,8 @@ export const useFinanceStore = create<FinanceStore>()((set, get) => ({
     }))
   },
   removeSalary: async (id) => {
-    if (isGuestMode()) {
-      updateGuestState(set, (state) => ({
+    if (isLocalMutationMode()) {
+      updateLocalState(set, (state) => ({
         salaries: state.salaries.filter((entry) => entry.id !== id),
       }))
       return
@@ -327,8 +407,8 @@ export const useFinanceStore = create<FinanceStore>()((set, get) => ({
     set((state) => ({ salaries: state.salaries.filter((entry) => entry.id !== id) }))
   },
   addTransaction: async (transaction) => {
-    if (isGuestMode()) {
-      updateGuestState(set, (state) => ({
+    if (isLocalMutationMode()) {
+      updateLocalState(set, (state) => ({
         transactions: [{ ...transaction, id: makeId(transaction.type) }, ...state.transactions],
       }))
       return
@@ -341,8 +421,8 @@ export const useFinanceStore = create<FinanceStore>()((set, get) => ({
     set((state) => ({ transactions: [created, ...state.transactions] }))
   },
   updateTransaction: async (id, data) => {
-    if (isGuestMode()) {
-      updateGuestState(set, (state) => ({
+    if (isLocalMutationMode()) {
+      updateLocalState(set, (state) => ({
         transactions: state.transactions.map((entry) => (entry.id === id ? { ...entry, ...data } : entry)),
       }))
       return
@@ -360,8 +440,8 @@ export const useFinanceStore = create<FinanceStore>()((set, get) => ({
     }))
   },
   removeTransaction: async (id) => {
-    if (isGuestMode()) {
-      updateGuestState(set, (state) => ({
+    if (isLocalMutationMode()) {
+      updateLocalState(set, (state) => ({
         transactions: state.transactions.filter((entry) => entry.id !== id),
       }))
       return
@@ -375,8 +455,8 @@ export const useFinanceStore = create<FinanceStore>()((set, get) => ({
     set((state) => ({ transactions: state.transactions.filter((entry) => entry.id !== id) }))
   },
   addWishlistItem: async (item) => {
-    if (isGuestMode()) {
-      updateGuestState(set, (state) => ({
+    if (isLocalMutationMode()) {
+      updateLocalState(set, (state) => ({
         wishlist: [{ ...item, id: makeId('wishlist') }, ...state.wishlist],
       }))
       return
@@ -389,8 +469,8 @@ export const useFinanceStore = create<FinanceStore>()((set, get) => ({
     set((state) => ({ wishlist: [created, ...state.wishlist] }))
   },
   updateWishlistItem: async (id, data) => {
-    if (isGuestMode()) {
-      updateGuestState(set, (state) => ({
+    if (isLocalMutationMode()) {
+      updateLocalState(set, (state) => ({
         wishlist: state.wishlist.map((item) => (item.id === id ? { ...item, ...data } : item)),
       }))
       return
@@ -419,8 +499,8 @@ export const useFinanceStore = create<FinanceStore>()((set, get) => ({
     }))
   },
   removeWishlistItem: async (id) => {
-    if (isGuestMode()) {
-      updateGuestState(set, (state) => ({
+    if (isLocalMutationMode()) {
+      updateLocalState(set, (state) => ({
         wishlist: state.wishlist.filter((item) => item.id !== id),
       }))
       return
@@ -437,8 +517,8 @@ export const useFinanceStore = create<FinanceStore>()((set, get) => ({
       (transaction) => transaction.type !== 'expense' && transaction.type !== 'want',
     )
 
-    if (isGuestMode()) {
-      updateGuestState(set, (state) => ({
+    if (isLocalMutationMode()) {
+      updateLocalState(set, (state) => ({
         transactions: nextTransactions,
         monthlyPlanningHistory: [snapshot, ...state.monthlyPlanningHistory],
       }))
@@ -469,8 +549,8 @@ export const useFinanceStore = create<FinanceStore>()((set, get) => ({
     const restoredTransactions = buildTransactionsFromHistory(history, scope)
     if (restoredTransactions.length === 0) return
 
-    if (isGuestMode()) {
-      updateGuestState(set, (state) => ({
+    if (isLocalMutationMode()) {
+      updateLocalState(set, (state) => ({
         transactions: [
           ...restoredTransactions.map((transaction) => ({ ...transaction, id: makeId(transaction.type) })),
           ...state.transactions,
@@ -489,10 +569,10 @@ export const useFinanceStore = create<FinanceStore>()((set, get) => ({
     }))
   },
   addDebt: async (debt) => {
-    if (isGuestMode()) {
+    if (isLocalMutationMode()) {
       const paidAmount = Math.min(debt.amount, Math.max(0, debt.initialPayment ?? 0))
       const remainingAmount = Math.max(0, debt.amount - paidAmount)
-      updateGuestState(set, (state) => ({
+      updateLocalState(set, (state) => ({
         debts: [{
           id: makeId('debt'),
           amount: debt.amount,
@@ -519,8 +599,8 @@ export const useFinanceStore = create<FinanceStore>()((set, get) => ({
     set((state) => ({ debts: [normalizeDebt(created), ...state.debts] }))
   },
   updateDebt: async (id, data) => {
-    if (isGuestMode()) {
-      updateGuestState(set, (state) => ({
+    if (isLocalMutationMode()) {
+      updateLocalState(set, (state) => ({
         debts: state.debts.map((entry) => {
           if (entry.id !== id) return entry
           const nextAmount = data.amount ?? entry.amount
@@ -552,8 +632,8 @@ export const useFinanceStore = create<FinanceStore>()((set, get) => ({
   payDebt: async (id, amount) => {
     if (amount <= 0) return
 
-    if (isGuestMode()) {
-      updateGuestState(set, (state) => ({
+    if (isLocalMutationMode()) {
+      updateLocalState(set, (state) => ({
         debts: state.debts.map((entry) => {
           if (entry.id !== id) return entry
           const nextPaidAmount = Math.min(entry.amount, entry.paidAmount + amount)
@@ -580,8 +660,8 @@ export const useFinanceStore = create<FinanceStore>()((set, get) => ({
     }))
   },
   removeDebt: async (id) => {
-    if (isGuestMode()) {
-      updateGuestState(set, (state) => ({
+    if (isLocalMutationMode()) {
+      updateLocalState(set, (state) => ({
         debts: state.debts.filter((entry) => entry.id !== id),
       }))
       return
@@ -591,8 +671,8 @@ export const useFinanceStore = create<FinanceStore>()((set, get) => ({
     set((state) => ({ debts: state.debts.filter((entry) => entry.id !== id) }))
   },
   addEvent: async (event) => {
-    if (isGuestMode()) {
-      updateGuestState(set, (state) => ({
+    if (isLocalMutationMode()) {
+      updateLocalState(set, (state) => ({
         events: [{ ...event, id: makeId('event') }, ...state.events],
       }))
       return
@@ -605,8 +685,8 @@ export const useFinanceStore = create<FinanceStore>()((set, get) => ({
     set((state) => ({ events: [created, ...state.events] }))
   },
   updateEvent: async (id, data) => {
-    if (isGuestMode()) {
-      updateGuestState(set, (state) => ({
+    if (isLocalMutationMode()) {
+      updateLocalState(set, (state) => ({
         events: state.events.map((entry) => (entry.id === id ? { ...entry, ...data } : entry)),
       }))
       return
@@ -621,8 +701,8 @@ export const useFinanceStore = create<FinanceStore>()((set, get) => ({
     }))
   },
   removeEvent: async (id) => {
-    if (isGuestMode()) {
-      updateGuestState(set, (state) => ({
+    if (isLocalMutationMode()) {
+      updateLocalState(set, (state) => ({
         events: state.events.filter((entry) => entry.id !== id),
       }))
       return
@@ -632,8 +712,8 @@ export const useFinanceStore = create<FinanceStore>()((set, get) => ({
     set((state) => ({ events: state.events.filter((entry) => entry.id !== id) }))
   },
   addProjection: async (projection) => {
-    if (isGuestMode()) {
-      updateGuestState(set, (state) => ({
+    if (isLocalMutationMode()) {
+      updateLocalState(set, (state) => ({
         projections: [{ ...projection, id: makeId('projection') }, ...state.projections],
       }))
       return
@@ -646,8 +726,8 @@ export const useFinanceStore = create<FinanceStore>()((set, get) => ({
     set((state) => ({ projections: [created, ...state.projections] }))
   },
   updateProjection: async (id, data) => {
-    if (isGuestMode()) {
-      updateGuestState(set, (state) => ({
+    if (isLocalMutationMode()) {
+      updateLocalState(set, (state) => ({
         projections: state.projections.map((entry) => (entry.id === id ? { ...entry, ...data } : entry)),
       }))
       return
@@ -662,8 +742,8 @@ export const useFinanceStore = create<FinanceStore>()((set, get) => ({
     }))
   },
   removeProjection: async (id) => {
-    if (isGuestMode()) {
-      updateGuestState(set, (state) => ({
+    if (isLocalMutationMode()) {
+      updateLocalState(set, (state) => ({
         projections: state.projections.filter((entry) => entry.id !== id),
       }))
       return
@@ -673,8 +753,8 @@ export const useFinanceStore = create<FinanceStore>()((set, get) => ({
     set((state) => ({ projections: state.projections.filter((entry) => entry.id !== id) }))
   },
   addSavingsGoal: async (goal) => {
-    if (isGuestMode()) {
-      updateGuestState(set, (state) => ({
+    if (isLocalMutationMode()) {
+      updateLocalState(set, (state) => ({
         savingsGoals: [{ ...goal, id: makeId('savings-goal') }, ...state.savingsGoals],
       }))
       return
@@ -687,8 +767,8 @@ export const useFinanceStore = create<FinanceStore>()((set, get) => ({
     set((state) => ({ savingsGoals: [created, ...state.savingsGoals] }))
   },
   updateSavingsGoal: async (id, data) => {
-    if (isGuestMode()) {
-      updateGuestState(set, (state) => ({
+    if (isLocalMutationMode()) {
+      updateLocalState(set, (state) => ({
         savingsGoals: state.savingsGoals.map((entry) => (entry.id === id ? { ...entry, ...data } : entry)),
       }))
       return
@@ -703,8 +783,8 @@ export const useFinanceStore = create<FinanceStore>()((set, get) => ({
     }))
   },
   removeSavingsGoal: async (id) => {
-    if (isGuestMode()) {
-      updateGuestState(set, (state) => ({
+    if (isLocalMutationMode()) {
+      updateLocalState(set, (state) => ({
         savingsGoals: state.savingsGoals.filter((entry) => entry.id !== id),
       }))
       return
@@ -714,8 +794,8 @@ export const useFinanceStore = create<FinanceStore>()((set, get) => ({
     set((state) => ({ savingsGoals: state.savingsGoals.filter((entry) => entry.id !== id) }))
   },
   addReminder: async (reminder) => {
-    if (isGuestMode()) {
-      updateGuestState(set, (state) => ({
+    if (isLocalMutationMode()) {
+      updateLocalState(set, (state) => ({
         reminders: [{ ...reminder, id: makeId('reminder') }, ...state.reminders],
       }))
       return
@@ -728,8 +808,8 @@ export const useFinanceStore = create<FinanceStore>()((set, get) => ({
     set((state) => ({ reminders: [created, ...state.reminders] }))
   },
   updateReminder: async (id, data) => {
-    if (isGuestMode()) {
-      updateGuestState(set, (state) => ({
+    if (isLocalMutationMode()) {
+      updateLocalState(set, (state) => ({
         reminders: state.reminders.map((entry) => (entry.id === id ? { ...entry, ...data } : entry)),
       }))
       return
@@ -744,8 +824,8 @@ export const useFinanceStore = create<FinanceStore>()((set, get) => ({
     }))
   },
   toggleReminder: async (id) => {
-    if (isGuestMode()) {
-      updateGuestState(set, (state) => ({
+    if (isLocalMutationMode()) {
+      updateLocalState(set, (state) => ({
         reminders: state.reminders.map((entry) => (entry.id === id ? { ...entry, completed: !entry.completed } : entry)),
       }))
       return
@@ -759,8 +839,8 @@ export const useFinanceStore = create<FinanceStore>()((set, get) => ({
     }))
   },
   removeReminder: async (id) => {
-    if (isGuestMode()) {
-      updateGuestState(set, (state) => ({
+    if (isLocalMutationMode()) {
+      updateLocalState(set, (state) => ({
         reminders: state.reminders.filter((entry) => entry.id !== id),
       }))
       return
