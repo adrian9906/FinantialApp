@@ -266,23 +266,33 @@ export default function Savings() {
     }
 
     const movementDate = withdrawForm.date || new Date().toISOString().slice(0, 10)
+    const savingWithdrawal = {
+      amount: -amount,
+      type: 'saving' as const,
+      description: buildSavingWithdrawalDescription(withdrawForm.target, withdrawForm.itemName, {
+        sourceGoalId: selectedSourceGoal?.id,
+        sourceGoalName: selectedSourceGoal?.name,
+      }),
+      date: movementDate,
+    }
     setIsWithdrawing(true)
 
     try {
-      await addTransaction({
-        amount: -amount,
-        type: 'saving',
-        description: buildSavingWithdrawalDescription(withdrawForm.target, withdrawForm.itemName, {
-          sourceGoalId: selectedSourceGoal?.id,
-          sourceGoalName: selectedSourceGoal?.name,
-        }),
-        date: movementDate,
-      })
-
       if (selectedSourceGoal) {
         await updateSavingsGoal(selectedSourceGoal.id, {
           currentAmount: Math.max(0, selectedSourceGoal.currentAmount - amount),
         })
+
+        try {
+          await addTransaction(savingWithdrawal)
+        } catch (error) {
+          await updateSavingsGoal(selectedSourceGoal.id, {
+            currentAmount: selectedSourceGoal.currentAmount,
+          })
+          throw error
+        }
+      } else {
+        await addTransaction(savingWithdrawal)
       }
 
       if (withdrawForm.target !== 'purpose') {

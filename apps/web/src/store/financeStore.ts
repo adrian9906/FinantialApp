@@ -774,9 +774,12 @@ export const useFinanceStore = create<FinanceStore>()((set, get) => ({
       return
     }
 
+    const current = get().savingsGoals.find((entry) => entry.id === id)
+    if (!current) return
+
     const updated = await requestJson<SavingsGoal>(`/savings-goals/${id}`, {
       method: 'PUT',
-      body: JSON.stringify(data),
+      body: JSON.stringify({ ...current, ...data }),
     })
     set((state) => ({
       savingsGoals: state.savingsGoals.map((entry) => (entry.id === id ? updated : entry)),
