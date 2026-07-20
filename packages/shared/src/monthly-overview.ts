@@ -1,7 +1,12 @@
 import type { AllocationFormula } from './preferences'
 import type { Debt, Salary, Transaction } from './types'
 import { getEffectiveExpenseTotal } from './expense-utils'
-import { getExpenseTransferTotal, getWantTransferTotal } from './saving-utils'
+import {
+  getExpenseTransferTotal,
+  getExpenseWithdrawalTotal,
+  getWantTransferTotal,
+  getWantWithdrawalTotal,
+} from './saving-utils'
 import { getEffectiveWantTotal } from './want-utils'
 
 export function getMonthlyOverview(
@@ -15,6 +20,8 @@ export function getMonthlyOverview(
   const totalWants = getEffectiveWantTotal(transactions)
   const transferredFromExpenses = getExpenseTransferTotal(transactions)
   const transferredFromWants = getWantTransferTotal(transactions)
+  const transferredToExpenses = getExpenseWithdrawalTotal(transactions)
+  const transferredToWants = getWantWithdrawalTotal(transactions)
   const totalSavings = transactions
     .filter((transaction) => transaction.type === 'saving')
     .reduce((sum, transaction) => sum + transaction.amount, 0)
@@ -23,10 +30,10 @@ export function getMonthlyOverview(
 
   const baseBudgetExpenses = totalSalary * (formula.expenses / 100)
   const baseBudgetSavings = totalSalary * (formula.savings / 100)
-  const budgetExpenses = Math.max(0, baseBudgetExpenses - transferredFromExpenses)
+  const budgetExpenses = Math.max(0, baseBudgetExpenses - transferredFromExpenses + transferredToExpenses)
   const baseWants = totalSalary * (formula.wants / 100)
   const budgetSavings = baseBudgetSavings + transferredFromExpenses + transferredFromWants
-  const budgetWantsBeforeRollover = Math.max(0, baseWants - transferredFromWants)
+  const budgetWantsBeforeRollover = Math.max(0, baseWants - transferredFromWants + transferredToWants)
   const savingsRollover = formula.rolloverSavings ? Math.max(0, budgetSavings - totalSavings) : 0
   const budgetWants = budgetWantsBeforeRollover + savingsRollover
 
@@ -39,6 +46,8 @@ export function getMonthlyOverview(
     totalDebtPaid,
     transferredFromExpenses,
     transferredFromWants,
+    transferredToExpenses,
+    transferredToWants,
     budgetExpenses,
     budgetWants,
     budgetSavings,

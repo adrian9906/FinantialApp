@@ -120,12 +120,12 @@ function serializeWant(entry: {
   }
 }
 
-function serializeSaving(entry: { id: string; cantidad: number; fecha: Date }): Transaction {
+function serializeSaving(entry: { id: string; cantidad: number; descripcion: string | null; fecha: Date }): Transaction {
   return {
     id: entry.id,
     amount: entry.cantidad,
     type: 'saving',
-    description: '',
+    description: entry.descripcion ?? '',
     date: toDateString(entry.fecha),
   }
 }
@@ -451,6 +451,7 @@ async function syncBootstrap(userId: string, body: JsonRecord) {
         data: {
           id: entry.id,
           cantidad: Number(entry.amount ?? 0),
+          descripcion: String(entry.description ?? '') || null,
           fecha: entry.date ? new Date(entry.date) : new Date(),
           usuarioId: userId,
         },
@@ -969,6 +970,7 @@ async function saveSaving(userId: string, body: JsonRecord, id?: string) {
 
   const payload = {
     cantidad: amount,
+    descripcion: String(body.description ?? '').trim() || null,
     fecha: date,
   }
 

@@ -1,8 +1,6 @@
 import { useState } from 'react'
 import { buildSavingWithdrawalDescription, parseSavingDescription } from '@plata/shared'
 import { useFinanceStore } from '@/store/financeStore'
-import { buildExpenseDescription } from '@/lib/expense-utils'
-import { buildWantDescription } from '@/lib/want-utils'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { ExportExcelButton } from '@/components/reports/ExportExcelButton'
@@ -294,17 +292,6 @@ export default function Savings() {
         }
       } else {
         await addTransaction(savingWithdrawal)
-      }
-
-      if (withdrawalTarget !== 'purpose') {
-        await addTransaction({
-          amount,
-          type: withdrawalTarget,
-          description: withdrawalTarget === 'expense'
-            ? buildExpenseDescription('essentials', withdrawForm.itemName, 'checked')
-            : buildWantDescription('outings', withdrawForm.itemName, 'checked'),
-          date: movementDate,
-        })
       }
 
       resetWithdrawForm()

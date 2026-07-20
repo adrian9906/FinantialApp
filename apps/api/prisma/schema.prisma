@@ -43,13 +43,14 @@ model Salario {
 }
 
 model Ahorro {
-  id        String   @id @default(uuid())
-  cantidad  Float
-  fecha     DateTime @default(now())
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-  usuarioId String
-  usuario   Usuario  @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+  id          String   @id @default(uuid())
+  cantidad    Float
+  descripcion String?
+  fecha       DateTime @default(now())
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  usuarioId   String
+  usuario     Usuario  @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
 
   @@map("ahorros")
 }
@@ -81,16 +82,16 @@ model Gusto {
 }
 
 model Deuda {
-  id               String   @id @default(uuid())
+  id               String      @id @default(uuid())
   cantidad         Float
   historial        String
   fechaInicio      DateTime
   fechaTerminacion DateTime
   interes          Float?
-  createdAt        DateTime @default(now())
-  updatedAt        DateTime @updatedAt
+  createdAt        DateTime    @default(now())
+  updatedAt        DateTime    @updatedAt
   usuarioId        String
-  usuario          Usuario  @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+  usuario          Usuario     @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
   pagos            DeudaPago[]
 
   @@map("deudas")
@@ -198,16 +199,16 @@ model Proyeccion {
 }
 
 model MetaAhorro {
-  id             String   @id @default(uuid())
-  nombre         String
-  categoria      String
-  montoObjetivo  Float
-  montoActual    Float
-  aporteMensual  Float
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
-  usuarioId      String
-  usuario        Usuario  @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+  id            String   @id @default(uuid())
+  nombre        String
+  categoria     String
+  montoObjetivo Float
+  montoActual   Float
+  aporteMensual Float
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  usuarioId     String
+  usuario       Usuario  @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
 
   @@map("metas_ahorro")
 }

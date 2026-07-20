@@ -116,3 +116,25 @@ export function getExpenseTransferTotal(transactions: Transaction[]) {
 export function getWantTransferTotal(transactions: Transaction[]) {
   return getTransferTotalBySource(transactions, 'want')
 }
+
+export function getWithdrawalTotalByTarget(
+  transactions: Transaction[],
+  target: 'expense' | 'want' | 'purpose',
+) {
+  return transactions
+    .filter((transaction) => transaction.type === 'saving' && transaction.amount < 0)
+    .reduce((sum, transaction) => {
+      const parsed = parseSavingDescription(transaction.description)
+      return parsed.kind === 'withdrawal' && parsed.target === target
+        ? sum + Math.abs(transaction.amount)
+        : sum
+    }, 0)
+}
+
+export function getExpenseWithdrawalTotal(transactions: Transaction[]) {
+  return getWithdrawalTotalByTarget(transactions, 'expense')
+}
+
+export function getWantWithdrawalTotal(transactions: Transaction[]) {
+  return getWithdrawalTotalByTarget(transactions, 'want')
+}
