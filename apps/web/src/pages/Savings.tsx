@@ -56,9 +56,11 @@ export default function Savings() {
   const [isWithdrawing, setIsWithdrawing] = useState(false)
   const [withdrawForm, setWithdrawForm] = useState({
     amount: '',
-    target: 'expense' as 'expense' | 'want',
+    target: 'purpose' as 'expense' | 'want' | 'purpose',
     itemName: '',
     date: '',
+    sourceGoalId: '',
+    sourceGoalName: '',
   })
 
   function resetForm() {
@@ -70,9 +72,11 @@ export default function Savings() {
   function resetWithdrawForm() {
     setWithdrawForm({
       amount: String(Math.max(0, overview.totalSavings)),
-      target: 'expense',
+      target: 'purpose',
       itemName: '',
       date: '',
+      sourceGoalId: '',
+      sourceGoalName: '',
     })
     setWithdrawError(null)
   }
@@ -116,6 +120,19 @@ export default function Savings() {
     }
     setGoalError(null)
     setGoalOpen(true)
+  }
+
+  function handleOpenWithdraw(goal?: typeof savingsGoals[number]) {
+    setWithdrawForm({
+      amount: String(Math.max(0, goal?.currentAmount ?? overview.totalSavings)),
+      target: 'purpose',
+      itemName: '',
+      date: '',
+      sourceGoalId: goal?.id ?? '',
+      sourceGoalName: goal?.name ?? '',
+    })
+    setWithdrawError(null)
+    setWithdrawOpen(true)
   }
 
   async function handleSave() {
@@ -162,6 +179,12 @@ export default function Savings() {
   const availableSavings = Math.max(0, overview.totalSavings)
   const assignedToGoals = savingsGoals.reduce((sum, goal) => sum + goal.currentAmount, 0)
   const freeSavings = Math.max(0, availableSavings - assignedToGoals)
+  const selectedSourceGoal = withdrawForm.sourceGoalId
+    ? savingsGoals.find((goal) => goal.id === withdrawForm.sourceGoalId) ?? null
+    : null
+  const availableWithdrawAmount = selectedSourceGoal
+    ? Math.max(0, selectedSourceGoal.currentAmount)
+    : availableSavings
 
   async function handleSaveGoal() {
     if (isGoalSaving) return
@@ -229,8 +252,12 @@ export default function Savings() {
       setWithdrawError('El monto debe ser mayor que cero.')
       return
     }
-    if (amount > availableSavings) {
-      setWithdrawError(`Solo puedes sacar hasta $${availableSavings.toLocaleString()} de tus ahorros.`)
+    if (amount > availableWithdrawAmount) {
+      setWithdrawError(
+        selectedSourceGoal
+          ? `Solo puedes sacar hasta $${availableWithdrawAmount.toLocaleString()} del bolsillo ${selectedSourceGoal.name}.`
+          : `Solo puedes sacar hasta $${availableWithdrawAmount.toLocaleString()} de tus ahorros.`,
+      )
       return
     }
     if (!withdrawForm.itemName.trim()) {
@@ -245,18 +272,29 @@ export default function Savings() {
       await addTransaction({
         amount: -amount,
         type: 'saving',
-        description: buildSavingWithdrawalDescription(withdrawForm.target, withdrawForm.itemName),
+        description: buildSavingWithdrawalDescription(withdrawForm.target, withdrawForm.itemName, {
+          sourceGoalId: selectedSourceGoal?.id,
+          sourceGoalName: selectedSourceGoal?.name,
+        }),
         date: movementDate,
       })
 
-      await addTransaction({
-        amount,
-        type: withdrawForm.target,
-        description: withdrawForm.target === 'expense'
-          ? buildExpenseDescription('essentials', withdrawForm.itemName, 'checked')
-          : buildWantDescription('outings', withdrawForm.itemName, 'checked'),
-        date: movementDate,
-      })
+      if (selectedSourceGoal) {
+        await updateSavingsGoal(selectedSourceGoal.id, {
+          currentAmount: Math.max(0, selectedSourceGoal.currentAmount - amount),
+        })
+      }
+
+      if (withdrawForm.target !== 'purpose') {
+        await addTransaction({
+          amount,
+          type: withdrawForm.target,
+          description: withdrawForm.target === 'expense'
+            ? buildExpenseDescription('essentials', withdrawForm.itemName, 'checked')
+            : buildWantDescription('outings', withdrawForm.itemName, 'checked'),
+          date: movementDate,
+        })
+      }
 
       resetWithdrawForm()
       setWithdrawOpen(false)
@@ -293,10 +331,7 @@ export default function Savings() {
           <Button
             variant="secondary"
             disabled={availableSavings <= 0}
-            onClick={() => {
-              resetWithdrawForm()
-              setWithdrawOpen(true)
-            }}
+            onClick={() => handleOpenWithdraw()}
             className="bg-surface-container-high text-on-surface hover:bg-surface-container-higher disabled:opacity-40 disabled:cursor-not-allowed"
           >
             <ArrowUpRight className="size-4" /> Sacar dinero
@@ -398,6 +433,14 @@ export default function Savings() {
                       <p className="mt-2 text-lg font-semibold text-success">${goal.monthlyContribution.toLocaleString()}</p>
                     </div>
                   </div>
+                  <Button
+                    variant="secondary"
+                    disabled={goal.currentAmount <= 0}
+                    onClick={() => handleOpenWithdraw(goal)}
+                    className="w-full bg-surface-container-high text-on-surface hover:bg-surface-container-higher disabled:opacity-40 disabled:cursor-not-allowed"
+                  >
+                    <ArrowUpRight className="size-4" /> Sacar de este bolsillo
+                  </Button>
                 </div>
               </Card>
             )
@@ -435,8 +478,13 @@ export default function Savings() {
                     {(() => {
                       const savingDetails = parseSavingDescription(transaction.description)
                       if (savingDetails.kind === 'withdrawal') {
-                        const baseLabel = savingDetails.target === 'want' ? 'Retirado hacia gustos' : 'Retirado hacia gastos'
-                        return savingDetails.label ? `${baseLabel}: ${savingDetails.label}` : baseLabel
+                        const baseLabel = savingDetails.target === 'want'
+                          ? 'Retirado hacia gustos'
+                          : savingDetails.target === 'purpose'
+                            ? 'Pagado para un proposito'
+                            : 'Retirado hacia gastos'
+                        const detail = savingDetails.label ? `${baseLabel}: ${savingDetails.label}` : baseLabel
+                        return savingDetails.sourceGoalName ? `${detail} desde ${savingDetails.sourceGoalName}` : detail
                       }
                       if (savingDetails.kind !== 'transfer') return 'Ahorro registrado'
                       return savingDetails.source === 'want' ? 'Transferido desde gustos' : 'Transferido desde gastos'
@@ -449,9 +497,14 @@ export default function Savings() {
                 </span>
                 <div className="opacity-100 transition-opacity md:text-right md:opacity-0 md:group-hover:opacity-100">
                   <div className="flex justify-end gap-1">
-                    <Button variant="ghost" size="icon" className="text-muted-gray hover:text-primary" onClick={() => handleOpen(transaction)}>
-                      <Pencil data-icon="inline-start" />
-                    </Button>
+                    {(() => {
+                      const savingDetails = parseSavingDescription(transaction.description)
+                      return savingDetails.kind === 'manual' && transaction.amount >= 0 ? (
+                        <Button variant="ghost" size="icon" className="text-muted-gray hover:text-primary" onClick={() => handleOpen(transaction)}>
+                          <Pencil data-icon="inline-start" />
+                        </Button>
+                      ) : null
+                    })()}
                     <Button variant="ghost" size="icon" className="text-muted-gray hover:text-error" onClick={() => void removeTransaction(transaction.id)}>
                       <Trash2 data-icon="inline-start" />
                     </Button>
@@ -497,7 +550,7 @@ export default function Savings() {
           <DialogHeader>
             <DialogTitle className="text-on-surface">Sacar dinero de ahorros</DialogTitle>
             <DialogDescription>
-              Usa esta opcion cuando necesites mover dinero guardado a un gasto o a un gusto.
+              Usa esta opcion cuando necesites sacar dinero guardado para un gasto, un gusto o un proposito puntual.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
@@ -514,7 +567,10 @@ export default function Savings() {
                   }}
                   className="bg-abyss border-graphite text-on-surface"
                 />
-                <p className="text-xs text-muted-gray">Disponible en ahorro: ${availableSavings.toLocaleString()}</p>
+                <p className="text-xs text-muted-gray">
+                  Disponible: ${availableWithdrawAmount.toLocaleString()}
+                  {selectedSourceGoal ? ` en ${selectedSourceGoal.name}` : ' en ahorro total'}
+                </p>
               </div>
 
               <div className="space-y-2">
@@ -523,13 +579,14 @@ export default function Savings() {
                   value={withdrawForm.target}
                   onValueChange={(value) => {
                     setWithdrawError(null)
-                    setWithdrawForm((current) => ({ ...current, target: value as 'expense' | 'want' }))
+                    setWithdrawForm((current) => ({ ...current, target: value as 'expense' | 'want' | 'purpose' }))
                   }}
                 >
                   <SelectTrigger className="bg-abyss border-graphite text-on-surface">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent className="border-graphite bg-surface">
+                    <SelectItem value="purpose">Proposito</SelectItem>
                     <SelectItem value="expense">Gasto</SelectItem>
                     <SelectItem value="want">Gusto</SelectItem>
                   </SelectContent>
@@ -537,10 +594,26 @@ export default function Savings() {
               </div>
             </div>
 
+            {selectedSourceGoal ? (
+              <Card className="border-graphite bg-abyss p-4 shadow-vault-sm">
+                <p className="text-xs uppercase tracking-[0.18em] text-medium-gray">Bolsillo origen</p>
+                <p className="mt-2 text-lg font-semibold text-on-surface">{selectedSourceGoal.name}</p>
+                <p className="mt-1 text-xs text-muted-gray">
+                  Al guardar, tambien se descontara este monto del bolsillo.
+                </p>
+              </Card>
+            ) : null}
+
             <div className="space-y-2">
               <Label className="text-medium-gray">Concepto</Label>
               <Input
-                placeholder={withdrawForm.target === 'expense' ? 'Emergencia, medicina, reparacion...' : 'Salida, capricho, compra...'}
+                placeholder={
+                  withdrawForm.target === 'expense'
+                    ? 'Emergencia, medicina, reparacion...'
+                    : withdrawForm.target === 'want'
+                      ? 'Salida, capricho, compra...'
+                      : 'Caja reguladora, tramite, pieza, objetivo pagado...'
+                }
                 value={withdrawForm.itemName}
                 onChange={(e) => {
                   setWithdrawError(null)
@@ -557,7 +630,11 @@ export default function Savings() {
                 setWithdrawError(null)
                 setWithdrawForm((current) => ({ ...current, date: value }))
               }}
-              description="La misma fecha se usa para la salida del ahorro y para el gasto o gusto destino."
+              description={
+                withdrawForm.target === 'purpose'
+                  ? 'La fecha se guarda en la salida del ahorro para dejar constancia del pago realizado.'
+                  : 'La misma fecha se usa para la salida del ahorro y para el movimiento destino.'
+              }
             />
             {withdrawError ? <p className="text-sm text-error">{withdrawError}</p> : null}
           </div>

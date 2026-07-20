@@ -13,6 +13,8 @@
     }
   },
   "scripts": {
+    "android:fix-gradle": "node scripts/fix-capacitor-android-gradle.mjs",
+    "postinstall": "node scripts/fix-capacitor-android-gradle.mjs",
     "dev:web": "pnpm --dir apps/web dev",
     "dev:api": "pnpm --dir apps/api dev",
     "dev:mobile": "pnpm --dir apps/mobile start",

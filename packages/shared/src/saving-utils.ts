@@ -11,14 +11,15 @@ export type SavingDescription =
   }
   | {
     kind: 'withdrawal'
-    target: 'expense' | 'want'
+    target: 'expense' | 'want' | 'purpose'
     label?: string
+    sourceGoalId?: string
+    sourceGoalName?: string
   }
 
 const EXPENSE_TRANSFER_PREFIX = 'transfer::expense'
 const WANT_TRANSFER_PREFIX = 'transfer::want'
-const EXPENSE_WITHDRAWAL_PREFIX = 'withdrawal::expense'
-const WANT_WITHDRAWAL_PREFIX = 'withdrawal::want'
+const WITHDRAWAL_PREFIX = 'withdrawal'
 
 export function buildExpenseTransferSavingDescription() {
   return EXPENSE_TRANSFER_PREFIX
@@ -28,10 +29,25 @@ export function buildWantTransferSavingDescription() {
   return WANT_TRANSFER_PREFIX
 }
 
-export function buildSavingWithdrawalDescription(target: 'expense' | 'want', label?: string) {
-  const prefix = target === 'want' ? WANT_WITHDRAWAL_PREFIX : EXPENSE_WITHDRAWAL_PREFIX
-  const trimmedLabel = label?.trim()
-  return trimmedLabel ? `${prefix}::${trimmedLabel}` : prefix
+export function buildSavingWithdrawalDescription(
+  target: 'expense' | 'want' | 'purpose',
+  label?: string,
+  options?: {
+    sourceGoalId?: string
+    sourceGoalName?: string
+  },
+) {
+  const trimmedLabel = label?.trim() ?? ''
+  const sourceGoalId = options?.sourceGoalId?.trim() ?? ''
+  const sourceGoalName = options?.sourceGoalName?.trim() ?? ''
+
+  return [
+    WITHDRAWAL_PREFIX,
+    target,
+    encodeURIComponent(trimmedLabel),
+    encodeURIComponent(sourceGoalId),
+    encodeURIComponent(sourceGoalName),
+  ].join('::')
 }
 
 export function parseSavingDescription(description?: string): SavingDescription {
@@ -53,19 +69,26 @@ export function parseSavingDescription(description?: string): SavingDescription 
     }
   }
 
-  if (description === EXPENSE_WITHDRAWAL_PREFIX || description.startsWith(`${EXPENSE_WITHDRAWAL_PREFIX}::`)) {
-    return {
-      kind: 'withdrawal',
-      target: 'expense',
-      label: description.slice(`${EXPENSE_WITHDRAWAL_PREFIX}::`.length) || undefined,
-    }
-  }
+  if (description.startsWith(`${WITHDRAWAL_PREFIX}::`)) {
+    const [, rawTarget, ...rawRest] = description.split('::')
+    const target = rawTarget === 'want' || rawTarget === 'purpose' ? rawTarget : 'expense'
 
-  if (description === WANT_WITHDRAWAL_PREFIX || description.startsWith(`${WANT_WITHDRAWAL_PREFIX}::`)) {
+    if (rawRest.length >= 3) {
+      const [encodedLabel, encodedSourceGoalId, encodedSourceGoalName] = rawRest
+
+      return {
+        kind: 'withdrawal',
+        target,
+        label: decodeURIComponent(encodedLabel || '') || undefined,
+        sourceGoalId: decodeURIComponent(encodedSourceGoalId || '') || undefined,
+        sourceGoalName: decodeURIComponent(encodedSourceGoalName || '') || undefined,
+      }
+    }
+
     return {
       kind: 'withdrawal',
-      target: 'want',
-      label: description.slice(`${WANT_WITHDRAWAL_PREFIX}::`.length) || undefined,
+      target,
+      label: rawRest.join('::') || undefined,
     }
   }
 

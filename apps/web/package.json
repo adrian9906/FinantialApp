@@ -4,6 +4,9 @@
   "version": "1.0.0",
   "type": "module",
   "scripts": {
+    "android:fix-gradle": "node ../../scripts/fix-capacitor-android-gradle.mjs",
+    "android:sync": "cap sync android && node ../../scripts/fix-capacitor-android-gradle.mjs",
+    "android:run": "npm run android:sync && cap run android --no-sync",
     "dev": "vite",
     "build": "tsc -b && vite build",
     "lint": "eslint .",
