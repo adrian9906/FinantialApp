@@ -266,10 +266,11 @@ export default function Savings() {
     }
 
     const movementDate = withdrawForm.date || new Date().toISOString().slice(0, 10)
+    const withdrawalTarget = selectedSourceGoal ? 'purpose' : withdrawForm.target
     const savingWithdrawal = {
       amount: -amount,
       type: 'saving' as const,
-      description: buildSavingWithdrawalDescription(withdrawForm.target, withdrawForm.itemName, {
+      description: buildSavingWithdrawalDescription(withdrawalTarget, withdrawForm.itemName, {
         sourceGoalId: selectedSourceGoal?.id,
         sourceGoalName: selectedSourceGoal?.name,
       }),
@@ -295,11 +296,11 @@ export default function Savings() {
         await addTransaction(savingWithdrawal)
       }
 
-      if (withdrawForm.target !== 'purpose') {
+      if (withdrawalTarget !== 'purpose') {
         await addTransaction({
           amount,
-          type: withdrawForm.target,
-          description: withdrawForm.target === 'expense'
+          type: withdrawalTarget,
+          description: withdrawalTarget === 'expense'
             ? buildExpenseDescription('essentials', withdrawForm.itemName, 'checked')
             : buildWantDescription('outings', withdrawForm.itemName, 'checked'),
           date: movementDate,
@@ -560,11 +561,13 @@ export default function Savings() {
           <DialogHeader>
             <DialogTitle className="text-on-surface">Sacar dinero de ahorros</DialogTitle>
             <DialogDescription>
-              Usa esta opcion cuando necesites sacar dinero guardado para un gasto, un gusto o un proposito puntual.
+              {selectedSourceGoal
+                ? 'Registra para que se uso el dinero. Se restara del bolsillo y del ahorro total, sin pasarlo a otra seccion.'
+                : 'Usa esta opcion cuando necesites sacar dinero guardado para un gasto, un gusto o un proposito puntual.'}
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
-            <div className="grid gap-4 lg:grid-cols-2">
+            <div className={selectedSourceGoal ? 'grid gap-4' : 'grid gap-4 lg:grid-cols-2'}>
               <div className="space-y-2">
                 <Label className="text-medium-gray">Monto</Label>
                 <Input
@@ -583,25 +586,27 @@ export default function Savings() {
                 </p>
               </div>
 
-              <div className="space-y-2">
-                <Label className="text-medium-gray">Pasarlo a</Label>
-                <Select
-                  value={withdrawForm.target}
-                  onValueChange={(value) => {
-                    setWithdrawError(null)
-                    setWithdrawForm((current) => ({ ...current, target: value as 'expense' | 'want' | 'purpose' }))
-                  }}
-                >
-                  <SelectTrigger className="bg-abyss border-graphite text-on-surface">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent className="border-graphite bg-surface">
-                    <SelectItem value="purpose">Proposito</SelectItem>
-                    <SelectItem value="expense">Gasto</SelectItem>
-                    <SelectItem value="want">Gusto</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
+              {!selectedSourceGoal ? (
+                <div className="space-y-2">
+                  <Label className="text-medium-gray">Pasarlo a</Label>
+                  <Select
+                    value={withdrawForm.target}
+                    onValueChange={(value) => {
+                      setWithdrawError(null)
+                      setWithdrawForm((current) => ({ ...current, target: value as 'expense' | 'want' | 'purpose' }))
+                    }}
+                  >
+                    <SelectTrigger className="bg-abyss border-graphite text-on-surface">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent className="border-graphite bg-surface">
+                      <SelectItem value="purpose">Proposito</SelectItem>
+                      <SelectItem value="expense">Gasto</SelectItem>
+                      <SelectItem value="want">Gusto</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              ) : null}
             </div>
 
             {selectedSourceGoal ? (
@@ -609,7 +614,7 @@ export default function Savings() {
                 <p className="text-xs uppercase tracking-[0.18em] text-medium-gray">Bolsillo origen</p>
                 <p className="mt-2 text-lg font-semibold text-on-surface">{selectedSourceGoal.name}</p>
                 <p className="mt-1 text-xs text-muted-gray">
-                  Al guardar, tambien se descontara este monto del bolsillo.
+                  Este dinero saldra del bolsillo y del ahorro total. No se registrara en otra seccion.
                 </p>
               </Card>
             ) : null}
@@ -641,7 +646,7 @@ export default function Savings() {
                 setWithdrawForm((current) => ({ ...current, date: value }))
               }}
               description={
-                withdrawForm.target === 'purpose'
+                selectedSourceGoal || withdrawForm.target === 'purpose'
                   ? 'La fecha se guarda en la salida del ahorro para dejar constancia del pago realizado.'
                   : 'La misma fecha se usa para la salida del ahorro y para el movimiento destino.'
               }
@@ -662,7 +667,7 @@ export default function Savings() {
             </Button>
             <Button
               loading={isWithdrawing}
-              disabled={isWithdrawing || availableSavings <= 0}
+              disabled={isWithdrawing || availableWithdrawAmount <= 0}
               onClick={() => void handleWithdraw()}
               className="bg-primary-container text-white hover:bg-primary-container/80 shadow-vault"
             >
