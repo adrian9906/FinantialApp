@@ -8,14 +8,16 @@ import {
   getWantWithdrawalTotal,
 } from './saving-utils'
 import { getEffectiveWantTotal } from './want-utils'
+import { getMonthKey, getSalaryForMonth } from './salary-utils'
 
 export function getMonthlyOverview(
   salaries: Salary[],
   transactions: Transaction[],
   debts: Debt[],
   formula: AllocationFormula,
+  month = getMonthKey(),
 ) {
-  const grossSalary = salaries.reduce((sum, salary) => sum + salary.amount, 0)
+  const grossSalary = getSalaryForMonth(salaries, month)?.amount ?? 0
   const totalExpenses = getEffectiveExpenseTotal(transactions)
   const totalWants = getEffectiveWantTotal(transactions)
   const transferredFromExpenses = getExpenseTransferTotal(transactions)
@@ -25,7 +27,12 @@ export function getMonthlyOverview(
   const totalSavings = transactions
     .filter((transaction) => transaction.type === 'saving')
     .reduce((sum, transaction) => sum + transaction.amount, 0)
-  const totalDebtPaid = debts.reduce((sum, debt) => sum + debt.paidAmount, 0)
+  const totalDebtPaid = debts.reduce(
+    (sum, debt) => sum + (debt.payments ?? [])
+      .filter((payment) => payment.date.slice(0, 7) === month)
+      .reduce((paymentSum, payment) => paymentSum + payment.amount, 0),
+    0,
+  )
   const totalSalary = Math.max(0, grossSalary - totalDebtPaid)
 
   const baseBudgetExpenses = totalSalary * (formula.expenses / 100)

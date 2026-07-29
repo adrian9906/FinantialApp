@@ -22,7 +22,6 @@ interface DebtFormState {
   startDate: string
   endDate: string
   interest: string
-  initialPayment: string
 }
 
 export default function Debts() {
@@ -51,7 +50,6 @@ export default function Debts() {
     startDate: '',
     endDate: '',
     interest: '',
-    initialPayment: '',
   })
 
   const paymentDebt = useMemo(
@@ -74,7 +72,6 @@ export default function Debts() {
       startDate: '',
       endDate: '',
       interest: '',
-      initialPayment: '',
     })
     setEditId(null)
     setFormError(null)
@@ -95,7 +92,6 @@ export default function Debts() {
         startDate: entry.startDate,
         endDate: entry.endDate,
         interest: entry.interest === undefined ? '' : String(entry.interest),
-        initialPayment: '',
       })
     } else {
       resetForm()
@@ -106,7 +102,7 @@ export default function Debts() {
 
   function handleOpenPayment(entry: typeof debts[number]) {
     setPaymentDebtId(entry.id)
-    setPaymentAmount(String(entry.remainingAmount))
+    setPaymentAmount('')
     setPaymentError(null)
     setPaymentOpen(true)
   }
@@ -115,15 +111,8 @@ export default function Debts() {
     if (!form.amount || !form.history || !form.startDate || !form.endDate || isSaving) return
 
     const amount = Number(form.amount)
-    const initialPayment = Math.max(0, Number(form.initialPayment || 0))
-
     if (!Number.isFinite(amount) || amount <= 0) {
       setFormError('El monto total de la deuda debe ser mayor que cero.')
-      return
-    }
-
-    if (initialPayment > amount) {
-      setFormError('El pago inicial no puede ser mayor que el total de la deuda.')
       return
     }
 
@@ -141,10 +130,7 @@ export default function Debts() {
       if (editId) {
         await updateDebt(editId, payload)
       } else {
-        await addDebt({
-          ...payload,
-          initialPayment,
-        })
+        await addDebt(payload)
       }
 
       resetForm()
@@ -213,7 +199,7 @@ export default function Debts() {
         <div>
           <h1 className="text-[28px] font-semibold tracking-tight text-on-surface md:text-[36px]">Deudas</h1>
           <p className="max-w-3xl text-sm text-muted-gray">
-            Cada abono que registres aqui se descuenta automáticamente del salario disponible. Si marcas una deuda como saldada, se paga el restante completo.
+            Registrar una deuda no modifica tu salario. Solo los abonos que confirmes se descuentan del salario del mes en que los realizas.
           </p>
         </div>
         <div className="flex flex-col gap-3 sm:flex-row">
@@ -261,7 +247,7 @@ export default function Debts() {
           </div>
           <div className="text-[28px] font-semibold text-on-surface">${asMoney(overview.totalSalary)}</div>
           <p className="mt-1 text-xs text-muted-gray">
-            Bruto ${asMoney(overview.grossSalary)} menos ${asMoney(overview.totalDebtPaid)} abonados
+            Bruto ${asMoney(overview.grossSalary)} menos ${asMoney(overview.totalDebtPaid)} abonados este mes
           </p>
         </div>
       </div>
@@ -443,7 +429,7 @@ export default function Debts() {
                         <div className="h-full rounded-full bg-primary transition-all duration-700" style={{ width: `${asPercent(debt.progress)}%` }} />
                       </div>
                       <p className="mt-2 text-xs text-muted-gray">
-                        Todo lo que abonas aquí se descuenta automáticamente del salario disponible de la app.
+                        Solo los abonos que confirmes se descuentan del salario disponible del mes actual.
                       </p>
                     </div>
                   </div>
@@ -473,7 +459,7 @@ export default function Debts() {
           <DialogHeader>
             <DialogTitle className="text-on-surface">{editId ? 'Editar deuda' : 'Agregar deuda'}</DialogTitle>
             <DialogDescription>
-              Define el total de la deuda y, si ya vas a pagar algo ahora, registra ese abono inicial para descontarlo del salario disponible.
+              Define los datos de la deuda. Guardarla no descontará dinero de tu salario.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
@@ -497,22 +483,6 @@ export default function Debts() {
                 />
               </div>
             </div>
-
-            {!editId ? (
-              <div className="space-y-2">
-                <Label className="text-medium-gray">Pago inicial de este momento (opcional)</Label>
-                <Input
-                  type="number"
-                  value={form.initialPayment}
-                  onChange={(e) => { setFormError(null); setForm({ ...form, initialPayment: e.target.value }) }}
-                  placeholder="100"
-                  className="bg-abyss border-graphite text-on-surface"
-                />
-                <p className="text-xs text-muted-gray">
-                  Si aquí pones 100, esa deuda nace con $100 abonados y se descuentan automáticamente del salario disponible.
-                </p>
-              </div>
-            ) : null}
 
             <div className="space-y-2">
               <Label className="text-medium-gray">Historial</Label>

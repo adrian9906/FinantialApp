@@ -17,6 +17,7 @@ import { ChevronLeft, ChevronRight, Plus, Pencil, Trash2, Wallet, Receipt } from
 import { exportSalariesReport } from '@/lib/reportExports'
 import { useMonthlyOverview } from '@/lib/useMonthlyOverview'
 import { formatFormulaLabel, usePreferencesStore } from '@/store/preferencesStore'
+import { getMonthKey, getSalaryForMonth, normalizeSalaryHistory } from '@plata/shared'
 
 const MONTH_LABELS = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic']
 
@@ -49,9 +50,10 @@ export default function Salary() {
   const [isSaving, setIsSaving] = useState(false)
   const [isExporting, setIsExporting] = useState(false)
 
-  const latestSalary = salaries.length > 0
-    ? salaries.reduce((max, salary) => new Date(salary.month) > new Date(max.month) ? salary : max)
-    : null
+  const currentMonth = getMonthKey()
+  const salaryHistory = normalizeSalaryHistory(salaries)
+  const currentSalary = salaryHistory.find((salary) => salary.month === currentMonth) ?? null
+  const activeSalary = getSalaryForMonth(salaryHistory, currentMonth)
 
   function resetForm() {
     setAmount('')
@@ -68,7 +70,20 @@ export default function Salary() {
       setCalendarYear(monthValueToDate(entry.month).getFullYear())
     } else {
       resetForm()
+      setMonth(currentMonth)
     }
+    setOpen(true)
+  }
+
+  function handleOpenCurrentSalary() {
+    if (currentSalary) {
+      handleOpen(currentSalary)
+      return
+    }
+
+    resetForm()
+    setAmount(activeSalary ? String(activeSalary.amount) : '')
+    setMonth(currentMonth)
     setOpen(true)
   }
 
@@ -83,8 +98,12 @@ export default function Salary() {
     setIsSaving(true)
 
     try {
+      const salaryForSelectedMonth = salaries.find((entry) => entry.month === payload.month)
+
       if (editId) {
         await updateSalary(editId, payload)
+      } else if (salaryForSelectedMonth) {
+        await updateSalary(salaryForSelectedMonth.id, payload)
       } else {
         await addSalary(payload)
       }
@@ -126,24 +145,24 @@ export default function Salary() {
               <Wallet className="size-8 text-primary" />
               Ingreso Mensual
             </h3>
-            <Button variant="ghost" size="sm" onClick={() => handleOpen()} className="text-primary-container hover:text-white">
-              <Plus className="size-4" />
-              {salaries.length > 0 ? 'Actualizar' : 'Agregar'}
+            <Button variant="ghost" size="sm" onClick={handleOpenCurrentSalary} className="text-primary-container hover:text-white">
+              {activeSalary ? <Pencil className="size-4" /> : <Plus className="size-4" />}
+              {activeSalary ? 'Actualizar' : 'Agregar'}
             </Button>
           </div>
 
-          {latestSalary ? (
+          {activeSalary ? (
             <>
               <div className="flex flex-col gap-1">
-                <label className="text-xs text-medium-gray uppercase tracking-widest">Salario Neto</label>
+                <label htmlFor="active-salary" className="text-xs text-medium-gray uppercase tracking-widest">Salario Neto</label>
                 <div className="relative flex items-center">
                   <span className="absolute left-3 text-muted-gray text-lg">$</span>
-                  <Input className="bg-abyss border-graphite pl-8 text-lg font-medium text-on-surface" type="text" value={overview.totalSalary.toLocaleString()} readOnly />
+                  <Input id="active-salary" className="bg-abyss border-graphite pl-8 text-lg font-medium text-on-surface" type="text" value={overview.totalSalary.toLocaleString()} readOnly />
                 </div>
-                <p className="text-xs text-muted-gray mt-1">{latestSalary.month}</p>
+                <p className="text-xs text-muted-gray mt-1">{activeSalary.month}</p>
                 {overview.totalDebtPaid > 0 && (
                   <p className="text-xs text-muted-gray">
-                    Salario registrado: ${latestSalary.amount.toLocaleString()} menos ${overview.totalDebtPaid.toLocaleString()} en deudas activas del ciclo.
+                    Salario registrado: ${activeSalary.amount.toLocaleString()} menos ${overview.totalDebtPaid.toLocaleString()} en abonos realizados este mes.
                   </p>
                 )}
               </div>
@@ -190,13 +209,13 @@ export default function Salary() {
               Historial de Salarios
             </h3>
           </div>
-          {salaries.length === 0 ? (
+          {salaryHistory.length === 0 ? (
             <div className="flex flex-col items-center py-10 text-muted-gray text-sm">
               <p>Sin registros</p>
             </div>
           ) : (
             <div className="flex flex-col gap-2 overflow-y-auto max-h-[350px] pr-1">
-              {salaries.map((entry) => (
+              {salaryHistory.map((entry) => (
                 <div key={entry.id} className="flex items-center justify-between p-3 bg-abyss rounded-lg border border-graphite group hover:border-outline-variant transition-colors">
                   <div className="flex items-center gap-3">
                     <div className="size-10 rounded-lg bg-surface-container flex items-center justify-center text-muted-gray shadow-vault-sm">
@@ -295,6 +314,7 @@ export default function Salary() {
                       className={isSelected
                         ? 'border-primary-container bg-primary-container text-white hover:bg-primary-container/80'
                         : 'border-graphite bg-surface text-muted-gray hover:bg-surface-container hover:text-on-surface'}
+                      disabled={editId !== null}
                       onClick={() => setMonth(value)}
                     >
                       {label}

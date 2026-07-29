@@ -12,7 +12,13 @@ import type {
   Transaction,
   WishlistItem,
 } from '@plata/shared'
-import { createEmptyBootstrapPayload, normalizeBootstrapPayload } from '@plata/shared'
+import {
+  carrySalaryForwardToMonth,
+  createEmptyBootstrapPayload,
+  getMonthKey,
+  normalizeBootstrapPayload,
+  normalizeSalaryHistory,
+} from '@plata/shared'
 
 import { parseExpenseDescription } from '@/lib/expense-utils'
 import { isNetworkRequestError, requestJson } from '@/lib/api'
@@ -101,10 +107,6 @@ function normalizeBootstrapSnapshot(payload?: Partial<BootstrapPayload> | null):
     ...snapshot,
     debts: snapshot.debts.map(normalizeDebt),
   }
-}
-
-function getMonthKey(value = new Date()) {
-  return value.toISOString().slice(0, 7)
 }
 
 function buildMonthlyPlanningHistory(transactions: Transaction[]): MonthlyPlanningHistory | null {
@@ -278,8 +280,16 @@ export const useFinanceStore = create<FinanceStore>()((set, get) => ({
     if (get().hasLoaded && get().loadedKey === activeKey) return
 
     if (activeKey === 'guest') {
+      const snapshot = normalizeBootstrapSnapshot(getGuestSnapshot())
+      const salaries = carrySalaryForwardToMonth(
+        snapshot.salaries,
+        getMonthKey(),
+        () => makeId('salary'),
+      )
+      const nextSnapshot = { ...snapshot, salaries }
+      persistGuestSnapshot(nextSnapshot)
       set({
-        ...normalizeBootstrapSnapshot(getGuestSnapshot()),
+        ...nextSnapshot,
         hasLoaded: true,
         loadedKey: activeKey,
       })
@@ -301,8 +311,16 @@ export const useFinanceStore = create<FinanceStore>()((set, get) => ({
     const cachedSnapshot = normalizeBootstrapSnapshot(readCachedBootstrap(userId))
 
     if (!isOnline()) {
+      const salaries = carrySalaryForwardToMonth(
+        cachedSnapshot.salaries,
+        getMonthKey(),
+        () => makeId('salary'),
+      )
+      const nextSnapshot = { ...cachedSnapshot, salaries }
+      persistCachedBootstrap(userId, nextSnapshot)
+      markPendingSync(userId, salaries.length !== cachedSnapshot.salaries.length || hasPendingSync(userId))
       set({
-        ...cachedSnapshot,
+        ...nextSnapshot,
         hasLoaded: true,
         loadedKey: activeKey,
       })
@@ -368,7 +386,13 @@ export const useFinanceStore = create<FinanceStore>()((set, get) => ({
   addSalary: async (salary) => {
     if (isLocalMutationMode()) {
       updateLocalState(set, (state) => ({
-        salaries: [{ ...salary, id: makeId('salary') }, ...state.salaries],
+        salaries: normalizeSalaryHistory(
+          state.salaries.some((entry) => entry.month === salary.month)
+            ? state.salaries.map((entry) => (
+                entry.month === salary.month ? { ...entry, amount: salary.amount } : entry
+              ))
+            : [{ ...salary, id: makeId('salary') }, ...state.salaries],
+        ),
       }))
       return
     }
@@ -377,12 +401,19 @@ export const useFinanceStore = create<FinanceStore>()((set, get) => ({
       method: 'POST',
       body: JSON.stringify(salary),
     })
-    set((state) => ({ salaries: [created, ...state.salaries] }))
+    set((state) => ({
+      salaries: normalizeSalaryHistory([
+        created,
+        ...state.salaries.filter((entry) => entry.month !== created.month),
+      ]),
+    }))
   },
   updateSalary: async (id, data) => {
     if (isLocalMutationMode()) {
       updateLocalState(set, (state) => ({
-        salaries: state.salaries.map((entry) => (entry.id === id ? { ...entry, ...data } : entry)),
+        salaries: normalizeSalaryHistory(
+          state.salaries.map((entry) => (entry.id === id ? { ...entry, ...data } : entry)),
+        ),
       }))
       return
     }
@@ -392,7 +423,9 @@ export const useFinanceStore = create<FinanceStore>()((set, get) => ({
       body: JSON.stringify(data),
     })
     set((state) => ({
-      salaries: state.salaries.map((entry) => (entry.id === id ? updated : entry)),
+      salaries: normalizeSalaryHistory(
+        state.salaries.map((entry) => (entry.id === id ? updated : entry)),
+      ),
     }))
   },
   removeSalary: async (id) => {

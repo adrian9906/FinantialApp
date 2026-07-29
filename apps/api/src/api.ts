@@ -306,9 +306,61 @@ async function requireUser(req: IncomingMessage, res: ServerResponse): Promise<A
 
 async function loadBootstrap(userId: string) {
   const prisma = await getPrisma()
+  const currentMonth = toMonthString(new Date())
+  const currentMonthDate = toMonthDate(currentMonth)
+  const latestSalary = await prisma.salario.findFirst({
+    where: {
+      usuarioId: userId,
+      fecha: { lte: currentMonthDate },
+    },
+    orderBy: [
+      { fecha: 'desc' },
+      { updatedAt: 'desc' },
+    ],
+  })
+
+  if (latestSalary && toMonthString(latestSalary.fecha) < currentMonth) {
+    const existingSalaryMonths = new Set(
+      (await prisma.salario.findMany({
+        where: {
+          usuarioId: userId,
+          fecha: {
+            gt: latestSalary.fecha,
+            lte: currentMonthDate,
+          },
+        },
+        select: { fecha: true },
+      })).map((salary) => toMonthString(salary.fecha)),
+    )
+    const carriedSalaries: Array<{ salario: number; fecha: Date; usuarioId: string }> = []
+    let month = new Date(latestSalary.fecha)
+    month.setUTCMonth(month.getUTCMonth() + 1)
+
+    while (toMonthString(month) <= currentMonth) {
+      const monthKey = toMonthString(month)
+      if (!existingSalaryMonths.has(monthKey)) {
+        carriedSalaries.push({
+          salario: latestSalary.salario,
+          fecha: toMonthDate(monthKey),
+          usuarioId: userId,
+        })
+      }
+      month.setUTCMonth(month.getUTCMonth() + 1)
+    }
+
+    if (carriedSalaries.length > 0) {
+      await prisma.salario.createMany({ data: carriedSalaries })
+    }
+  }
 
   const [salaries, expenses, wants, savings, debts, wishlist, monthlyPlanningHistory, events, projections, savingsGoals, reminders] = await Promise.all([
-    prisma.salario.findMany({ where: { usuarioId: userId }, orderBy: { fecha: 'desc' } }),
+    prisma.salario.findMany({
+      where: { usuarioId: userId },
+      orderBy: [
+        { fecha: 'desc' },
+        { updatedAt: 'desc' },
+      ],
+    }),
     prisma.gasto.findMany({
       where: { usuarioId: userId },
       include: { items: { orderBy: { createdAt: 'asc' } } },
@@ -1332,14 +1384,27 @@ export async function handleApiRequest(req: IncomingMessage, res: ServerResponse
     if (pathname === '/api/salaries' && method === 'POST') {
       const prisma = await getPrisma()
       const body = await readJsonBody(req)
-      const created = await prisma.salario.create({
-        data: {
-          salario: Number(body.amount ?? 0),
-          fecha: toMonthDate(String(body.month ?? toMonthString(new Date()))),
+      const monthDate = toMonthDate(String(body.month ?? toMonthString(new Date())))
+      const existingSalary = await prisma.salario.findFirst({
+        where: {
           usuarioId: authenticatedUser.id,
+          fecha: monthDate,
         },
+        orderBy: { updatedAt: 'desc' },
       })
-      sendJson(res, 201, serializeSalary(created))
+      const saved = existingSalary
+        ? await prisma.salario.update({
+            where: { id: existingSalary.id },
+            data: { salario: Number(body.amount ?? 0) },
+          })
+        : await prisma.salario.create({
+            data: {
+              salario: Number(body.amount ?? 0),
+              fecha: monthDate,
+              usuarioId: authenticatedUser.id,
+            },
+          })
+      sendJson(res, existingSalary ? 200 : 201, serializeSalary(saved))
       return true
     }
 

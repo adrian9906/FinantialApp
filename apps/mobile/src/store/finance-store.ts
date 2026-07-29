@@ -2,10 +2,13 @@ import { create } from 'zustand'
 import {
   type AppEvent,
   buildPurchaseProjection,
+  carrySalaryForwardToMonth,
   createEmptyBootstrapPayload,
   type Debt,
   getMonthlyOverview,
+  getMonthKey,
   normalizeBootstrapPayload,
+  normalizeSalaryHistory,
   type Projection,
   type Reminder,
   type BootstrapPayload,
@@ -79,10 +82,6 @@ async function readAuthSnapshot() {
 
 async function persistSnapshot(key: string, snapshot: BootstrapPayload) {
   await writeStoredJson(key, snapshot)
-}
-
-function sortSalariesByMonth(items: Salary[]) {
-  return [...items].sort((a, b) => b.month.localeCompare(a.month))
 }
 
 function createLocalId(prefix: string) {
@@ -166,7 +165,16 @@ export const useFinanceStore = create<FinanceStore>()((set, get) => ({
     }
 
     if (activeKey === 'guest') {
-      const snapshot = normalizeBootstrapPayload(await readGuestSnapshot())
+      const storedSnapshot = normalizeBootstrapPayload(await readGuestSnapshot())
+      const snapshot = {
+        ...storedSnapshot,
+        salaries: carrySalaryForwardToMonth(
+          storedSnapshot.salaries,
+          getMonthKey(),
+          () => createLocalId('salary'),
+        ),
+      }
+      await persistSnapshot(GUEST_FINANCE_STORAGE_KEY, snapshot)
       set({
         ...snapshot,
         hasLoaded: true,
@@ -247,7 +255,13 @@ export const useFinanceStore = create<FinanceStore>()((set, get) => ({
       }
       const snapshot = {
         ...state,
-        salaries: sortSalariesByMonth([...state.salaries, created]),
+        salaries: normalizeSalaryHistory(
+          state.salaries.some((salary) => salary.month === payload.month)
+            ? state.salaries.map((salary) => (
+                salary.month === payload.month ? { ...salary, amount: payload.amount } : salary
+              ))
+            : [...state.salaries, created],
+        ),
       }
 
       await persistFinanceSnapshotForActiveKey(activeKey, snapshot)
@@ -267,7 +281,10 @@ export const useFinanceStore = create<FinanceStore>()((set, get) => ({
 
     const snapshot = {
       ...state,
-      salaries: sortSalariesByMonth([...state.salaries, created]),
+      salaries: normalizeSalaryHistory([
+        created,
+        ...state.salaries.filter((salary) => salary.month !== created.month),
+      ]),
     }
 
     await persistFinanceSnapshotForActiveKey(activeKey, snapshot)
@@ -281,7 +298,7 @@ export const useFinanceStore = create<FinanceStore>()((set, get) => ({
     if (activeKey === 'guest') {
       const snapshot = {
         ...state,
-        salaries: sortSalariesByMonth(
+        salaries: normalizeSalaryHistory(
           state.salaries.map((salary) =>
             salary.id === id
               ? {
@@ -311,7 +328,7 @@ export const useFinanceStore = create<FinanceStore>()((set, get) => ({
 
     const snapshot = {
       ...state,
-      salaries: sortSalariesByMonth(
+      salaries: normalizeSalaryHistory(
         state.salaries.map((salary) => (salary.id === id ? updated : salary)),
       ),
     }
