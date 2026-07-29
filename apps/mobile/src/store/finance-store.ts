@@ -370,6 +370,10 @@ export const useFinanceStore = create<FinanceStore>()((set, get) => ({
     set(snapshot)
   },
   addTransaction: async (payload) => {
+    if (payload.type === 'want' && usePreferencesStore.getState().formula.wants === 0) {
+      throw new Error('La sección Gustos está desactivada porque su porcentaje es 0%.')
+    }
+
     const activeKey = getActiveKey()
     const state = get()
 

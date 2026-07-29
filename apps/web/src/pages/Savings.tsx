@@ -13,6 +13,7 @@ import { useMonthlyOverview } from '@/lib/useMonthlyOverview'
 import { Badge } from '@/components/ui/badge'
 import { exportSavingsReport } from '@/lib/reportExports'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { usePreferencesStore } from '@/store/preferencesStore'
 
 const GOAL_CATEGORY_LABELS = {
   emergency: 'Emergencia',
@@ -32,6 +33,7 @@ export default function Savings() {
   const updateSavingsGoal = useFinanceStore((state) => state.updateSavingsGoal)
   const removeSavingsGoal = useFinanceStore((state) => state.removeSavingsGoal)
   const overview = useMonthlyOverview()
+  const wantsEnabled = usePreferencesStore((state) => state.formula.wants > 0)
   const [open, setOpen] = useState(false)
   const [editId, setEditId] = useState<string | null>(null)
   const [form, setForm] = useState({ amount: '', date: '' })
@@ -244,6 +246,10 @@ export default function Savings() {
 
   async function handleWithdraw() {
     if (isWithdrawing) return
+    if (!selectedSourceGoal && withdrawForm.target === 'want' && !wantsEnabled) {
+      setWithdrawError('No puedes enviar dinero a Gustos porque esa sección tiene una asignación de 0%.')
+      return
+    }
 
     const amount = Number(withdrawForm.amount)
     if (!Number.isFinite(amount) || amount <= 0) {
@@ -589,7 +595,7 @@ export default function Savings() {
                     <SelectContent className="border-graphite bg-surface">
                       <SelectItem value="purpose">Proposito</SelectItem>
                       <SelectItem value="expense">Gasto</SelectItem>
-                      <SelectItem value="want">Gusto</SelectItem>
+                      <SelectItem value="want" disabled={!wantsEnabled}>Gusto</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>

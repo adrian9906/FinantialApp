@@ -73,10 +73,12 @@ function buildMonthMatrix(visibleMonth: Date) {
 export default function WantsScreen() {
   const transactions = useFinanceStore((state) => state.transactions)
   const salaries = useFinanceStore((state) => state.salaries)
+  const debts = useFinanceStore((state) => state.debts)
   const addTransaction = useFinanceStore((state) => state.addTransaction)
   const updateTransaction = useFinanceStore((state) => state.updateTransaction)
   const removeTransaction = useFinanceStore((state) => state.removeTransaction)
   const formula = usePreferencesStore((state) => state.formula)
+  const isWantsDisabled = formula.wants === 0
   const appearance = usePreferencesStore((state) => state.appearance)
   const theme = usePreferencesStore((state) => state.theme)
   const palette = resolvePalette(appearance, theme)
@@ -86,7 +88,7 @@ export default function WantsScreen() {
   const [formError, setFormError] = useState<string | null>(null)
   const [calendarMonth, setCalendarMonth] = useState(() => new Date(new Date().getFullYear(), new Date().getMonth(), 1))
 
-  const overview = getMonthlyOverview(salaries, transactions, formula)
+  const overview = getMonthlyOverview(salaries, transactions, debts, formula)
   const wantItems: WantViewItem[] = useMemo(() => transactions.filter((transaction) => transaction.type === 'want').map((transaction) => {
     const parsed = parseWantDescription(transaction.description)
     return { id: transaction.id, amount: transaction.amount, date: transaction.date, itemName: parsed.itemName, category: parsed.category, status: parsed.status }
@@ -126,6 +128,8 @@ export default function WantsScreen() {
   }
 
   function handleOpen(entry?: WantViewItem) {
+    if (isWantsDisabled) return
+
     if (entry) {
       setEditId(entry.id)
       setForm({ amount: String(entry.amount), itemName: entry.itemName, category: entry.category, date: entry.date })
@@ -145,6 +149,10 @@ export default function WantsScreen() {
 
   async function handleSave() {
     if (!form.amount || !form.itemName) return
+    if (isWantsDisabled) {
+      setFormError('La sección Gustos está desactivada porque su porcentaje es 0%.')
+      return
+    }
     if (inlineAmountError) {
       setFormError(inlineAmountError)
       return
@@ -165,6 +173,8 @@ export default function WantsScreen() {
   }
 
   async function toggleChecked(item: WantViewItem) {
+    if (isWantsDisabled) return
+
     const nextStatus = item.status === 'checked' ? 'pending' : 'checked'
     await updateTransaction(item.id, {
       amount: item.amount,
@@ -179,12 +189,23 @@ export default function WantsScreen() {
       title="Gustos"
       subtitle="Tus caprichos y experiencias, organizados por categoria y respetando el presupuesto libre."
       actions={
-        <Button variant="default" className="self-start" onPress={() => handleOpen()}>
+        <Button disabled={isWantsDisabled} variant="default" className="self-start" onPress={() => handleOpen()}>
           <PlusIcon size={16} color={palette.text} />
-          <Text>Agregar gusto</Text>
+          <Text>{isWantsDisabled ? 'Gustos desactivados' : 'Agregar gusto'}</Text>
         </Button>
       }
     >
+      {isWantsDisabled ? (
+        <Card>
+          <CardContent className="pt-6">
+            <Text style={{ color: palette.warning, fontSize: 15, fontWeight: '700' }}>Sección Gustos desactivada</Text>
+            <Text style={{ color: palette.textMuted, fontSize: 13, marginTop: spacing.xs }}>
+              La fórmula asigna 0% a Gustos. El presupuesto es $0 y no se pueden registrar movimientos hasta aumentar el porcentaje.
+            </Text>
+          </CardContent>
+        </Card>
+      ) : null}
+
       <Card>
         <CardContent className="pt-6">
           <View style={{ gap: spacing.md }}>
@@ -227,7 +248,7 @@ export default function WantsScreen() {
               {items.length === 0 ? (
                 <Text style={{ color: palette.textMuted, fontSize: 12 }}>Aun no hay gustos en esta categoria.</Text>
               ) : items.map((item) => (
-                <Pressable key={item.id} onPress={() => void toggleChecked(item)} style={{ borderRadius: radius.md, borderWidth: 1, borderColor: item.status === 'checked' ? meta.color : palette.border, backgroundColor: palette.backgroundAlt, padding: spacing.md }}>
+                <Pressable disabled={isWantsDisabled} key={item.id} onPress={() => void toggleChecked(item)} style={{ borderRadius: radius.md, borderWidth: 1, borderColor: item.status === 'checked' ? meta.color : palette.border, backgroundColor: palette.backgroundAlt, padding: spacing.md, opacity: isWantsDisabled ? 0.65 : 1 }}>
                   <View style={{ flexDirection: 'row', justifyContent: 'space-between', gap: spacing.md }}>
                     <View style={{ flex: 1 }}>
                       <Text style={{ color: item.status === 'checked' ? palette.textMuted : palette.text, fontSize: 15, fontWeight: '700', textDecorationLine: item.status === 'checked' ? 'line-through' : 'none' }}>{item.itemName}</Text>
@@ -236,7 +257,7 @@ export default function WantsScreen() {
                     <Text style={{ color: item.status === 'checked' ? palette.textMuted : meta.color, fontSize: 14, fontWeight: '700' }}>{formatMoney(item.amount)}</Text>
                   </View>
                   <View style={{ flexDirection: 'row', justifyContent: 'flex-end', gap: spacing.sm, marginTop: spacing.sm }}>
-                    <Pressable onPress={() => handleOpen(item)}><PencilIcon size={18} color={palette.primary} /></Pressable>
+                    <Pressable disabled={isWantsDisabled} onPress={() => handleOpen(item)}><PencilIcon size={18} color={isWantsDisabled ? palette.textMuted : palette.primary} /></Pressable>
                     <Pressable onPress={() => void removeTransaction(item.id)}><Trash2Icon size={18} color={palette.danger} /></Pressable>
                   </View>
                 </Pressable>
@@ -259,7 +280,7 @@ export default function WantsScreen() {
         footer={
           <View style={{ flexDirection: 'row', gap: spacing.sm }}>
             <Button variant="ghost" className="flex-1" onPress={resetForm}><Text>Cancelar</Text></Button>
-            <Button className="flex-1" onPress={() => void handleSave()} disabled={Boolean(inlineAmountError) || !form.itemName.trim()}><Text>Guardar</Text></Button>
+            <Button className="flex-1" onPress={() => void handleSave()} disabled={isWantsDisabled || Boolean(inlineAmountError) || !form.itemName.trim()}><Text>Guardar</Text></Button>
           </View>
         }
       >

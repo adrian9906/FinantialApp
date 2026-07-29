@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { buildWantTransferSavingDescription } from '@plata/shared'
-import { Clapperboard, Gamepad2, Heart, Pencil, Plus, ShoppingBag, Sparkles, Ticket, Trash2, type LucideIcon } from 'lucide-react'
+import { Clapperboard, Gamepad2, Heart, LockKeyhole, Pencil, Plus, ShoppingBag, Sparkles, Ticket, Trash2, type LucideIcon } from 'lucide-react'
 import { useFinanceStore } from '@/store/financeStore'
 import { buildWantDescription, getPlannedWantTotal, parseWantDescription, type WantCategory } from '@/lib/want-utils'
 import { useMonthlyOverview } from '@/lib/useMonthlyOverview'
@@ -23,6 +23,7 @@ import { Label } from '@/components/ui/label'
 import { exportWantsReport } from '@/lib/reportExports'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { usePreferencesStore } from '@/store/preferencesStore'
 
 interface WantFormState {
   amount: string
@@ -165,6 +166,8 @@ export default function Wants() {
   const updateTransaction = useFinanceStore((state) => state.updateTransaction)
   const removeTransaction = useFinanceStore((state) => state.removeTransaction)
   const overview = useMonthlyOverview()
+  const formula = usePreferencesStore((state) => state.formula)
+  const isWantsDisabled = formula.wants === 0
   const [open, setOpen] = useState(false)
   const [editId, setEditId] = useState<string | null>(null)
   const [sparkBursts, setSparkBursts] = useState<Record<string, number>>({})
@@ -182,6 +185,15 @@ export default function Wants() {
     date: '',
   })
 
+  useEffect(() => {
+    if (!isWantsDisabled) return
+    setOpen(false)
+    setTransferOpen(false)
+    setEditId(null)
+    setFormError(null)
+    setTransferError(null)
+  }, [isWantsDisabled])
+
   function resetForm() {
     setForm({
       amount: '',
@@ -194,6 +206,8 @@ export default function Wants() {
   }
 
   function handleOpen(entry?: (typeof transactions)[number]) {
+    if (isWantsDisabled) return
+
     if (entry) {
       const parsed = parseWantDescription(entry.description)
       setEditId(entry.id)
@@ -265,6 +279,10 @@ export default function Wants() {
 
   async function handleSave() {
     if (!form.amount || !form.itemName || isSaving) return
+    if (isWantsDisabled) {
+      setFormError('La sección Gustos está desactivada porque su porcentaje es 0%.')
+      return
+    }
 
     const nextAmount = Number(form.amount)
     if (!Number.isFinite(nextAmount) || nextAmount <= 0) {
@@ -310,6 +328,8 @@ export default function Wants() {
   }
 
   async function toggleChecked(item: WantViewItem) {
+    if (isWantsDisabled) return
+
     const nextStatus = item.status === 'checked' ? 'pending' : 'checked'
 
     if (nextStatus === 'checked') {
@@ -329,6 +349,7 @@ export default function Wants() {
 
   async function handleTransferRemainingToSavings() {
     if (isTransferring) return
+    if (isWantsDisabled) return
 
     const nextAmount = Number(transferAmount)
     if (!Number.isFinite(nextAmount) || nextAmount <= 0) {
@@ -377,20 +398,43 @@ export default function Wants() {
         </div>
         <div className="flex flex-col gap-3 sm:flex-row lg:w-auto">
           <ExportExcelButton loading={isExporting} onClick={handleExport} className="w-full sm:w-auto bg-surface-container-high text-on-surface hover:bg-surface-container-higher" />
-          <Button onClick={() => handleOpen()} className="w-full bg-primary-container text-white shadow-vault hover:bg-primary-container/80 sm:w-auto">
-            <Plus className="size-4" /> Agregar gusto
+          <Button
+            disabled={isWantsDisabled}
+            onClick={() => handleOpen()}
+            className="w-full bg-primary-container text-white shadow-vault hover:bg-primary-container/80 disabled:cursor-not-allowed disabled:opacity-40 sm:w-auto"
+          >
+            {isWantsDisabled ? <LockKeyhole className="size-4" /> : <Plus className="size-4" />}
+            {isWantsDisabled ? 'Gustos desactivados' : 'Agregar gusto'}
           </Button>
         </div>
       </header>
+
+      {isWantsDisabled ? (
+        <Card className="border-warning/30 bg-warning/10 p-4 shadow-vault-sm">
+          <div className="flex items-start gap-3">
+            <LockKeyhole className="mt-0.5 size-5 shrink-0 text-warning" />
+            <div>
+              <p className="text-sm font-semibold text-on-surface">Sección Gustos desactivada</p>
+              <p className="mt-1 text-sm text-muted-gray">
+                La fórmula asigna 0% a Gustos. El presupuesto se mantiene en $0 y no se pueden agregar, editar ni marcar gustos hasta asignarle un porcentaje mayor que cero.
+              </p>
+            </div>
+          </div>
+        </Card>
+      ) : null}
 
       <div className="relative overflow-hidden rounded-xl bg-surface p-4 shadow-vault sm:p-6">
         <div className="absolute right-0 top-0 h-40 w-40 rounded-bl-full bg-secondary/10 blur-2xl" />
         <div className="relative z-10 grid gap-4 lg:grid-cols-[1.4fr_0.6fr]">
           <div>
             <div className="mb-2 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-              <p className="text-xs uppercase tracking-wider text-muted-gray">Presupuesto mensual (25%)</p>
-              <Badge variant="secondary" className={`w-fit ${remaining >= 0 ? 'bg-success/10 text-success' : 'bg-error/10 text-error'}`}>
-                {remaining >= 0 ? `$${remaining.toLocaleString()} disponible` : `$${Math.abs(remaining).toLocaleString()} excedido`}
+              <p className="text-xs uppercase tracking-wider text-muted-gray">Presupuesto mensual ({formula.wants}%)</p>
+              <Badge variant="secondary" className={`w-fit ${isWantsDisabled ? 'bg-warning/10 text-warning' : remaining >= 0 ? 'bg-success/10 text-success' : 'bg-error/10 text-error'}`}>
+                {isWantsDisabled
+                  ? 'Sección desactivada'
+                  : remaining >= 0
+                    ? `$${remaining.toLocaleString()} disponible`
+                    : `$${Math.abs(remaining).toLocaleString()} excedido`}
               </Badge>
             </div>
             <h2 className="mb-3 break-words text-[28px] font-semibold leading-tight text-on-surface sm:text-[30px]">
@@ -402,7 +446,7 @@ export default function Wants() {
             <div className="mt-4 flex flex-col items-start gap-3 sm:flex-row sm:flex-wrap sm:items-center">
               <Button
                 variant="secondary"
-                disabled={remaining <= 0}
+                disabled={isWantsDisabled || remaining <= 0}
                 onClick={() => {
                   setTransferAmount(String(Math.max(0, remaining)))
                   setTransferError(null)
@@ -438,7 +482,7 @@ export default function Wants() {
           <div className="flex flex-col items-center gap-3 py-16 text-sm text-muted-gray">
             <Heart className="size-8" />
             <p>No hay gustos registrados</p>
-            <Button variant="secondary" onClick={() => handleOpen()} className="bg-surface-container-high text-on-surface hover:bg-surface-container-higher">
+            <Button disabled={isWantsDisabled} variant="secondary" onClick={() => handleOpen()} className="bg-surface-container-high text-on-surface hover:bg-surface-container-higher disabled:cursor-not-allowed disabled:opacity-40">
               Crear tu primera lista
             </Button>
           </div>
@@ -503,6 +547,7 @@ export default function Wants() {
                                 {sparkBursts[item.id] && isChecked ? <SparkBurst key={`${item.id}-${sparkBursts[item.id]}`} color={meta.stroke} /> : null}
                                 <Checkbox
                                   checked={isChecked}
+                                  disabled={isWantsDisabled}
                                   onCheckedChange={() => void toggleChecked(item)}
                                   aria-label={`Marcar ${item.itemName}`}
                                   className="gap-0"
@@ -530,7 +575,7 @@ export default function Wants() {
                                     <Button
                                       variant="ghost"
                                       size="icon"
-                                      disabled={isChecked}
+                                      disabled={isWantsDisabled || isChecked}
                                       className="text-muted-gray hover:text-primary disabled:cursor-not-allowed disabled:opacity-30"
                                       onClick={() => handleOpen(transactions.find((entry) => entry.id === item.id))}
                                     >
@@ -644,7 +689,7 @@ export default function Wants() {
             <Button
               loading={isSaving}
               onClick={() => void handleSave()}
-              disabled={isSaving || !form.amount || !form.itemName}
+              disabled={isWantsDisabled || isSaving || !form.amount || !form.itemName}
               className="bg-primary-container text-white shadow-vault hover:brightness-110"
             >
               Guardar

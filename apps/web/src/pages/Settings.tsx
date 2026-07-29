@@ -300,6 +300,7 @@ function FormulaCard({
         <div className="mt-4">
           <Checkbox
             checked={draftFormula.rolloverSavings}
+            disabled={draftFormula.wants === 0}
             onCheckedChange={(checked) =>
               setDraftFormula((current) => ({
                 ...current,
@@ -311,7 +312,9 @@ function FormulaCard({
             <div>
               <p className="font-medium text-on-surface">Mover ahorro no usado a gustos</p>
               <p className="text-xs text-muted-gray">
-                Si te sobra parte del presupuesto de ahorro, se suma al dinero disponible de gustos y eventos.
+                {draftFormula.wants === 0
+                  ? 'Desactivado porque Gustos tiene una asignación de 0%.'
+                  : 'Si te sobra parte del presupuesto de ahorro, se suma al dinero disponible de gustos y eventos.'}
               </p>
             </div>
           </Checkbox>
@@ -365,9 +368,11 @@ function SummaryCard({
           <p className="text-xs uppercase tracking-[0.22em] text-medium-gray">Fórmula actual</p>
           <p className="mt-2 text-xl font-semibold text-on-surface">{formatFormulaLabel(formula)}</p>
           <p className="mt-1 text-sm text-muted-gray">
-            {formula.rolloverSavings
-              ? 'Con traspaso del ahorro sobrante a gustos.'
-              : 'Sin traspaso automático entre categorías.'}
+            {formula.wants === 0
+              ? 'Gustos está desactivado y no recibe traspasos automáticos.'
+              : formula.rolloverSavings
+                ? 'Con traspaso del ahorro sobrante a gustos.'
+                : 'Sin traspaso automático entre categorías.'}
           </p>
         </div>
 
@@ -560,6 +565,7 @@ function MonthlyResetCard() {
   const monthlyPlanningHistory = useFinanceStore((state) => state.monthlyPlanningHistory)
   const resetMonthlyPlans = useFinanceStore((state) => state.resetMonthlyPlans)
   const restoreMonthlyPlan = useFinanceStore((state) => state.restoreMonthlyPlan)
+  const wantsDisabled = usePreferencesStore((state) => state.formula.wants === 0)
   const [isResetting, setIsResetting] = useState(false)
   const [restoringKey, setRestoringKey] = useState<string | null>(null)
 
@@ -743,7 +749,7 @@ function MonthlyResetCard() {
                   <Button
                     variant="outline"
                     size="sm"
-                    disabled={restoringKey !== null || history.wants.length === 0}
+                    disabled={wantsDisabled || restoringKey !== null || history.wants.length === 0}
                     loading={restoringKey === `${history.id}:wants`}
                     onClick={() => void handleRestore(history.id, 'wants')}
                     className="border-graphite bg-abyss text-on-surface hover:bg-surface-container"
@@ -753,7 +759,11 @@ function MonthlyResetCard() {
                   </Button>
                   <Button
                     size="sm"
-                    disabled={restoringKey !== null || (history.expenses.length === 0 && history.wants.length === 0)}
+                    disabled={
+                      restoringKey !== null
+                      || (history.expenses.length === 0 && history.wants.length === 0)
+                      || (wantsDisabled && history.wants.length > 0)
+                    }
                     loading={restoringKey === `${history.id}:all`}
                     onClick={() => void handleRestore(history.id, 'all')}
                     className="bg-primary-container text-primary-foreground hover:brightness-110"
@@ -799,6 +809,9 @@ export default function Settings() {
     }
 
     const nextFormula = cloneFormula(draftFormula)
+    if (nextFormula.wants === 0) {
+      nextFormula.rolloverSavings = false
+    }
     setFormula(nextFormula)
     setDraftFormula(nextFormula)
     toast.success('La formula financiera fue actualizada.')

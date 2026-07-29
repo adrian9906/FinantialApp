@@ -41,8 +41,11 @@ export function getMonthlyOverview(
   const baseWants = totalSalary * (formula.wants / 100)
   const budgetSavings = baseBudgetSavings + transferredFromExpenses + transferredFromWants
   const budgetWantsBeforeRollover = Math.max(0, baseWants - transferredFromWants + transferredToWants)
-  const savingsRollover = formula.rolloverSavings ? Math.max(0, budgetSavings - totalSavings) : 0
-  const budgetWants = budgetWantsBeforeRollover + savingsRollover
+  const wantsEnabled = formula.wants > 0
+  const savingsRollover = formula.rolloverSavings && wantsEnabled
+    ? Math.max(0, budgetSavings - totalSavings)
+    : 0
+  const budgetWants = wantsEnabled ? budgetWantsBeforeRollover + savingsRollover : 0
 
   return {
     grossSalary,

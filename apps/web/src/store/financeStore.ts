@@ -25,6 +25,7 @@ import { isNetworkRequestError, requestJson } from '@/lib/api'
 import { hasPendingSync, isOnline, markPendingSync, persistCachedBootstrap, readCachedBootstrap } from '@/lib/offline'
 import { parseWantDescription } from '@/lib/want-utils'
 import { useAuthStore } from '@/store/authStore'
+import { usePreferencesStore } from '@/store/preferencesStore'
 
 const GUEST_FINANCE_STORAGE_KEY = 'plata-guest-finance'
 
@@ -440,6 +441,10 @@ export const useFinanceStore = create<FinanceStore>()((set, get) => ({
     set((state) => ({ salaries: state.salaries.filter((entry) => entry.id !== id) }))
   },
   addTransaction: async (transaction) => {
+    if (transaction.type === 'want' && usePreferencesStore.getState().formula.wants === 0) {
+      throw new Error('La sección Gustos está desactivada porque su porcentaje es 0%.')
+    }
+
     if (isLocalMutationMode()) {
       updateLocalState(set, (state) => ({
         transactions: [{ ...transaction, id: makeId(transaction.type) }, ...state.transactions],
@@ -578,6 +583,10 @@ export const useFinanceStore = create<FinanceStore>()((set, get) => ({
   restoreMonthlyPlan: async (id, scope = 'all') => {
     const history = get().monthlyPlanningHistory.find((entry) => entry.id === id)
     if (!history) return
+    const wantsDisabled = usePreferencesStore.getState().formula.wants === 0
+    if (wantsDisabled && (scope === 'wants' || (scope === 'all' && history.wants.length > 0))) {
+      throw new Error('No puedes restaurar gustos porque esa sección tiene una asignación de 0%.')
+    }
 
     const restoredTransactions = buildTransactionsFromHistory(history, scope)
     if (restoredTransactions.length === 0) return
