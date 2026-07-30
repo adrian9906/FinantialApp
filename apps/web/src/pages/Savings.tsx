@@ -71,7 +71,7 @@ export default function Savings() {
 
   function resetWithdrawForm() {
     setWithdrawForm({
-      amount: String(Math.max(0, overview.totalSavings)),
+      amount: String(Math.max(0, overview.accumulatedSavings)),
       target: 'purpose',
       itemName: '',
       date: '',
@@ -124,7 +124,7 @@ export default function Savings() {
 
   function handleOpenWithdraw(goal?: typeof savingsGoals[number]) {
     setWithdrawForm({
-      amount: String(Math.max(0, goal?.currentAmount ?? overview.totalSavings)),
+      amount: String(Math.max(0, goal?.currentAmount ?? overview.accumulatedSavings)),
       target: 'purpose',
       itemName: '',
       date: '',
@@ -176,7 +176,7 @@ export default function Savings() {
   const pct = overview.budgetSavings > 0 ? Math.min(100, Math.round((overview.totalSavings / overview.budgetSavings) * 100)) : 0
   const remaining = overview.budgetSavings - overview.totalSavings
   const budgetFull = remaining <= 0
-  const availableSavings = Math.max(0, overview.totalSavings)
+  const availableSavings = Math.max(0, overview.accumulatedSavings)
   const assignedToGoals = savingsGoals.reduce((sum, goal) => sum + goal.currentAmount, 0)
   const freeSavings = Math.max(0, availableSavings - assignedToGoals)
   const selectedSourceGoal = withdrawForm.sourceGoalId
@@ -358,6 +358,9 @@ export default function Savings() {
           <h2 className="text-[28px] font-semibold text-on-surface mb-3">
             +${overview.totalSavings.toLocaleString()} <span className="text-base font-normal text-muted-gray">/ ${overview.budgetSavings.toLocaleString()}</span>
           </h2>
+          <p className="mb-3 text-sm text-muted-gray">
+            Ahorro total acumulado: <span className="font-semibold text-on-surface">${overview.accumulatedSavings.toLocaleString()}</span>
+          </p>
           <div className="w-full h-2 bg-surface-container-highest rounded-full overflow-hidden">
             <div className="h-full bg-tertiary-container rounded-full transition-all duration-1000" style={{ width: `${pct}%` }} />
           </div>

@@ -17,9 +17,10 @@ export function useMonthlyOverview() {
       (sum, item) => sum + (isWishlistPurchased(item) ? getWishlistReservedAmount(item) : 0),
       0,
     )
-    const totalSavings = Math.max(0, overview.totalSavings - reservedForPurchasedWishlist)
+    const totalSavings = Math.max(0, overview.totalSavings)
+    const accumulatedSavings = Math.max(0, overview.accumulatedSavings - reservedForPurchasedWishlist)
     const assignedSavingsGoals = savingsGoals.reduce((sum, goal) => sum + goal.currentAmount, 0)
-    const freeSavings = Math.max(0, totalSavings - assignedSavingsGoals)
+    const freeSavings = Math.max(0, accumulatedSavings - assignedSavingsGoals)
     const wantsEnabled = formula.wants > 0
     const savingsRollover = formula.rolloverSavings && wantsEnabled
       ? Math.max(0, overview.budgetSavings - totalSavings)
@@ -31,6 +32,7 @@ export function useMonthlyOverview() {
     return {
       ...overview,
       totalSavings,
+      accumulatedSavings,
       freeSavings,
       assignedSavingsGoals,
       savingsRollover,

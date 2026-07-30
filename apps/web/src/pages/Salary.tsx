@@ -162,7 +162,7 @@ export default function Salary() {
                 <p className="text-xs text-muted-gray mt-1">{activeSalary.month}</p>
                 {overview.totalDebtPaid > 0 && (
                   <p className="text-xs text-muted-gray">
-                    Salario registrado: ${activeSalary.amount.toLocaleString()} menos ${overview.totalDebtPaid.toLocaleString()} en abonos realizados este mes.
+                    Salario registrado: ${activeSalary.amount.toLocaleString()} menos ${overview.totalDebtPaid.toLocaleString()} en abonos de deudas activas realizados este mes.
                   </p>
                 )}
               </div>

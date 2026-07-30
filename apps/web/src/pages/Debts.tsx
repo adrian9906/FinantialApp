@@ -247,7 +247,7 @@ export default function Debts() {
           </div>
           <div className="text-[28px] font-semibold text-on-surface">${asMoney(overview.totalSalary)}</div>
           <p className="mt-1 text-xs text-muted-gray">
-            Bruto ${asMoney(overview.grossSalary)} menos ${asMoney(overview.totalDebtPaid)} abonados este mes
+            Bruto ${asMoney(overview.grossSalary)} menos ${asMoney(overview.totalDebtPaid)} abonados a deudas activas este mes
           </p>
         </div>
       </div>

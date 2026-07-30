@@ -24,13 +24,20 @@ export function getMonthlyOverview(
   const transferredFromWants = getWantTransferTotal(transactions)
   const transferredToExpenses = getExpenseWithdrawalTotal(transactions)
   const transferredToWants = getWantWithdrawalTotal(transactions)
-  const totalSavings = transactions
+  const accumulatedSavings = transactions
     .filter((transaction) => transaction.type === 'saving')
     .reduce((sum, transaction) => sum + transaction.amount, 0)
+  const totalSavings = transactions
+    .filter((transaction) => transaction.type === 'saving' && transaction.date.slice(0, 7) === month)
+    .reduce((sum, transaction) => sum + transaction.amount, 0)
   const totalDebtPaid = debts.reduce(
-    (sum, debt) => sum + (debt.payments ?? [])
-      .filter((payment) => payment.date.slice(0, 7) === month)
-      .reduce((paymentSum, payment) => paymentSum + payment.amount, 0),
+    (sum, debt) => {
+      if (debt.isSettled) return sum
+
+      return sum + (debt.payments ?? [])
+        .filter((payment) => payment.date.slice(0, 7) === month)
+        .reduce((paymentSum, payment) => paymentSum + payment.amount, 0)
+    },
     0,
   )
   const totalSalary = Math.max(0, grossSalary - totalDebtPaid)
@@ -53,6 +60,7 @@ export function getMonthlyOverview(
     totalExpenses,
     totalWants,
     totalSavings,
+    accumulatedSavings,
     totalDebtPaid,
     transferredFromExpenses,
     transferredFromWants,
