@@ -54,6 +54,11 @@ export default function Salary() {
   const salaryHistory = normalizeSalaryHistory(salaries)
   const currentSalary = salaryHistory.find((salary) => salary.month === currentMonth) ?? null
   const activeSalary = getSalaryForMonth(salaryHistory, currentMonth)
+  const formulaDistribution = {
+    expenses: overview.totalSalary * (formula.expenses / 100),
+    wants: overview.totalSalary * (formula.wants / 100),
+    savings: overview.totalSalary * (formula.savings / 100),
+  }
 
   function resetForm() {
     setAmount('')
@@ -170,21 +175,21 @@ export default function Salary() {
               <div className="flex flex-col gap-2 bg-abyss rounded-lg p-4 shadow-vault-sm">
                 <div className="flex justify-between items-center text-sm">
                   <span className="text-muted-gray">{formula.expenses}% Necesidades</span>
-                  <span className="text-base font-semibold text-primary-fixed">${overview.budgetExpenses.toLocaleString()}</span>
+                  <span className="text-base font-semibold text-primary-fixed">${formulaDistribution.expenses.toLocaleString()}</span>
                 </div>
                 <div className="w-full h-1 bg-graphite rounded-full overflow-hidden">
                   <div className="h-full rounded-full bg-primary" style={{ width: `${formula.expenses}%` }} />
                 </div>
                 <div className="flex justify-between items-center text-sm mt-1">
                   <span className="text-muted-gray">{formula.wants}% Gustos</span>
-                  <span className="text-base font-semibold text-secondary">${overview.budgetWants.toLocaleString()}</span>
+                  <span className="text-base font-semibold text-secondary">${formulaDistribution.wants.toLocaleString()}</span>
                 </div>
                 <div className="w-full h-1 bg-graphite rounded-full overflow-hidden">
                   <div className="h-full rounded-full bg-secondary" style={{ width: `${formula.wants}%` }} />
                 </div>
                 <div className="flex justify-between items-center text-sm mt-1">
                   <span className="text-muted-gray">{formula.savings}% Ahorros</span>
-                  <span className="text-base font-semibold text-tertiary-container">${overview.budgetSavings.toLocaleString()}</span>
+                  <span className="text-base font-semibold text-tertiary-container">${formulaDistribution.savings.toLocaleString()}</span>
                 </div>
                 <div className="w-full h-1 bg-graphite rounded-full overflow-hidden">
                   <div className="h-full rounded-full bg-tertiary-container" style={{ width: `${formula.savings}%` }} />
