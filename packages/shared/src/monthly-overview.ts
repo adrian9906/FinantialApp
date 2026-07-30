@@ -18,17 +18,18 @@ export function getMonthlyOverview(
   month = getMonthKey(),
 ) {
   const grossSalary = getSalaryForMonth(salaries, month)?.amount ?? 0
-  const totalExpenses = getEffectiveExpenseTotal(transactions)
-  const totalWants = getEffectiveWantTotal(transactions)
-  const transferredFromExpenses = getExpenseTransferTotal(transactions)
-  const transferredFromWants = getWantTransferTotal(transactions)
-  const transferredToExpenses = getExpenseWithdrawalTotal(transactions)
-  const transferredToWants = getWantWithdrawalTotal(transactions)
+  const monthlyTransactions = transactions.filter((transaction) => transaction.date.slice(0, 7) === month)
+  const totalExpenses = getEffectiveExpenseTotal(monthlyTransactions)
+  const totalWants = getEffectiveWantTotal(monthlyTransactions)
+  const transferredFromExpenses = getExpenseTransferTotal(monthlyTransactions)
+  const transferredFromWants = getWantTransferTotal(monthlyTransactions)
+  const transferredToExpenses = getExpenseWithdrawalTotal(monthlyTransactions)
+  const transferredToWants = getWantWithdrawalTotal(monthlyTransactions)
   const accumulatedSavings = transactions
     .filter((transaction) => transaction.type === 'saving')
     .reduce((sum, transaction) => sum + transaction.amount, 0)
-  const totalSavings = transactions
-    .filter((transaction) => transaction.type === 'saving' && transaction.date.slice(0, 7) === month)
+  const totalSavings = monthlyTransactions
+    .filter((transaction) => transaction.type === 'saving')
     .reduce((sum, transaction) => sum + transaction.amount, 0)
   const totalDebtPaid = debts.reduce(
     (sum, debt) => {
