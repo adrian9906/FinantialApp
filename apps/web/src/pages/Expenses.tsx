@@ -1,8 +1,8 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { buildExpenseTransferSavingDescription } from '@plata/shared'
 import { ArrowUpRight, Dumbbell, HeartPulse, House, Package, Pencil, Plus, ShoppingBasket, Trash2, type LucideIcon } from 'lucide-react'
 import { useFinanceStore } from '@/store/financeStore'
-import { buildExpenseDescription, getPlannedExpenseTotal, parseExpenseDescription, type ExpenseCategory } from '@/lib/expense-utils'
+import { buildExpenseDescription, createCustomExpenseCategory, getExpenseCategoryLabel, getPlannedExpenseTotal, parseExpenseDescription, type ExpenseBuiltInCategory, type ExpenseCategory } from '@/lib/expense-utils'
 import { useMonthlyOverview } from '@/lib/useMonthlyOverview'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -23,6 +23,10 @@ import { Label } from '@/components/ui/label'
 import { exportExpensesReport } from '@/lib/reportExports'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { PlanningHistoryPicker } from '@/components/planning/PlanningHistoryPicker'
+import { PlanningListHistory } from '@/components/planning/PlanningListHistory'
+import { buildPlanningHistorySuggestions, buildReusablePlanningListDrafts } from '@/lib/productivity'
+import { toast } from 'sonner'
 
 interface ExpenseFormState {
   amount: string
@@ -40,10 +44,9 @@ interface ExpenseViewItem {
   status: 'pending' | 'checked'
 }
 
-const CATEGORY_META: Record<
-  ExpenseCategory,
-  { label: string; hint: string; icon: LucideIcon; accent: string; badge: string; stroke: string }
-> = {
+type ExpenseCategoryMeta = { label: string; hint: string; icon: LucideIcon; accent: string; badge: string; stroke: string }
+
+const CATEGORY_META: Record<ExpenseBuiltInCategory, ExpenseCategoryMeta> = {
   food: {
     label: 'Comida',
     hint: 'Mercado, frutas, snacks y cocina diaria.',
@@ -84,6 +87,19 @@ const CATEGORY_META: Record<
     badge: 'bg-amber-400/15 text-amber-300',
     stroke: '#fcd34d',
   },
+}
+
+function getCategoryMeta(category: ExpenseCategory): ExpenseCategoryMeta {
+  if (category in CATEGORY_META) return CATEGORY_META[category as ExpenseBuiltInCategory]
+
+  return {
+    label: getExpenseCategoryLabel(category) ?? 'Categoría personalizada',
+    hint: 'Una categoría creada por ti.',
+    icon: Package,
+    accent: 'text-violet-300',
+    badge: 'bg-violet-400/15 text-violet-300',
+    stroke: '#c4b5fd',
+  }
 }
 
 function HandDrawnStrike({ color }: { color: string }) {
@@ -164,6 +180,7 @@ export default function Expenses() {
   const addTransaction = useFinanceStore((state) => state.addTransaction)
   const updateTransaction = useFinanceStore((state) => state.updateTransaction)
   const removeTransaction = useFinanceStore((state) => state.removeTransaction)
+  const monthlyPlanningHistory = useFinanceStore((state) => state.monthlyPlanningHistory)
   const overview = useMonthlyOverview()
   const [open, setOpen] = useState(false)
   const [editId, setEditId] = useState<string | null>(null)
@@ -175,6 +192,8 @@ export default function Expenses() {
   const [transferOpen, setTransferOpen] = useState(false)
   const [transferAmount, setTransferAmount] = useState('')
   const [transferError, setTransferError] = useState<string | null>(null)
+  const [restoringListId, setRestoringListId] = useState<string | null>(null)
+  const [customCategoryName, setCustomCategoryName] = useState('')
   const [form, setForm] = useState<ExpenseFormState>({
     amount: '',
     itemName: '',
@@ -191,9 +210,11 @@ export default function Expenses() {
     })
     setEditId(null)
     setFormError(null)
+    setCustomCategoryName('')
   }
 
   function handleOpen(entry?: (typeof transactions)[number]) {
+    setCustomCategoryName('')
     if (entry) {
       const parsed = parseExpenseDescription(entry.description)
       setEditId(entry.id)
@@ -268,8 +289,24 @@ export default function Expenses() {
         status: parsed.status,
       }
     })
+  const historySuggestions = useMemo(
+    () => buildPlanningHistorySuggestions({
+      transactions,
+      history: monthlyPlanningHistory,
+      type: 'expense',
+    }),
+    [monthlyPlanningHistory, transactions],
+  )
 
-  const groupedExpenses = Object.entries(CATEGORY_META).map(([key, meta]) => {
+  const expenseCategories = (() => {
+    const categories = new Set<ExpenseCategory>(Object.keys(CATEGORY_META) as ExpenseBuiltInCategory[])
+    expenseItems.forEach((item) => categories.add(item.category))
+    categories.add(form.category)
+    return Array.from(categories)
+  })()
+
+  const groupedExpenses = expenseCategories.map((key) => {
+    const meta = getCategoryMeta(key)
     const items = expenseItems
       .filter((item) => item.category === key)
       .sort((a, b) => a.itemName.localeCompare(b.itemName))
@@ -278,7 +315,7 @@ export default function Expenses() {
     const completed = items.filter((item) => item.status === 'checked').length
 
     return {
-      key: key as ExpenseCategory,
+      key,
       meta,
       items,
       total,
@@ -304,6 +341,44 @@ export default function Expenses() {
         : plannedTotal + typedAmount > overview.budgetExpenses
           ? `No puedes agregar este producto porque la lista subiria a $${(plannedTotal + typedAmount).toLocaleString()} y tu limite es $${overview.budgetExpenses.toLocaleString()}.`
           : null
+
+  function handleCreateCategory() {
+    const category = createCustomExpenseCategory(customCategoryName)
+    if (!category) {
+      setFormError('Escribe un nombre para la categoría.')
+      return
+    }
+
+    setFormError(null)
+    setForm((current) => ({ ...current, category }))
+    setCustomCategoryName('')
+  }
+
+  async function handleReuseList(entry: typeof monthlyPlanningHistory[number]) {
+    if (restoringListId) return
+    const drafts = buildReusablePlanningListDrafts(entry, 'expense', transactions)
+
+    if (drafts.length === 0) {
+      toast.info('Todos los artículos de esa lista ya están en tus gastos actuales.')
+      return
+    }
+
+    const total = drafts.reduce((sum, draft) => sum + draft.amount, 0)
+    if (total > availableToPlan) {
+      toast.error(`La lista necesita $${total.toLocaleString()} y solo tienes $${availableToPlan.toLocaleString()} disponibles.`)
+      return
+    }
+
+    setRestoringListId(entry.id)
+    try {
+      await Promise.all(drafts.map((draft) => addTransaction(draft)))
+      toast.success(`Se reutilizaron ${drafts.length} artículo(s) de ${entry.label}.`)
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'No se pudo reutilizar la lista.')
+    } finally {
+      setRestoringListId(null)
+    }
+  }
 
   async function toggleChecked(item: ExpenseViewItem) {
     const nextStatus = item.status === 'checked' ? 'pending' : 'checked'
@@ -428,6 +503,13 @@ export default function Expenses() {
           </div>
         </div>
       </div>
+
+      <PlanningListHistory
+        history={monthlyPlanningHistory}
+        type="expense"
+        restoringId={restoringListId}
+        onReuse={(entry) => void handleReuseList(entry)}
+      />
 
       {expenseItems.length === 0 ? (
         <Card className="border-0 bg-surface shadow-vault">
@@ -569,16 +651,36 @@ export default function Expenses() {
                 <Label className="text-medium-gray">Categoria</Label>
                 <Select value={form.category} onValueChange={(value) => { setFormError(null); setForm((current) => ({ ...current, category: value as ExpenseCategory })) }}>
                   <SelectTrigger className="bg-abyss border-graphite text-on-surface">
-                    <SelectValue>{CATEGORY_META[form.category].label}</SelectValue>
+                    <SelectValue>{getCategoryMeta(form.category).label}</SelectValue>
                   </SelectTrigger>
                   <SelectContent className="border-graphite bg-surface">
-                    {Object.entries(CATEGORY_META).map(([key, meta]) => (
+                    {expenseCategories.map((key) => (
                       <SelectItem key={key} value={key}>
-                        {meta.label}
+                        {getCategoryMeta(key).label}
                       </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
+                <div className="flex gap-2">
+                  <Input
+                    value={customCategoryName}
+                    maxLength={48}
+                    placeholder="Ej. Pago del niño"
+                    aria-label="Nombre de la nueva categoría de gasto"
+                    onChange={(event) => { setFormError(null); setCustomCategoryName(event.target.value) }}
+                    onKeyDown={(event) => {
+                      if (event.key === 'Enter') {
+                        event.preventDefault()
+                        handleCreateCategory()
+                      }
+                    }}
+                    className="border-graphite bg-abyss text-on-surface"
+                  />
+                  <Button type="button" variant="secondary" disabled={!customCategoryName.trim()} onClick={handleCreateCategory}>
+                    <Plus className="size-4" /> Crear
+                  </Button>
+                </div>
+                <p className="text-xs text-muted-gray">Crea una categoría propia y quedará disponible con tus gastos guardados.</p>
               </div>
               <div className="space-y-2">
                 <Label className="text-medium-gray">Precio</Label>
@@ -603,6 +705,23 @@ export default function Expenses() {
               />
             </div>
 
+            {!editId ? (
+              <PlanningHistoryPicker
+                suggestions={historySuggestions}
+                query={form.itemName}
+                getCategoryLabel={(category) => getCategoryMeta(category as ExpenseCategory).label}
+                onReuse={(suggestion) => {
+                  setFormError(null)
+                  setForm({
+                    amount: String(suggestion.amount),
+                    itemName: suggestion.itemName,
+                    category: suggestion.category as ExpenseCategory,
+                    date: '',
+                  })
+                }}
+              />
+            ) : null}
+
             <DatePickerField
               label="Fecha"
               value={form.date}
@@ -616,8 +735,8 @@ export default function Expenses() {
                 {form.itemName || 'Producto sin nombre'}
               </p>
               <div className="mt-2 flex flex-wrap items-center gap-2">
-                <Badge variant="secondary" className={CATEGORY_META[form.category].badge}>
-                  {CATEGORY_META[form.category].label}
+                <Badge variant="secondary" className={getCategoryMeta(form.category).badge}>
+                  {getCategoryMeta(form.category).label}
                 </Badge>
                 <span className="text-sm text-muted-gray">
                   {form.amount ? `$${Number(form.amount).toLocaleString()}` : 'Sin precio'}

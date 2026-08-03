@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { buildWantTransferSavingDescription } from '@plata/shared'
 import { Clapperboard, Gamepad2, Heart, LockKeyhole, Pencil, Plus, ShoppingBag, Sparkles, Ticket, Trash2, type LucideIcon } from 'lucide-react'
 import { useFinanceStore } from '@/store/financeStore'
-import { buildWantDescription, getPlannedWantTotal, parseWantDescription, type WantCategory } from '@/lib/want-utils'
+import { buildWantDescription, createCustomWantCategory, getPlannedWantTotal, getWantCategoryLabel, parseWantDescription, type WantBuiltInCategory, type WantCategory } from '@/lib/want-utils'
 import { useMonthlyOverview } from '@/lib/useMonthlyOverview'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -24,6 +24,10 @@ import { exportWantsReport } from '@/lib/reportExports'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { usePreferencesStore } from '@/store/preferencesStore'
+import { PlanningHistoryPicker } from '@/components/planning/PlanningHistoryPicker'
+import { PlanningListHistory } from '@/components/planning/PlanningListHistory'
+import { buildPlanningHistorySuggestions, buildReusablePlanningListDrafts } from '@/lib/productivity'
+import { toast } from 'sonner'
 
 interface WantFormState {
   amount: string
@@ -41,10 +45,9 @@ interface WantViewItem {
   status: 'pending' | 'checked'
 }
 
-const CATEGORY_META: Record<
-  WantCategory,
-  { label: string; hint: string; icon: LucideIcon; accent: string; badge: string; stroke: string }
-> = {
+type WantCategoryMeta = { label: string; hint: string; icon: LucideIcon; accent: string; badge: string; stroke: string }
+
+const CATEGORY_META: Record<WantBuiltInCategory, WantCategoryMeta> = {
   outings: {
     label: 'Salidas',
     hint: 'Cenas, cafes, paseos y antojos fuera de casa.',
@@ -85,6 +88,19 @@ const CATEGORY_META: Record<
     badge: 'bg-emerald-400/15 text-emerald-300',
     stroke: '#6ee7b7',
   },
+}
+
+function getCategoryMeta(category: WantCategory): WantCategoryMeta {
+  if (category in CATEGORY_META) return CATEGORY_META[category as WantBuiltInCategory]
+
+  return {
+    label: getWantCategoryLabel(category) ?? 'Categoría personalizada',
+    hint: 'Una categoría creada por ti.',
+    icon: Heart,
+    accent: 'text-fuchsia-300',
+    badge: 'bg-fuchsia-400/15 text-fuchsia-300',
+    stroke: '#e879f9',
+  }
 }
 
 function HandDrawnStrike({ color }: { color: string }) {
@@ -165,6 +181,7 @@ export default function Wants() {
   const addTransaction = useFinanceStore((state) => state.addTransaction)
   const updateTransaction = useFinanceStore((state) => state.updateTransaction)
   const removeTransaction = useFinanceStore((state) => state.removeTransaction)
+  const monthlyPlanningHistory = useFinanceStore((state) => state.monthlyPlanningHistory)
   const overview = useMonthlyOverview()
   const formula = usePreferencesStore((state) => state.formula)
   const isWantsDisabled = formula.wants === 0
@@ -178,6 +195,8 @@ export default function Wants() {
   const [transferOpen, setTransferOpen] = useState(false)
   const [transferAmount, setTransferAmount] = useState('')
   const [transferError, setTransferError] = useState<string | null>(null)
+  const [restoringListId, setRestoringListId] = useState<string | null>(null)
+  const [customCategoryName, setCustomCategoryName] = useState('')
   const [form, setForm] = useState<WantFormState>({
     amount: '',
     itemName: '',
@@ -191,6 +210,7 @@ export default function Wants() {
     setTransferOpen(false)
     setEditId(null)
     setFormError(null)
+    setCustomCategoryName('')
     setTransferError(null)
   }, [isWantsDisabled])
 
@@ -207,6 +227,7 @@ export default function Wants() {
 
   function handleOpen(entry?: (typeof transactions)[number]) {
     if (isWantsDisabled) return
+    setCustomCategoryName('')
 
     if (entry) {
       const parsed = parseWantDescription(entry.description)
@@ -239,8 +260,15 @@ export default function Wants() {
       })
   }, [transactions])
 
-  const groupedWants = useMemo(() => {
-    return Object.entries(CATEGORY_META).map(([key, meta]) => {
+  const wantCategories = (() => {
+    const categories = new Set<WantCategory>(Object.keys(CATEGORY_META) as WantBuiltInCategory[])
+    wantItems.forEach((item) => categories.add(item.category))
+    categories.add(form.category)
+    return Array.from(categories)
+  })()
+
+  const groupedWants = wantCategories.map((key) => {
+      const meta = getCategoryMeta(key)
       const items = wantItems
         .filter((item) => item.category === key)
         .sort((a, b) => a.itemName.localeCompare(b.itemName))
@@ -249,14 +277,21 @@ export default function Wants() {
       const completed = items.filter((item) => item.status === 'checked').length
 
       return {
-        key: key as WantCategory,
+        key,
         meta,
         items,
         total,
         completed,
       }
     })
-  }, [wantItems])
+  const historySuggestions = useMemo(
+    () => buildPlanningHistorySuggestions({
+      transactions,
+      history: monthlyPlanningHistory,
+      type: 'want',
+    }),
+    [monthlyPlanningHistory, transactions],
+  )
 
   const wantCount = wantItems.length
   const checkedCount = wantItems.filter((item) => item.status === 'checked').length
@@ -276,6 +311,18 @@ export default function Wants() {
         : plannedTotal + typedAmount > overview.budgetWants
           ? `No puedes agregar este gusto porque la lista subiria a $${(plannedTotal + typedAmount).toLocaleString()} y tu limite es $${overview.budgetWants.toLocaleString()}.`
           : null
+
+  function handleCreateCategory() {
+    const category = createCustomWantCategory(customCategoryName)
+    if (!category) {
+      setFormError('Escribe un nombre para la categoría.')
+      return
+    }
+
+    setFormError(null)
+    setForm((current) => ({ ...current, category }))
+    setCustomCategoryName('')
+  }
 
   async function handleSave() {
     if (!form.amount || !form.itemName || isSaving) return
@@ -324,6 +371,32 @@ export default function Wants() {
       setOpen(false)
     } finally {
       setIsSaving(false)
+    }
+  }
+
+  async function handleReuseList(entry: typeof monthlyPlanningHistory[number]) {
+    if (isWantsDisabled || restoringListId) return
+    const drafts = buildReusablePlanningListDrafts(entry, 'want', transactions)
+
+    if (drafts.length === 0) {
+      toast.info('Todos los artículos de esa lista ya están en tus gustos actuales.')
+      return
+    }
+
+    const total = drafts.reduce((sum, draft) => sum + draft.amount, 0)
+    if (total > availableToPlan) {
+      toast.error(`La lista necesita $${total.toLocaleString()} y solo tienes $${availableToPlan.toLocaleString()} disponibles.`)
+      return
+    }
+
+    setRestoringListId(entry.id)
+    try {
+      await Promise.all(drafts.map((draft) => addTransaction(draft)))
+      toast.success(`Se reutilizaron ${drafts.length} artículo(s) de ${entry.label}.`)
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'No se pudo reutilizar la lista.')
+    } finally {
+      setRestoringListId(null)
     }
   }
 
@@ -477,6 +550,14 @@ export default function Wants() {
         </div>
       </div>
 
+      <PlanningListHistory
+        history={monthlyPlanningHistory}
+        type="want"
+        restoringId={restoringListId}
+        disabled={isWantsDisabled}
+        onReuse={(entry) => void handleReuseList(entry)}
+      />
+
       {wantItems.length === 0 ? (
         <Card className="border-0 bg-surface shadow-vault">
           <div className="flex flex-col items-center gap-3 py-16 text-sm text-muted-gray">
@@ -618,16 +699,36 @@ export default function Wants() {
                 <Label className="text-medium-gray">Categoria</Label>
                 <Select value={form.category} onValueChange={(value) => { setFormError(null); setForm((current) => ({ ...current, category: value as WantCategory })) }}>
                   <SelectTrigger className="bg-abyss border-graphite text-on-surface">
-                    <SelectValue>{CATEGORY_META[form.category].label}</SelectValue>
+                    <SelectValue>{getCategoryMeta(form.category).label}</SelectValue>
                   </SelectTrigger>
                   <SelectContent className="border-graphite bg-surface">
-                    {Object.entries(CATEGORY_META).map(([key, meta]) => (
+                    {wantCategories.map((key) => (
                       <SelectItem key={key} value={key}>
-                        {meta.label}
+                        {getCategoryMeta(key).label}
                       </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
+                <div className="flex gap-2">
+                  <Input
+                    value={customCategoryName}
+                    maxLength={48}
+                    placeholder="Ej. Actividades del niño"
+                    aria-label="Nombre de la nueva categoría de gusto"
+                    onChange={(event) => { setFormError(null); setCustomCategoryName(event.target.value) }}
+                    onKeyDown={(event) => {
+                      if (event.key === 'Enter') {
+                        event.preventDefault()
+                        handleCreateCategory()
+                      }
+                    }}
+                    className="border-graphite bg-abyss text-on-surface"
+                  />
+                  <Button type="button" variant="secondary" disabled={!customCategoryName.trim()} onClick={handleCreateCategory}>
+                    <Plus className="size-4" /> Crear
+                  </Button>
+                </div>
+                <p className="text-xs text-muted-gray">Crea una categoría propia y quedará disponible con tus gustos guardados.</p>
               </div>
               <div className="space-y-2">
                 <Label className="text-medium-gray">Precio</Label>
@@ -652,6 +753,23 @@ export default function Wants() {
               />
             </div>
 
+            {!editId ? (
+              <PlanningHistoryPicker
+                suggestions={historySuggestions}
+                query={form.itemName}
+                getCategoryLabel={(category) => getCategoryMeta(category as WantCategory).label}
+                onReuse={(suggestion) => {
+                  setFormError(null)
+                  setForm({
+                    amount: String(suggestion.amount),
+                    itemName: suggestion.itemName,
+                    category: suggestion.category as WantCategory,
+                    date: '',
+                  })
+                }}
+              />
+            ) : null}
+
             <DatePickerField
               label="Fecha"
               value={form.date}
@@ -665,8 +783,8 @@ export default function Wants() {
                 {form.itemName || 'Gusto sin nombre'}
               </p>
               <div className="mt-2 flex flex-wrap items-center gap-2">
-                <Badge variant="secondary" className={CATEGORY_META[form.category].badge}>
-                  {CATEGORY_META[form.category].label}
+                <Badge variant="secondary" className={getCategoryMeta(form.category).badge}>
+                  {getCategoryMeta(form.category).label}
                 </Badge>
                 <span className="text-sm text-muted-gray">
                   {form.amount ? `$${Number(form.amount).toLocaleString()}` : 'Sin precio'}

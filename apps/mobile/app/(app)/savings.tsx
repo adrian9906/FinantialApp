@@ -12,7 +12,7 @@ import { useFinanceStore } from '../../src/store/finance-store'
 import { usePreferencesStore } from '../../src/store/preferences-store'
 import { resolvePalette } from '../../src/theme/palette'
 import { radius, spacing } from '../../src/theme/tokens'
-import { getMonthlyOverview } from '@plata/shared'
+import { getFinancialPeriodStart, getMonthlyOverview } from '@plata/shared'
 
 const PiggyBankIcon = PiggyBank as any
 const PlusIcon = Plus as any
@@ -30,6 +30,8 @@ function formatMoney(value: number) {
 export default function SavingsScreen() {
   const transactions = useFinanceStore((state) => state.transactions)
   const salaries = useFinanceStore((state) => state.salaries)
+  const debts = useFinanceStore((state) => state.debts)
+  const monthlyPlanningHistory = useFinanceStore((state) => state.monthlyPlanningHistory)
   const addTransaction = useFinanceStore((state) => state.addTransaction)
   const updateTransaction = useFinanceStore((state) => state.updateTransaction)
   const removeTransaction = useFinanceStore((state) => state.removeTransaction)
@@ -43,7 +45,7 @@ export default function SavingsScreen() {
   const [date, setDate] = useState('')
   const [formError, setFormError] = useState<string | null>(null)
 
-  const overview = getMonthlyOverview(salaries, transactions, formula)
+  const overview = getMonthlyOverview(salaries, transactions, debts, formula, { periodStart: getFinancialPeriodStart(monthlyPlanningHistory) })
   const savingsList = transactions.filter((transaction) => transaction.type === 'saving')
   const pct = overview.budgetSavings > 0 ? Math.min(100, Math.round((overview.totalSavings / overview.budgetSavings) * 100)) : 0
   const remaining = overview.budgetSavings - overview.totalSavings

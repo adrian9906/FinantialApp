@@ -44,6 +44,16 @@ export type RecurringPlanningSuggestion = {
 
 export type RepeatPlanDraft = Omit<Transaction, 'id'>
 
+export type PlanningHistorySuggestion = {
+  key: string
+  type: 'expense' | 'want'
+  itemName: string
+  category: string
+  amount: number
+  lastUsedMonth: string
+  monthsUsed: number
+}
+
 const MONTH_FORMATTER = new Intl.DateTimeFormat('es-ES', { month: 'long', year: 'numeric' })
 
 function formatCurrency(value: number) {
@@ -185,6 +195,125 @@ export function buildRepeatPlanDrafts(suggestions: RecurringPlanningSuggestion[]
         ? buildExpenseDescription(item.category as never, item.itemName, 'pending')
         : buildWantDescription(item.category as never, item.itemName, 'pending'),
   }))
+}
+
+export function buildPlanningHistorySuggestions({
+  transactions,
+  history,
+  type,
+}: {
+  transactions: Transaction[]
+  history: MonthlyPlanningHistory[]
+  type: 'expense' | 'want'
+}): PlanningHistorySuggestion[] {
+  const suggestions = new Map<
+    string,
+    Omit<PlanningHistorySuggestion, 'monthsUsed'> & { months: Set<string> }
+  >()
+
+  const register = ({
+    itemName,
+    category,
+    amount,
+    month,
+  }: {
+    itemName: string
+    category: string
+    amount: number
+    month: string
+  }) => {
+    const trimmedName = itemName.trim()
+    if (!trimmedName || !Number.isFinite(amount) || amount <= 0) return
+
+    const key = buildItemKey(type, trimmedName, category)
+    const current = suggestions.get(key)
+
+    if (!current) {
+      suggestions.set(key, {
+        key,
+        type,
+        itemName: trimmedName,
+        category,
+        amount,
+        lastUsedMonth: month,
+        months: new Set([month]),
+      })
+      return
+    }
+
+    current.months.add(month)
+    if (month >= current.lastUsedMonth) {
+      current.itemName = trimmedName
+      current.category = category
+      current.amount = amount
+      current.lastUsedMonth = month
+    }
+  }
+
+  history.forEach((entry) => {
+    const items = type === 'expense' ? entry.expenses : entry.wants
+    items.forEach((item) => register({ ...item, month: entry.month }))
+  })
+
+  transactions.forEach((transaction) => {
+    if (transaction.type !== type) return
+
+    const parsed = type === 'expense'
+      ? parseExpenseDescription(transaction.description)
+      : parseWantDescription(transaction.description)
+
+    register({
+      itemName: parsed.itemName,
+      category: parsed.category,
+      amount: transaction.amount,
+      month: transaction.date.slice(0, 7),
+    })
+  })
+
+  return [...suggestions.values()]
+    .map(({ months, ...suggestion }) => ({ ...suggestion, monthsUsed: months.size }))
+    .sort((a, b) => (
+      b.lastUsedMonth.localeCompare(a.lastUsedMonth)
+      || b.monthsUsed - a.monthsUsed
+      || a.itemName.localeCompare(b.itemName)
+    ))
+}
+
+export function buildReusablePlanningListDrafts(
+  history: MonthlyPlanningHistory,
+  type: 'expense' | 'want',
+  transactions: Transaction[],
+): RepeatPlanDraft[] {
+  const existingKeys = new Set<string>()
+
+  transactions.forEach((transaction) => {
+    if (transaction.type !== type) return
+    const parsed = type === 'expense'
+      ? parseExpenseDescription(transaction.description)
+      : parseWantDescription(transaction.description)
+    existingKeys.add(buildItemKey(type, parsed.itemName, parsed.category))
+  })
+
+  const items = type === 'expense' ? history.expenses : history.wants
+  const today = new Date().toISOString().slice(0, 10)
+  const drafts: RepeatPlanDraft[] = []
+
+  items.forEach((item) => {
+    const key = buildItemKey(type, item.itemName, item.category)
+    if (existingKeys.has(key)) return
+    existingKeys.add(key)
+
+    drafts.push({
+      amount: item.amount,
+      type,
+      date: today,
+      description: type === 'expense'
+        ? buildExpenseDescription(item.category as never, item.itemName, 'pending')
+        : buildWantDescription(item.category as never, item.itemName, 'pending'),
+    })
+  })
+
+  return drafts
 }
 
 export function buildGlobalSearchIndex({

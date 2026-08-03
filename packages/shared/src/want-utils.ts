@@ -1,6 +1,7 @@
 import type { Transaction } from './types'
 
-export type WantCategory = 'outings' | 'shopping' | 'gaming' | 'subscriptions' | 'selfcare'
+export type WantBuiltInCategory = 'outings' | 'shopping' | 'gaming' | 'subscriptions' | 'selfcare'
+export type WantCategory = WantBuiltInCategory | `custom:${string}`
 export type WantStatus = 'pending' | 'checked'
 
 export interface ParsedWantDescription {
@@ -53,6 +54,21 @@ export function buildWantDescription(category: WantCategory, itemName: string, s
   return `${category}::${status}::${itemName.trim()}`
 }
 
+export function createCustomWantCategory(label: string): WantCategory | null {
+  const normalized = label.trim().replace(/\s+/g, ' ').slice(0, 48)
+  return normalized ? `custom:${encodeURIComponent(normalized)}` : null
+}
+
+export function getWantCategoryLabel(category: WantCategory) {
+  if (!category.startsWith('custom:')) return null
+
+  try {
+    return decodeURIComponent(category.slice(7)) || 'Categoría personalizada'
+  } catch {
+    return category.slice(7) || 'Categoría personalizada'
+  }
+}
+
 export function getEffectiveWantTotal(transactions: Transaction[]) {
   return transactions
     .filter((transaction) => transaction.type === 'want')
@@ -69,7 +85,7 @@ export function getPlannedWantTotal(transactions: Transaction[]) {
 }
 
 function isWantCategory(value: string): value is WantCategory {
-  return value === 'outings' || value === 'shopping' || value === 'gaming' || value === 'subscriptions' || value === 'selfcare'
+  return value === 'outings' || value === 'shopping' || value === 'gaming' || value === 'subscriptions' || value === 'selfcare' || value.startsWith('custom:')
 }
 
 function isWantStatus(value: string): value is WantStatus {

@@ -94,6 +94,7 @@ function serializeExpense(entry: {
   id: string
   cantidad: number
   fecha: Date
+  createdAt: Date
   items: Array<{ nombre: string }>
 }): Transaction {
   return {
@@ -102,6 +103,7 @@ function serializeExpense(entry: {
     type: 'expense',
     description: entry.items[0]?.nombre ?? 'Gasto',
     date: toDateString(entry.fecha),
+    createdAt: entry.createdAt.toISOString(),
   }
 }
 
@@ -109,6 +111,7 @@ function serializeWant(entry: {
   id: string
   cantidad: number
   fecha: Date
+  createdAt: Date
   items: Array<{ nombre: string }>
 }): Transaction {
   return {
@@ -117,16 +120,18 @@ function serializeWant(entry: {
     type: 'want',
     description: entry.items[0]?.nombre ?? 'Gusto',
     date: toDateString(entry.fecha),
+    createdAt: entry.createdAt.toISOString(),
   }
 }
 
-function serializeSaving(entry: { id: string; cantidad: number; descripcion: string | null; fecha: Date }): Transaction {
+function serializeSaving(entry: { id: string; cantidad: number; descripcion: string | null; fecha: Date; createdAt: Date }): Transaction {
   return {
     id: entry.id,
     amount: entry.cantidad,
     type: 'saving',
     description: entry.descripcion ?? '',
     date: toDateString(entry.fecha),
+    createdAt: entry.createdAt.toISOString(),
   }
 }
 
@@ -162,7 +167,7 @@ function serializeDebt(entry: {
   fechaInicio: Date
   fechaTerminacion: Date
   interes: number | null
-  pagos?: Array<{ cantidad: number; fecha: Date }>
+  pagos?: Array<{ cantidad: number; fecha: Date; createdAt: Date }>
 }): Debt {
   const paidAmount = entry.pagos?.reduce((sum, payment) => sum + payment.cantidad, 0) ?? 0
   const remainingAmount = Math.max(0, entry.cantidad - paidAmount)
@@ -180,6 +185,7 @@ function serializeDebt(entry: {
     payments: entry.pagos?.map((payment) => ({
       amount: payment.cantidad,
       date: toDateString(payment.fecha),
+      createdAt: payment.createdAt.toISOString(),
     })) ?? [],
   }
 }
@@ -466,6 +472,7 @@ async function syncBootstrap(userId: string, body: JsonRecord) {
           id: entry.id,
           cantidad: Number(entry.amount ?? 0),
           fecha: entry.date ? new Date(entry.date) : new Date(),
+          ...(entry.createdAt && Number.isFinite(Date.parse(entry.createdAt)) ? { createdAt: new Date(entry.createdAt) } : {}),
           usuarioId: userId,
           items: {
             create: {
@@ -485,6 +492,7 @@ async function syncBootstrap(userId: string, body: JsonRecord) {
           id: entry.id,
           cantidad: Number(entry.amount ?? 0),
           fecha: entry.date ? new Date(entry.date) : new Date(),
+          ...(entry.createdAt && Number.isFinite(Date.parse(entry.createdAt)) ? { createdAt: new Date(entry.createdAt) } : {}),
           usuarioId: userId,
           items: {
             create: {
@@ -505,6 +513,7 @@ async function syncBootstrap(userId: string, body: JsonRecord) {
           cantidad: Number(entry.amount ?? 0),
           descripcion: String(entry.description ?? '') || null,
           fecha: entry.date ? new Date(entry.date) : new Date(),
+          ...(entry.createdAt && Number.isFinite(Date.parse(entry.createdAt)) ? { createdAt: new Date(entry.createdAt) } : {}),
           usuarioId: userId,
         },
       })
@@ -524,6 +533,7 @@ async function syncBootstrap(userId: string, body: JsonRecord) {
             create: (entry.payments ?? []).map((payment) => ({
               cantidad: Number(payment.amount ?? 0),
               fecha: payment.date ? new Date(payment.date) : new Date(),
+              ...(payment.createdAt && Number.isFinite(Date.parse(payment.createdAt)) ? { createdAt: new Date(payment.createdAt) } : {}),
             })),
           },
         },
@@ -561,6 +571,7 @@ async function syncBootstrap(userId: string, body: JsonRecord) {
           etiqueta: String(entry.label ?? entry.month ?? ''),
           gastos: (entry.expenses ?? []) as unknown as Prisma.InputJsonValue,
           gustos: (entry.wants ?? []) as unknown as Prisma.InputJsonValue,
+          ...(entry.createdAt && Number.isFinite(Date.parse(entry.createdAt)) ? { createdAt: new Date(entry.createdAt) } : {}),
           usuarioId: userId,
         },
       })

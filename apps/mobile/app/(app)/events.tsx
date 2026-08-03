@@ -12,7 +12,7 @@ import { useFinanceStore } from '../../src/store/finance-store'
 import { usePreferencesStore } from '../../src/store/preferences-store'
 import { resolvePalette } from '../../src/theme/palette'
 import { radius, spacing } from '../../src/theme/tokens'
-import { getMonthlyOverview } from '@plata/shared'
+import { getFinancialPeriodStart, getMonthlyOverview } from '@plata/shared'
 
 const MONTH_LABELS = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre']
 const WEEKDAY_LABELS = ['Lu', 'Ma', 'Mi', 'Ju', 'Vi', 'Sa', 'Do']
@@ -59,6 +59,8 @@ export default function EventsScreen() {
   const events = useFinanceStore((state) => state.events)
   const transactions = useFinanceStore((state) => state.transactions)
   const salaries = useFinanceStore((state) => state.salaries)
+  const debts = useFinanceStore((state) => state.debts)
+  const monthlyPlanningHistory = useFinanceStore((state) => state.monthlyPlanningHistory)
   const addEvent = useFinanceStore((state) => state.addEvent)
   const updateEvent = useFinanceStore((state) => state.updateEvent)
   const removeEvent = useFinanceStore((state) => state.removeEvent)
@@ -73,7 +75,7 @@ export default function EventsScreen() {
   const [formError, setFormError] = useState<string | null>(null)
   const [form, setForm] = useState({ name: '', date: '', amount: '', isNotification: false })
 
-  const overview = getMonthlyOverview(salaries, transactions, formula)
+  const overview = getMonthlyOverview(salaries, transactions, debts, formula, { periodStart: getFinancialPeriodStart(monthlyPlanningHistory) })
   const sortedEvents = useMemo(() => [...events].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()), [events])
   const totalReserved = sortedEvents.reduce((sum, event) => sum + event.amount, 0)
   const notificationCount = sortedEvents.filter((event) => event.isNotification).length

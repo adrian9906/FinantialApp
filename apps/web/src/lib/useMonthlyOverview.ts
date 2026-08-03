@@ -1,7 +1,7 @@
 import { useFinanceStore } from '@/store/financeStore'
 import { usePreferencesStore } from '@/store/preferencesStore'
 import { useMemo } from 'react'
-import { getMonthlyOverview, getWishlistReservedAmount, isWishlistPurchased } from '@plata/shared'
+import { getFinancialPeriodStart, getMonthlyOverview, getWishlistReservedAmount, isWishlistPurchased } from '@plata/shared'
 
 export function useMonthlyOverview() {
   const salaries = useFinanceStore((state) => state.salaries)
@@ -9,10 +9,12 @@ export function useMonthlyOverview() {
   const debts = useFinanceStore((state) => state.debts)
   const wishlist = useFinanceStore((state) => state.wishlist)
   const savingsGoals = useFinanceStore((state) => state.savingsGoals)
+  const monthlyPlanningHistory = useFinanceStore((state) => state.monthlyPlanningHistory)
   const formula = usePreferencesStore((state) => state.formula)
 
   return useMemo(() => {
-    const overview = getMonthlyOverview(salaries, transactions, debts, formula)
+    const periodStart = getFinancialPeriodStart(monthlyPlanningHistory)
+    const overview = getMonthlyOverview(salaries, transactions, debts, formula, { periodStart })
     const reservedForPurchasedWishlist = wishlist.reduce(
       (sum, item) => sum + (isWishlistPurchased(item) ? getWishlistReservedAmount(item) : 0),
       0,
@@ -41,5 +43,5 @@ export function useMonthlyOverview() {
       remainingSavings: overview.budgetSavings - totalSavings,
       reservedForPurchasedWishlist,
     }
-  }, [debts, formula, salaries, savingsGoals, transactions, wishlist])
+  }, [debts, formula, monthlyPlanningHistory, salaries, savingsGoals, transactions, wishlist])
 }

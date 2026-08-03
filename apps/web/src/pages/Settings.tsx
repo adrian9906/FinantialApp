@@ -592,15 +592,11 @@ function MonthlyResetCard() {
 
   async function handleResetMonth() {
     if (isResetting) return
-    if (plannedExpenses.length === 0 && plannedWants.length === 0) {
-      toast.error('No hay listas activas para archivar este mes.')
-      return
-    }
 
     setIsResetting(true)
     try {
       await resetMonthlyPlans()
-      toast.success('Se guardo el historial del mes y las listas activas quedaron en cero.')
+      toast.success('Nuevo ciclo iniciado. El presupuesto cuenta desde este momento.')
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'No se pudo cerrar el mes.')
     } finally {
@@ -632,8 +628,8 @@ function MonthlyResetCard() {
       <Card className="border-graphite bg-surface p-6 shadow-vault">
         <SectionIntro
           eyebrow="Cierre mensual"
-          title="Reset de listas"
-          description="Guarda una foto de tus gastos y gustos del mes, vacia las listas activas y te deja listo para planificar el próximo mes desde cero."
+          title="Iniciar un nuevo ciclo"
+          description="Marca este momento como el inicio del nuevo presupuesto y deja las listas listas para volver a planificar desde cero."
           icon={
             <div className="flex size-11 items-center justify-center rounded-2xl bg-warning/10 text-warning shadow-vault-sm">
               <Archive className="size-5" />
@@ -655,9 +651,9 @@ function MonthlyResetCard() {
         </div>
 
         <div className="mt-5 rounded-2xl border border-graphite bg-surface-container-low p-4">
-          <p className="text-sm font-medium text-on-surface">Que hace este reset</p>
+          <p className="text-sm font-medium text-on-surface">Qué hace este reset</p>
           <p className="mt-2 text-sm text-muted-gray">
-            Guarda el historial de compras del mes actual y elimina solo las listas activas de gastos y gustos. Tus ahorros, deudas, salario, deseos y eventos no se borran.
+            Desde el momento del reset, ingresos, gastos, gustos, ahorros y pagos de deuda se calculan dentro del nuevo ciclo. Tus datos anteriores no se borran; solo se limpian las listas activas de gastos y gustos.
           </p>
 
           <div className="mt-4">
@@ -666,19 +662,19 @@ function MonthlyResetCard() {
                 render={
                   <Button
                     className="bg-warning text-black hover:bg-warning/85"
-                    disabled={isResetting || (plannedExpenses.length === 0 && plannedWants.length === 0)}
+                    disabled={isResetting}
                     loading={isResetting}
                   />
                 }
               >
                 <RefreshCcw className="size-4" />
-                Cerrar mes y limpiar listas
+                Iniciar nuevo ciclo
               </AlertDialogTrigger>
               <AlertDialogContent>
                 <AlertDialogHeader>
-                  <AlertDialogTitle>Resetear gastos y gustos del mes</AlertDialogTitle>
+                  <AlertDialogTitle>Iniciar un nuevo ciclo financiero</AlertDialogTitle>
                   <AlertDialogDescription>
-                    Se guardara el historial actual para reutilizarlo despues y las listas activas quedaran vacias. Esta accion no toca tus ahorros, deudas ni salario.
+                    El presupuesto empezará a contar desde este momento. Se guardará el historial actual y las listas de gastos y gustos quedarán vacías.
                   </AlertDialogDescription>
                 </AlertDialogHeader>
                 <AlertDialogFooter>
@@ -688,7 +684,7 @@ function MonthlyResetCard() {
                     loading={isResetting}
                     onClick={() => void handleResetMonth()}
                   >
-                    Confirmar reset mensual
+                    Confirmar nuevo ciclo
                   </AlertDialogAction>
                 </AlertDialogFooter>
               </AlertDialogContent>

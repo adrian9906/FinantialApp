@@ -10,11 +10,13 @@ export interface Transaction {
   type: 'expense' | 'want' | 'saving'
   description?: string
   date: string
+  createdAt?: string
 }
 
 export interface DebtPayment {
   amount: number
   date: string
+  createdAt?: string
 }
 
 export interface Debt {

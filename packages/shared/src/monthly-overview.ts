@@ -1,5 +1,5 @@
 import type { AllocationFormula } from './preferences'
-import type { Debt, Salary, Transaction } from './types'
+import type { Debt, MonthlyPlanningHistory, Salary, Transaction } from './types'
 import { getEffectiveExpenseTotal } from './expense-utils'
 import {
   getExpenseTransferTotal,
@@ -10,15 +10,50 @@ import {
 import { getEffectiveWantTotal } from './want-utils'
 import { getMonthKey, getSalaryForMonth } from './salary-utils'
 
+export interface MonthlyOverviewOptions {
+  periodStart?: string | null
+  salaryMonth?: string
+}
+
+export function getFinancialPeriodStart(
+  history: MonthlyPlanningHistory[],
+  now = new Date(),
+) {
+  const nowTime = now.getTime()
+  const latestReset = history.reduce<MonthlyPlanningHistory | null>((latest, entry) => {
+    const entryTime = Date.parse(entry.createdAt)
+    if (!Number.isFinite(entryTime) || entryTime > nowTime) return latest
+    if (!latest || entryTime > Date.parse(latest.createdAt)) return entry
+    return latest
+  }, null)
+
+  return latestReset?.createdAt ?? `${getMonthKey(now)}-01T00:00:00.000Z`
+}
+
+function isInFinancialPeriod(
+  entry: { date: string; createdAt?: string },
+  periodStart: string,
+) {
+  const startDate = periodStart.slice(0, 10)
+  if (entry.date < startDate) return false
+  if (entry.date > startDate || !entry.createdAt) return true
+
+  const createdAt = Date.parse(entry.createdAt)
+  const startTime = Date.parse(periodStart)
+  return !Number.isFinite(createdAt) || !Number.isFinite(startTime) || createdAt >= startTime
+}
+
 export function getMonthlyOverview(
   salaries: Salary[],
   transactions: Transaction[],
   debts: Debt[],
   formula: AllocationFormula,
-  month = getMonthKey(),
+  options: MonthlyOverviewOptions = {},
 ) {
-  const grossSalary = getSalaryForMonth(salaries, month)?.amount ?? 0
-  const monthlyTransactions = transactions.filter((transaction) => transaction.date.slice(0, 7) === month)
+  const periodStart = options.periodStart ?? `${getMonthKey()}-01T00:00:00.000Z`
+  const salaryMonth = options.salaryMonth ?? getMonthKey()
+  const grossSalary = getSalaryForMonth(salaries, salaryMonth)?.amount ?? 0
+  const monthlyTransactions = transactions.filter((transaction) => isInFinancialPeriod(transaction, periodStart))
   const totalExpenses = getEffectiveExpenseTotal(monthlyTransactions)
   const totalWants = getEffectiveWantTotal(monthlyTransactions)
   const transferredFromExpenses = getExpenseTransferTotal(monthlyTransactions)
@@ -36,7 +71,7 @@ export function getMonthlyOverview(
       if (debt.isSettled) return sum
 
       return sum + (debt.payments ?? [])
-        .filter((payment) => payment.date.slice(0, 7) === month)
+        .filter((payment) => isInFinancialPeriod(payment, periodStart))
         .reduce((paymentSum, payment) => paymentSum + payment.amount, 0)
     },
     0,

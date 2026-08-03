@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react'
 import { Calendar, ChevronLeft, ChevronRight, Clapperboard, Gamepad2, Heart, Pencil, Plus, ShoppingBag, Sparkles, Ticket, Trash2 } from 'lucide-react-native'
 import { Pressable, View } from 'react-native'
-import { buildWantDescription, getPlannedWantTotal, parseWantDescription, type WantCategory } from '@plata/shared'
+import { buildWantDescription, createCustomWantCategory, getFinancialPeriodStart, getPlannedWantTotal, getWantCategoryLabel, parseWantDescription, type WantBuiltInCategory, type WantCategory } from '@plata/shared'
 
 import { AppFrame } from '../../src/components/app-frame'
 import { Button } from '../../src/components/ui/button'
@@ -38,12 +38,19 @@ const Trash2Icon = Trash2 as any
 const MONTH_LABELS = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre']
 const WEEKDAY_LABELS = ['Lu', 'Ma', 'Mi', 'Ju', 'Vi', 'Sa', 'Do']
 
-const CATEGORY_META: Record<WantCategory, { label: string; hint: string; icon: any; color: string }> = {
+type WantCategoryMeta = { label: string; hint: string; icon: any; color: string }
+
+const CATEGORY_META: Record<WantBuiltInCategory, WantCategoryMeta> = {
   outings: { label: 'Salidas', hint: 'Cenas, cafes y paseos.', icon: TicketIcon, color: '#c084fc' },
   shopping: { label: 'Compras', hint: 'Ropa, gadgets y accesorios.', icon: ShoppingBagIcon, color: '#f9a8d4' },
   gaming: { label: 'Gaming', hint: 'Juegos y entretenimiento digital.', icon: Gamepad2Icon, color: '#67e8f9' },
   subscriptions: { label: 'Suscripciones', hint: 'Streaming, apps premium y servicios.', icon: ClapperboardIcon, color: '#fcd34d' },
   selfcare: { label: 'Autocuidado', hint: 'Spa, skincare y hobbies.', icon: SparklesIcon, color: '#6ee7b7' },
+}
+
+function getCategoryMeta(category: WantCategory): WantCategoryMeta {
+  if (category in CATEGORY_META) return CATEGORY_META[category as WantBuiltInCategory]
+  return { label: getWantCategoryLabel(category) ?? 'Categoría personalizada', hint: 'Una categoría creada por ti.', icon: SparklesIcon, color: '#e879f9' }
 }
 
 function formatMoney(value: number) {
@@ -74,6 +81,7 @@ export default function WantsScreen() {
   const transactions = useFinanceStore((state) => state.transactions)
   const salaries = useFinanceStore((state) => state.salaries)
   const debts = useFinanceStore((state) => state.debts)
+  const monthlyPlanningHistory = useFinanceStore((state) => state.monthlyPlanningHistory)
   const addTransaction = useFinanceStore((state) => state.addTransaction)
   const updateTransaction = useFinanceStore((state) => state.updateTransaction)
   const removeTransaction = useFinanceStore((state) => state.removeTransaction)
@@ -86,16 +94,24 @@ export default function WantsScreen() {
   const [editId, setEditId] = useState<string | null>(null)
   const [form, setForm] = useState({ amount: '', itemName: '', category: 'outings' as WantCategory, date: '' })
   const [formError, setFormError] = useState<string | null>(null)
+  const [customCategoryName, setCustomCategoryName] = useState('')
   const [calendarMonth, setCalendarMonth] = useState(() => new Date(new Date().getFullYear(), new Date().getMonth(), 1))
 
-  const overview = getMonthlyOverview(salaries, transactions, debts, formula)
+  const overview = getMonthlyOverview(salaries, transactions, debts, formula, { periodStart: getFinancialPeriodStart(monthlyPlanningHistory) })
   const wantItems: WantViewItem[] = useMemo(() => transactions.filter((transaction) => transaction.type === 'want').map((transaction) => {
     const parsed = parseWantDescription(transaction.description)
     return { id: transaction.id, amount: transaction.amount, date: transaction.date, itemName: parsed.itemName, category: parsed.category, status: parsed.status }
   }), [transactions])
-  const groupedWants = Object.entries(CATEGORY_META).map(([key, meta]) => {
+  const wantCategories = (() => {
+    const categories = new Set<WantCategory>(Object.keys(CATEGORY_META) as WantBuiltInCategory[])
+    wantItems.forEach((item) => categories.add(item.category))
+    categories.add(form.category)
+    return Array.from(categories)
+  })()
+  const groupedWants = wantCategories.map((key) => {
+    const meta = getCategoryMeta(key)
     const items = wantItems.filter((item) => item.category === key)
-    return { key: key as WantCategory, meta, items, total: items.reduce((sum, item) => sum + item.amount, 0), completed: items.filter((item) => item.status === 'checked').length }
+    return { key, meta, items, total: items.reduce((sum, item) => sum + item.amount, 0), completed: items.filter((item) => item.status === 'checked').length }
   })
 
   const wantCount = wantItems.length
@@ -123,12 +139,14 @@ export default function WantsScreen() {
     setForm({ amount: '', itemName: '', category: 'outings', date: '' })
     setEditId(null)
     setFormError(null)
+    setCustomCategoryName('')
     setCalendarMonth(new Date(new Date().getFullYear(), new Date().getMonth(), 1))
     setOpen(false)
   }
 
   function handleOpen(entry?: WantViewItem) {
     if (isWantsDisabled) return
+    setCustomCategoryName('')
 
     if (entry) {
       setEditId(entry.id)
@@ -170,6 +188,17 @@ export default function WantsScreen() {
     if (editId) await updateTransaction(editId, payload)
     else await addTransaction(payload)
     resetForm()
+  }
+
+  function handleCreateCategory() {
+    const category = createCustomWantCategory(customCategoryName)
+    if (!category) {
+      setFormError('Escribe un nombre para la categoría.')
+      return
+    }
+    setFormError(null)
+    setForm((current) => ({ ...current, category }))
+    setCustomCategoryName('')
   }
 
   async function toggleChecked(item: WantViewItem) {
@@ -372,11 +401,20 @@ export default function WantsScreen() {
             </View>
           </View>
           <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm }}>
-            {Object.entries(CATEGORY_META).map(([key, meta]) => (
+            {wantCategories.map((key) => (
               <Button key={key} variant={form.category === key ? 'default' : 'outline'} className="self-start" onPress={() => setForm((current) => ({ ...current, category: key as WantCategory }))}>
-                <Text>{meta.label}</Text>
+                <Text>{getCategoryMeta(key).label}</Text>
               </Button>
             ))}
+          </View>
+          <View style={{ gap: spacing.sm }}>
+            <Text style={{ color: palette.textMuted, fontSize: 13 }}>Crear categoría propia</Text>
+            <View style={{ flexDirection: 'row', gap: spacing.sm, alignItems: 'center' }}>
+              <View style={{ flex: 1 }}>
+                <Input value={customCategoryName} onChangeText={(value) => { setFormError(null); setCustomCategoryName(value) }} maxLength={48} placeholder="Ej. Actividades del niño" />
+              </View>
+              <Button variant="outline" onPress={handleCreateCategory} disabled={!customCategoryName.trim()}><Text>Crear</Text></Button>
+            </View>
           </View>
           {formError && formError !== inlineAmountError ? <Text style={{ color: palette.danger, fontSize: 13 }}>{formError}</Text> : null}
         </View>

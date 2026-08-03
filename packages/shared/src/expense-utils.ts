@@ -1,6 +1,7 @@
 import type { Transaction } from './types'
 
-export type ExpenseCategory = 'food' | 'home' | 'gym' | 'health' | 'essentials'
+export type ExpenseBuiltInCategory = 'food' | 'home' | 'gym' | 'health' | 'essentials'
+export type ExpenseCategory = ExpenseBuiltInCategory | `custom:${string}`
 export type ExpenseStatus = 'pending' | 'checked'
 
 export interface ParsedExpenseDescription {
@@ -53,6 +54,21 @@ export function buildExpenseDescription(category: ExpenseCategory, itemName: str
   return `${category}::${status}::${itemName.trim()}`
 }
 
+export function createCustomExpenseCategory(label: string): ExpenseCategory | null {
+  const normalized = label.trim().replace(/\s+/g, ' ').slice(0, 48)
+  return normalized ? `custom:${encodeURIComponent(normalized)}` : null
+}
+
+export function getExpenseCategoryLabel(category: ExpenseCategory) {
+  if (!category.startsWith('custom:')) return null
+
+  try {
+    return decodeURIComponent(category.slice(7)) || 'Categoría personalizada'
+  } catch {
+    return category.slice(7) || 'Categoría personalizada'
+  }
+}
+
 export function getEffectiveExpenseTotal(transactions: Transaction[]) {
   return transactions
     .filter((transaction) => transaction.type === 'expense')
@@ -69,7 +85,7 @@ export function getPlannedExpenseTotal(transactions: Transaction[]) {
 }
 
 function isExpenseCategory(value: string): value is ExpenseCategory {
-  return value === 'food' || value === 'home' || value === 'gym' || value === 'health' || value === 'essentials'
+  return value === 'food' || value === 'home' || value === 'gym' || value === 'health' || value === 'essentials' || value.startsWith('custom:')
 }
 
 function isExpenseStatus(value: string): value is ExpenseStatus {

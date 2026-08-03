@@ -5,6 +5,7 @@ import {
   carrySalaryForwardToMonth,
   createEmptyBootstrapPayload,
   type Debt,
+  getFinancialPeriodStart,
   getMonthlyOverview,
   getMonthKey,
   normalizeBootstrapPayload,
@@ -25,6 +26,8 @@ import { usePreferencesStore } from './preferences-store'
 const GUEST_FINANCE_STORAGE_KEY = 'plata-mobile-guest-finance'
 const AUTH_FINANCE_CACHE_KEY = 'plata-mobile-auth-finance'
 
+type DebtInput = Omit<Debt, 'id' | 'paidAmount' | 'remainingAmount' | 'progress' | 'isSettled' | 'payments'>
+
 interface FinanceStore extends BootstrapPayload {
   hasLoaded: boolean
   loadedKey: string | null
@@ -40,7 +43,7 @@ interface FinanceStore extends BootstrapPayload {
   addWishlistItem: (payload: Omit<WishlistItem, 'id'>) => Promise<void>
   updateWishlistItem: (id: string, payload: Partial<Omit<WishlistItem, 'id'>>) => Promise<void>
   removeWishlistItem: (id: string) => Promise<void>
-  addDebt: (payload: Omit<Debt, 'id'>) => Promise<void>
+  addDebt: (payload: DebtInput) => Promise<void>
   updateDebt: (id: string, payload: Partial<Omit<Debt, 'id'>>) => Promise<void>
   removeDebt: (id: string) => Promise<void>
   addEvent: (payload: Omit<AppEvent, 'id'>) => Promise<void>
@@ -128,6 +131,7 @@ function createGuestDemoSnapshot(): BootstrapPayload {
         image: 'https://images.unsplash.com/photo-1505740420928-5e560c06d30e?auto=format&fit=crop&w=900&q=80',
       },
     ],
+    monthlyPlanningHistory: [],
     events: [
       {
         id: 'event-demo',
@@ -381,6 +385,7 @@ export const useFinanceStore = create<FinanceStore>()((set, get) => ({
       const created: Transaction = {
         ...payload,
         id: createLocalId(payload.type),
+        createdAt: new Date().toISOString(),
       }
       const snapshot = {
         ...state,
@@ -544,7 +549,15 @@ export const useFinanceStore = create<FinanceStore>()((set, get) => ({
     const state = get()
 
     if (activeKey === 'guest') {
-      const created: Debt = { ...payload, id: createLocalId('debt') }
+      const created: Debt = {
+        ...payload,
+        id: createLocalId('debt'),
+        paidAmount: 0,
+        remainingAmount: payload.amount,
+        progress: 0,
+        isSettled: payload.amount <= 0,
+        payments: [],
+      }
       const snapshot = { ...state, debts: [created, ...state.debts] }
       await persistFinanceSnapshotForActiveKey(activeKey, snapshot)
       set(snapshot)
@@ -808,7 +821,9 @@ export const useFinanceStore = create<FinanceStore>()((set, get) => ({
   getWishlistProjection: (item) => {
     const state = get()
     const formula = usePreferencesStore.getState().formula
-    const overview = getMonthlyOverview(state.salaries, state.transactions, formula)
+    const overview = getMonthlyOverview(state.salaries, state.transactions, state.debts, formula, {
+      periodStart: getFinancialPeriodStart(state.monthlyPlanningHistory),
+    })
     const averageMonthlySavings = Math.max(overview.totalSavings, overview.budgetSavings)
 
     return buildPurchaseProjection(item.price, item.savedAmount, averageMonthlySavings, formatProjectionDate)

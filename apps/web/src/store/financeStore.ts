@@ -96,6 +96,7 @@ function normalizeDebt(entry: Partial<Debt>): Debt {
       ? entry.payments.map((payment) => ({
           amount: Number(payment.amount ?? 0),
           date: String(payment.date ?? new Date().toISOString().slice(0, 10)),
+          createdAt: payment.createdAt ? String(payment.createdAt) : undefined,
         }))
       : [],
   }
@@ -110,7 +111,7 @@ function normalizeBootstrapSnapshot(payload?: Partial<BootstrapPayload> | null):
   }
 }
 
-function buildMonthlyPlanningHistory(transactions: Transaction[]): MonthlyPlanningHistory | null {
+function buildMonthlyPlanningHistory(transactions: Transaction[]): MonthlyPlanningHistory {
   const expenses = transactions
     .filter((transaction) => transaction.type === 'expense')
     .map<MonthlyPlanningItem>((transaction) => {
@@ -138,8 +139,6 @@ function buildMonthlyPlanningHistory(transactions: Transaction[]): MonthlyPlanni
         date: transaction.date,
       }
     })
-
-  if (expenses.length === 0 && wants.length === 0) return null
 
   const now = new Date()
 
@@ -447,7 +446,7 @@ export const useFinanceStore = create<FinanceStore>()((set, get) => ({
 
     if (isLocalMutationMode()) {
       updateLocalState(set, (state) => ({
-        transactions: [{ ...transaction, id: makeId(transaction.type) }, ...state.transactions],
+        transactions: [{ ...transaction, id: makeId(transaction.type), createdAt: new Date().toISOString() }, ...state.transactions],
       }))
       return
     }
@@ -549,7 +548,6 @@ export const useFinanceStore = create<FinanceStore>()((set, get) => ({
   },
   resetMonthlyPlans: async () => {
     const snapshot = buildMonthlyPlanningHistory(get().transactions)
-    if (!snapshot) return
 
     const nextTransactions = get().transactions.filter(
       (transaction) => transaction.type !== 'expense' && transaction.type !== 'want',
@@ -594,7 +592,7 @@ export const useFinanceStore = create<FinanceStore>()((set, get) => ({
     if (isLocalMutationMode()) {
       updateLocalState(set, (state) => ({
         transactions: [
-          ...restoredTransactions.map((transaction) => ({ ...transaction, id: makeId(transaction.type) })),
+          ...restoredTransactions.map((transaction) => ({ ...transaction, id: makeId(transaction.type), createdAt: new Date().toISOString() })),
           ...state.transactions,
         ],
       }))
@@ -627,7 +625,7 @@ export const useFinanceStore = create<FinanceStore>()((set, get) => ({
           progress: debt.amount > 0 ? Math.min(100, Math.round((paidAmount / debt.amount) * 100)) : 100,
           isSettled: remainingAmount === 0,
           payments: paidAmount > 0
-            ? [{ amount: paidAmount, date: new Date().toISOString().slice(0, 10) }]
+            ? [{ amount: paidAmount, date: new Date().toISOString().slice(0, 10), createdAt: new Date().toISOString() }]
             : [],
         }, ...state.debts],
       }))
@@ -686,7 +684,7 @@ export const useFinanceStore = create<FinanceStore>()((set, get) => ({
             remainingAmount: nextRemainingAmount,
             progress: entry.amount > 0 ? Math.min(100, Math.round((nextPaidAmount / entry.amount) * 100)) : 100,
             isSettled: nextRemainingAmount === 0,
-            payments: [...(entry.payments ?? []), { amount, date: new Date().toISOString().slice(0, 10) }],
+            payments: [...(entry.payments ?? []), { amount, date: new Date().toISOString().slice(0, 10), createdAt: new Date().toISOString() }],
           }
         }),
       }))

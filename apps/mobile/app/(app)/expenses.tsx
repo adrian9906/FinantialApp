@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react'
 import { Calendar, ChevronLeft, ChevronRight, Dumbbell, HeartPulse, House, Package, Pencil, Plus, ShoppingBasket, Trash2 } from 'lucide-react-native'
 import { Pressable, View } from 'react-native'
-import { buildExpenseDescription, getPlannedExpenseTotal, parseExpenseDescription, type ExpenseCategory } from '@plata/shared'
+import { buildExpenseDescription, createCustomExpenseCategory, getExpenseCategoryLabel, getFinancialPeriodStart, getPlannedExpenseTotal, parseExpenseDescription, type ExpenseBuiltInCategory, type ExpenseCategory } from '@plata/shared'
 
 import { AppFrame } from '../../src/components/app-frame'
 import { Button } from '../../src/components/ui/button'
@@ -38,15 +38,19 @@ const Trash2Icon = Trash2 as any
 const MONTH_LABELS = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre']
 const WEEKDAY_LABELS = ['Lu', 'Ma', 'Mi', 'Ju', 'Vi', 'Sa', 'Do']
 
-const CATEGORY_META: Record<
-  ExpenseCategory,
-  { label: string; hint: string; icon: any; color: string }
-> = {
+type ExpenseCategoryMeta = { label: string; hint: string; icon: any; color: string }
+
+const CATEGORY_META: Record<ExpenseBuiltInCategory, ExpenseCategoryMeta> = {
   food: { label: 'Comida', hint: 'Mercado, frutas, snacks y cocina diaria.', icon: ShoppingBasketIcon, color: '#8b5cf6' },
   home: { label: 'Pagos del hogar', hint: 'Luz, agua, internet, gas y mantenimiento.', icon: HouseIcon, color: '#38bdf8' },
   gym: { label: 'Gym', hint: 'Cuota, suplementos y accesorios.', icon: DumbbellIcon, color: '#34d399' },
   health: { label: 'Salud', hint: 'Medicinas, consultas y cuidado personal.', icon: HeartPulseIcon, color: '#fb7185' },
   essentials: { label: 'Otros esenciales', hint: 'Lo necesario que no cae en otra categoria.', icon: PackageIcon, color: '#fbbf24' },
+}
+
+function getCategoryMeta(category: ExpenseCategory): ExpenseCategoryMeta {
+  if (category in CATEGORY_META) return CATEGORY_META[category as ExpenseBuiltInCategory]
+  return { label: getExpenseCategoryLabel(category) ?? 'Categoría personalizada', hint: 'Una categoría creada por ti.', icon: PackageIcon, color: '#c4b5fd' }
 }
 
 function formatMoney(value: number) {
@@ -76,6 +80,8 @@ function buildMonthMatrix(visibleMonth: Date) {
 export default function ExpensesScreen() {
   const transactions = useFinanceStore((state) => state.transactions)
   const salaries = useFinanceStore((state) => state.salaries)
+  const debts = useFinanceStore((state) => state.debts)
+  const monthlyPlanningHistory = useFinanceStore((state) => state.monthlyPlanningHistory)
   const addTransaction = useFinanceStore((state) => state.addTransaction)
   const updateTransaction = useFinanceStore((state) => state.updateTransaction)
   const removeTransaction = useFinanceStore((state) => state.removeTransaction)
@@ -87,16 +93,24 @@ export default function ExpensesScreen() {
   const [editId, setEditId] = useState<string | null>(null)
   const [form, setForm] = useState({ amount: '', itemName: '', category: 'food' as ExpenseCategory, date: '' })
   const [formError, setFormError] = useState<string | null>(null)
+  const [customCategoryName, setCustomCategoryName] = useState('')
   const [calendarMonth, setCalendarMonth] = useState(() => new Date(new Date().getFullYear(), new Date().getMonth(), 1))
 
-  const overview = getMonthlyOverview(salaries, transactions, formula)
+  const overview = getMonthlyOverview(salaries, transactions, debts, formula, { periodStart: getFinancialPeriodStart(monthlyPlanningHistory) })
   const expenseItems: ExpenseViewItem[] = useMemo(() => transactions.filter((transaction) => transaction.type === 'expense').map((transaction) => {
     const parsed = parseExpenseDescription(transaction.description)
     return { id: transaction.id, amount: transaction.amount, date: transaction.date, itemName: parsed.itemName, category: parsed.category, status: parsed.status }
   }), [transactions])
-  const groupedExpenses = Object.entries(CATEGORY_META).map(([key, meta]) => {
+  const expenseCategories = (() => {
+    const categories = new Set<ExpenseCategory>(Object.keys(CATEGORY_META) as ExpenseBuiltInCategory[])
+    expenseItems.forEach((item) => categories.add(item.category))
+    categories.add(form.category)
+    return Array.from(categories)
+  })()
+  const groupedExpenses = expenseCategories.map((key) => {
+    const meta = getCategoryMeta(key)
     const items = expenseItems.filter((item) => item.category === key)
-    return { key: key as ExpenseCategory, meta, items, total: items.reduce((sum, item) => sum + item.amount, 0), completed: items.filter((item) => item.status === 'checked').length }
+    return { key, meta, items, total: items.reduce((sum, item) => sum + item.amount, 0), completed: items.filter((item) => item.status === 'checked').length }
   })
 
   const expenseCount = expenseItems.length
@@ -124,11 +138,13 @@ export default function ExpensesScreen() {
     setForm({ amount: '', itemName: '', category: 'food', date: '' })
     setEditId(null)
     setFormError(null)
+    setCustomCategoryName('')
     setCalendarMonth(new Date(new Date().getFullYear(), new Date().getMonth(), 1))
     setOpen(false)
   }
 
   function handleOpen(entry?: ExpenseViewItem) {
+    setCustomCategoryName('')
     if (entry) {
       setEditId(entry.id)
       setForm({ amount: String(entry.amount), itemName: entry.itemName, category: entry.category, date: entry.date })
@@ -165,6 +181,17 @@ export default function ExpensesScreen() {
     if (editId) await updateTransaction(editId, payload)
     else await addTransaction(payload)
     resetForm()
+  }
+
+  function handleCreateCategory() {
+    const category = createCustomExpenseCategory(customCategoryName)
+    if (!category) {
+      setFormError('Escribe un nombre para la categoría.')
+      return
+    }
+    setFormError(null)
+    setForm((current) => ({ ...current, category }))
+    setCustomCategoryName('')
   }
 
   async function toggleChecked(item: ExpenseViewItem) {
@@ -354,11 +381,20 @@ export default function ExpensesScreen() {
             </View>
           </View>
           <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm }}>
-            {Object.entries(CATEGORY_META).map(([key, meta]) => (
+            {expenseCategories.map((key) => (
               <Button key={key} variant={form.category === key ? 'default' : 'outline'} className="self-start" onPress={() => setForm((current) => ({ ...current, category: key as ExpenseCategory }))}>
-                <Text>{meta.label}</Text>
+                <Text>{getCategoryMeta(key).label}</Text>
               </Button>
             ))}
+          </View>
+          <View style={{ gap: spacing.sm }}>
+            <Text style={{ color: palette.textMuted, fontSize: 13 }}>Crear categoría propia</Text>
+            <View style={{ flexDirection: 'row', gap: spacing.sm, alignItems: 'center' }}>
+              <View style={{ flex: 1 }}>
+                <Input value={customCategoryName} onChangeText={(value) => { setFormError(null); setCustomCategoryName(value) }} maxLength={48} placeholder="Ej. Pago del niño" />
+              </View>
+              <Button variant="outline" onPress={handleCreateCategory} disabled={!customCategoryName.trim()}><Text>Crear</Text></Button>
+            </View>
           </View>
           {formError && formError !== inlineAmountError ? <Text style={{ color: palette.danger, fontSize: 13 }}>{formError}</Text> : null}
         </View>

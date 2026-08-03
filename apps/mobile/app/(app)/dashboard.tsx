@@ -1,6 +1,6 @@
 import { useMemo } from 'react'
 import { router } from 'expo-router'
-import { getMonthlyOverview } from '@plata/shared'
+import { getFinancialPeriodStart, getMonthlyOverview } from '@plata/shared'
 import {
   Bell,
   Calendar,
@@ -209,6 +209,7 @@ export default function DashboardScreen() {
   const reminders = useFinanceStore((state) => state.reminders)
   const events = useFinanceStore((state) => state.events)
   const debts = useFinanceStore((state) => state.debts)
+  const monthlyPlanningHistory = useFinanceStore((state) => state.monthlyPlanningHistory)
   const hasLoaded = useFinanceStore((state) => state.hasLoaded)
   const seedGuestData = useFinanceStore((state) => state.seedGuestData)
   const getWishlistProjection = useFinanceStore((state) => state.getWishlistProjection)
@@ -216,7 +217,7 @@ export default function DashboardScreen() {
   const appearance = usePreferencesStore((state) => state.appearance)
   const theme = usePreferencesStore((state) => state.theme)
   const palette = resolvePalette(appearance, theme)
-  const overview = getMonthlyOverview(salaries, transactions, formula)
+  const overview = getMonthlyOverview(salaries, transactions, debts, formula, { periodStart: getFinancialPeriodStart(monthlyPlanningHistory) })
   const featuredWish = wishlist[0] ?? null
   const projection = featuredWish ? getWishlistProjection(featuredWish) : null
 
