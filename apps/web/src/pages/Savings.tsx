@@ -358,9 +358,20 @@ export default function Savings() {
           <h2 className="text-[28px] font-semibold text-on-surface mb-3">
             +${overview.totalSavings.toLocaleString()} <span className="text-base font-normal text-muted-gray">/ ${overview.budgetSavings.toLocaleString()}</span>
           </h2>
-          <p className="mb-3 text-sm text-muted-gray">
-            Ahorro total acumulado: <span className="font-semibold text-on-surface">${overview.accumulatedSavings.toLocaleString()}</span>
-          </p>
+          <div className="mb-4 grid gap-3 sm:grid-cols-3">
+            <div className="rounded-xl border border-graphite bg-abyss/80 p-3">
+              <p className="text-[10px] uppercase tracking-[0.16em] text-medium-gray">Ahorro propio</p>
+              <p className="mt-2 text-lg font-semibold tabular-nums text-success">${overview.ownSavings.toLocaleString()}</p>
+            </div>
+            <div className="rounded-xl border border-amber-500/20 bg-amber-500/8 p-3">
+              <p className="text-[10px] uppercase tracking-[0.16em] text-amber-200">Adquirido en deuda</p>
+              <p className="mt-2 text-lg font-semibold tabular-nums text-amber-200">${overview.borrowedSavings.toLocaleString()}</p>
+            </div>
+            <div className="rounded-xl border border-graphite bg-surface-container-low p-3">
+              <p className="text-[10px] uppercase tracking-[0.16em] text-medium-gray">Ahorro total</p>
+              <p className="mt-2 text-lg font-semibold tabular-nums text-on-surface">${overview.accumulatedSavings.toLocaleString()}</p>
+            </div>
+          </div>
           <div className="w-full h-2 bg-surface-container-highest rounded-full overflow-hidden">
             <div className="h-full bg-tertiary-container rounded-full transition-all duration-1000" style={{ width: `${pct}%` }} />
           </div>
@@ -493,6 +504,12 @@ export default function Savings() {
                         const detail = savingDetails.label ? `${baseLabel}: ${savingDetails.label}` : baseLabel
                         return savingDetails.sourceGoalName ? `${detail} desde ${savingDetails.sourceGoalName}` : detail
                       }
+                      if (savingDetails.kind === 'debt-acquisition') {
+                        return `Dinero prestado adquirido: ${savingDetails.label ?? 'Deuda'}`
+                      }
+                      if (savingDetails.kind === 'debt-payment') {
+                        return `Pago de deuda desde ahorros: ${savingDetails.label ?? 'Deuda'}`
+                      }
                       if (savingDetails.kind !== 'transfer') return 'Ahorro registrado'
                       return savingDetails.source === 'want' ? 'Transferido desde gustos' : 'Transferido desde gastos'
                     })()}
@@ -512,9 +529,14 @@ export default function Savings() {
                         </Button>
                       ) : null
                     })()}
-                    <Button variant="ghost" size="icon" className="text-muted-gray hover:text-error" onClick={() => void removeTransaction(transaction.id)}>
-                      <Trash2 data-icon="inline-start" />
-                    </Button>
+                    {(() => {
+                      const savingDetails = parseSavingDescription(transaction.description)
+                      return savingDetails.kind === 'debt-acquisition' || savingDetails.kind === 'debt-payment' ? null : (
+                        <Button variant="ghost" size="icon" className="text-muted-gray hover:text-error" onClick={() => void removeTransaction(transaction.id)}>
+                          <Trash2 data-icon="inline-start" />
+                        </Button>
+                      )
+                    })()}
                   </div>
                 </div>
               </div>

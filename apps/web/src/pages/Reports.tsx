@@ -17,6 +17,7 @@ import { Bar, BarChart, CartesianGrid, Line, LineChart, XAxis, YAxis } from 'rec
 import { getWishlistReservedAmount, isWishlistPurchased } from '@plata/shared'
 
 import { ExportExcelButton } from '@/components/reports/ExportExcelButton'
+import { SpendingHistory } from '@/components/reports/SpendingHistory'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -414,6 +415,12 @@ export default function Reports() {
           )
         })}
       </section>
+
+      <SpendingHistory
+        transactions={transactions}
+        monthlyPlanningHistory={monthlyPlanningHistory}
+        wishlist={wishlist}
+      />
 
       <section className="grid gap-4 xl:grid-cols-[1.15fr_0.85fr]">
         <Card className="border-graphite bg-surface shadow-vault">

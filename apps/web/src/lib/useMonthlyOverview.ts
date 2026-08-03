@@ -1,7 +1,13 @@
 import { useFinanceStore } from '@/store/financeStore'
 import { usePreferencesStore } from '@/store/preferencesStore'
 import { useMemo } from 'react'
-import { getFinancialPeriodStart, getMonthlyOverview, getWishlistReservedAmount, isWishlistPurchased } from '@plata/shared'
+import {
+  getFinancialPeriodStart,
+  getMonthlyOverview,
+  getSavingsFundingBreakdown,
+  getWishlistReservedAmount,
+  isWishlistPurchased,
+} from '@plata/shared'
 
 export function useMonthlyOverview() {
   const salaries = useFinanceStore((state) => state.salaries)
@@ -19,8 +25,9 @@ export function useMonthlyOverview() {
       (sum, item) => sum + (isWishlistPurchased(item) ? getWishlistReservedAmount(item) : 0),
       0,
     )
+    const funding = getSavingsFundingBreakdown(transactions, wishlist)
     const totalSavings = Math.max(0, overview.totalSavings)
-    const accumulatedSavings = Math.max(0, overview.accumulatedSavings - reservedForPurchasedWishlist)
+    const accumulatedSavings = funding.totalBalance
     const assignedSavingsGoals = savingsGoals.reduce((sum, goal) => sum + goal.currentAmount, 0)
     const freeSavings = Math.max(0, accumulatedSavings - assignedSavingsGoals)
     const wantsEnabled = formula.wants > 0
@@ -42,6 +49,11 @@ export function useMonthlyOverview() {
       remainingWants: budgetWants - overview.totalWants,
       remainingSavings: overview.budgetSavings - totalSavings,
       reservedForPurchasedWishlist,
+      ownSavings: funding.ownBalance,
+      borrowedSavings: funding.borrowedBalance,
+      borrowedSavingsAcquired: funding.borrowedAcquired,
+      borrowedSavingsUsed: funding.borrowedUsed,
+      savingsUsages: funding.usages,
     }
   }, [debts, formula, monthlyPlanningHistory, salaries, savingsGoals, transactions, wishlist])
 }

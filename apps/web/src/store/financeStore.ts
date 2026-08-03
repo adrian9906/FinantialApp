@@ -42,7 +42,7 @@ interface FinanceStore extends BootstrapPayload {
   addSalary: (salary: Omit<Salary, 'id'>) => Promise<void>
   updateSalary: (id: string, data: Partial<Omit<Salary, 'id'>>) => Promise<void>
   removeSalary: (id: string) => Promise<void>
-  addTransaction: (t: Omit<Transaction, 'id'>) => Promise<void>
+  addTransaction: (t: Omit<Transaction, 'id'>) => Promise<Transaction>
   updateTransaction: (id: string, data: Partial<Omit<Transaction, 'id'>>) => Promise<void>
   removeTransaction: (id: string) => Promise<void>
   addWishlistItem: (w: Omit<WishlistItem, 'id'>) => Promise<void>
@@ -445,10 +445,11 @@ export const useFinanceStore = create<FinanceStore>()((set, get) => ({
     }
 
     if (isLocalMutationMode()) {
+      const created = { ...transaction, id: makeId(transaction.type), createdAt: new Date().toISOString() }
       updateLocalState(set, (state) => ({
-        transactions: [{ ...transaction, id: makeId(transaction.type), createdAt: new Date().toISOString() }, ...state.transactions],
+        transactions: [created, ...state.transactions],
       }))
-      return
+      return created
     }
 
     const created = await requestJson<Transaction>(`/${transaction.type === 'expense' ? 'expenses' : transaction.type === 'want' ? 'wants' : 'savings'}`, {
@@ -456,6 +457,7 @@ export const useFinanceStore = create<FinanceStore>()((set, get) => ({
       body: JSON.stringify(transaction),
     })
     set((state) => ({ transactions: [created, ...state.transactions] }))
+    return created
   },
   updateTransaction: async (id, data) => {
     if (isLocalMutationMode()) {

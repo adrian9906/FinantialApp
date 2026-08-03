@@ -140,6 +140,7 @@ function serializeWishlist(entry: {
   cantidad: number
   aportado: number
   comprado: boolean
+  fecha: Date
   items: Array<{ nombre: string; precio: number; prioridad: string; foto: string | null; tienda: string | null; urlReferencia: string | null; moneda: string | null }>
 }): WishlistItem {
   const item = entry.items[0]
@@ -153,6 +154,7 @@ function serializeWishlist(entry: {
     savedAmount: isPurchased ? entry.cantidad : 0,
     externalContribution: entry.aportado,
     isPurchased,
+    purchasedAt: isPurchased ? entry.fecha.toISOString() : undefined,
     image: item?.foto ?? undefined,
     sourceStore: item?.tienda ?? undefined,
     sourceUrl: item?.urlReferencia ?? undefined,
@@ -1066,6 +1068,7 @@ async function saveWishlist(userId: string, body: JsonRecord, id?: string) {
   const inferredPurchased = rawSavedAmount > 0 && rawSavedAmount >= price
   const isPurchased = typeof body.isPurchased === 'boolean' ? body.isPurchased : inferredPurchased
   const savedAmount = isPurchased ? Math.max(0, rawSavedAmount) : 0
+  const purchasedAt = body.purchasedAt ? new Date(String(body.purchasedAt)) : null
 
   if (!name) {
     throw new Error('El nombre del deseo es obligatorio.')
@@ -1087,6 +1090,7 @@ async function saveWishlist(userId: string, body: JsonRecord, id?: string) {
         cantidad: savedAmount,
         aportado: externalContribution,
         comprado: isPurchased,
+        fecha: purchasedAt ?? existing.fecha,
         items: existing.items[0]
           ? {
               update: {
@@ -1125,6 +1129,7 @@ async function saveWishlist(userId: string, body: JsonRecord, id?: string) {
       cantidad: savedAmount,
       aportado: externalContribution,
       comprado: isPurchased,
+      fecha: purchasedAt ?? new Date(),
       usuarioId: userId,
       items: {
         create: {

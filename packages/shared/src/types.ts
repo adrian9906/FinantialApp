@@ -41,6 +41,7 @@ export interface WishlistItem {
   savedAmount: number
   externalContribution?: number
   isPurchased?: boolean
+  purchasedAt?: string
   image?: string
   sourceStore?: string
   sourceUrl?: string

@@ -1,11 +1,11 @@
 import { useMemo, useState } from 'react'
 import { CalendarClock, CheckCheck, Landmark, Pencil, Plus, ReceiptText, Trash2, Wallet } from 'lucide-react'
+import { buildDebtAcquisitionSavingDescription, buildDebtPaymentSavingDescription, getDebtAcquisitionAmount } from '@plata/shared'
 
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { ExportExcelButton } from '@/components/reports/ExportExcelButton'
-import { Checkbox } from '@/components/ui/checkbox'
 import { DatePickerField } from '@/components/ui/date-picker-field'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
@@ -30,17 +30,24 @@ export default function Debts() {
   const updateDebt = useFinanceStore((state) => state.updateDebt)
   const payDebt = useFinanceStore((state) => state.payDebt)
   const removeDebt = useFinanceStore((state) => state.removeDebt)
+  const transactions = useFinanceStore((state) => state.transactions)
+  const addTransaction = useFinanceStore((state) => state.addTransaction)
+  const removeTransaction = useFinanceStore((state) => state.removeTransaction)
   const overview = useMonthlyOverview()
 
   const [open, setOpen] = useState(false)
   const [paymentOpen, setPaymentOpen] = useState(false)
+  const [acquisitionOpen, setAcquisitionOpen] = useState(false)
   const [editId, setEditId] = useState<string | null>(null)
   const [paymentDebtId, setPaymentDebtId] = useState<string | null>(null)
+  const [acquisitionDebtId, setAcquisitionDebtId] = useState<string | null>(null)
   const [paymentAmount, setPaymentAmount] = useState('')
   const [formError, setFormError] = useState<string | null>(null)
   const [paymentError, setPaymentError] = useState<string | null>(null)
+  const [acquisitionError, setAcquisitionError] = useState<string | null>(null)
   const [isSaving, setIsSaving] = useState(false)
   const [isPaying, setIsPaying] = useState(false)
+  const [isAcquiring, setIsAcquiring] = useState(false)
   const [isExporting, setIsExporting] = useState(false)
   const [strategy, setStrategy] = useState<DebtStrategy>('snowball')
   const [extraMonthlyPayment, setExtraMonthlyPayment] = useState('')
@@ -55,6 +62,10 @@ export default function Debts() {
   const paymentDebt = useMemo(
     () => debts.find((entry) => entry.id === paymentDebtId) ?? null,
     [debts, paymentDebtId],
+  )
+  const acquisitionDebt = useMemo(
+    () => debts.find((entry) => entry.id === acquisitionDebtId) ?? null,
+    [acquisitionDebtId, debts],
   )
 
   function asMoney(value: number | undefined) {
@@ -107,6 +118,12 @@ export default function Debts() {
     setPaymentOpen(true)
   }
 
+  function handleOpenAcquisition(entry: typeof debts[number]) {
+    setAcquisitionDebtId(entry.id)
+    setAcquisitionError(null)
+    setAcquisitionOpen(true)
+  }
+
   async function handleSave() {
     if (!form.amount || !form.history || !form.startDate || !form.endDate || isSaving) return
 
@@ -154,20 +171,66 @@ export default function Debts() {
       return
     }
 
+    if (nextPayment > overview.freeSavings) {
+      setPaymentError(`Solo tienes $${asMoney(overview.freeSavings)} disponibles en ahorros para realizar este pago.`)
+      return
+    }
+
     setIsPaying(true)
 
     try {
-      await payDebt(paymentDebt.id, nextPayment)
+      const movement = await addTransaction({
+        amount: -nextPayment,
+        type: 'saving',
+        description: buildDebtPaymentSavingDescription(paymentDebt.id, paymentDebt.history),
+        date: new Date().toISOString().slice(0, 10),
+      })
+
+      try {
+        await payDebt(paymentDebt.id, nextPayment)
+      } catch (error) {
+        await removeTransaction(movement.id).catch(() => {})
+        throw error
+      }
+
       resetPaymentFlow()
       setPaymentOpen(false)
+    } catch (error) {
+      setPaymentError(error instanceof Error ? error.message : 'No se pudo registrar el pago desde ahorros.')
     } finally {
       setIsPaying(false)
     }
   }
 
-  async function handleSettleDebt(entry: typeof debts[number]) {
-    if (entry.isSettled || entry.remainingAmount <= 0) return
-    await payDebt(entry.id, entry.remainingAmount)
+  async function handleAcquireDebt() {
+    if (!acquisitionDebt || isAcquiring) return
+
+    const alreadyAcquired = getDebtAcquisitionAmount(transactions, acquisitionDebt.id)
+    if (alreadyAcquired > 0) {
+      setAcquisitionError('Esta deuda ya fue adquirida y sumada al ahorro prestado.')
+      return
+    }
+
+    if (acquisitionDebt.remainingAmount <= 0) {
+      setAcquisitionError('No puedes adquirir una deuda que ya está saldada.')
+      return
+    }
+
+    setIsAcquiring(true)
+    try {
+      await addTransaction({
+        amount: acquisitionDebt.remainingAmount,
+        type: 'saving',
+        description: buildDebtAcquisitionSavingDescription(acquisitionDebt.id, acquisitionDebt.history),
+        date: new Date().toISOString().slice(0, 10),
+      })
+      setAcquisitionOpen(false)
+      setAcquisitionDebtId(null)
+    } catch (error) {
+      setAcquisitionError(error instanceof Error ? error.message : 'No se pudo añadir la deuda a los ahorros.')
+    } finally {
+      setIsAcquiring(false)
+    }
   }
 
   async function handleExport() {
@@ -199,7 +262,7 @@ export default function Debts() {
         <div>
           <h1 className="text-[28px] font-semibold tracking-tight text-on-surface md:text-[36px]">Deudas</h1>
           <p className="max-w-3xl text-sm text-muted-gray">
-            Registrar una deuda no modifica tu salario. Solo los abonos que confirmes se descuentan del salario del mes en que los realizas.
+            Registrar una deuda no modifica tu salario ni tus ahorros. Tú decides si la adquieres y cuándo pagarla usando el ahorro disponible.
           </p>
         </div>
         <div className="flex flex-col gap-3 sm:flex-row">
@@ -242,12 +305,12 @@ export default function Debts() {
         </div>
         <div className="rounded-xl bg-surface p-5 shadow-vault">
           <div className="mb-2 flex items-center justify-between text-muted-gray">
-            <span className="text-base font-medium">Disponible neto</span>
+            <span className="text-base font-medium">Ahorro disponible</span>
             <Wallet className="size-5 text-primary" />
           </div>
-          <div className="text-[28px] font-semibold text-on-surface">${asMoney(overview.totalSalary)}</div>
+          <div className="text-[28px] font-semibold text-on-surface">${asMoney(overview.freeSavings)}</div>
           <p className="mt-1 text-xs text-muted-gray">
-            Bruto ${asMoney(overview.grossSalary)} menos ${asMoney(overview.totalDebtPaid)} abonados a deudas activas este mes
+            Propio ${asMoney(overview.ownSavings)} · Prestado ${asMoney(overview.borrowedSavings)}
           </p>
         </div>
       </div>
@@ -375,12 +438,9 @@ export default function Debts() {
               <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
                 <div className="flex min-w-0 flex-1 gap-3">
                   <div className="pt-1">
-                    <Checkbox
-                      checked={debt.isSettled}
-                      disabled={debt.isSettled}
-                      onCheckedChange={() => void handleSettleDebt(debt)}
-                      aria-label={`Marcar ${debt.history} como saldada`}
-                    />
+                    <div className={`flex size-6 items-center justify-center rounded-lg border ${debt.isSettled ? 'border-success/30 bg-success/10 text-success' : 'border-graphite bg-abyss text-medium-gray'}`}>
+                      {debt.isSettled ? <CheckCheck className="size-3.5" /> : <Landmark className="size-3.5" />}
+                    </div>
                   </div>
                   <div className="min-w-0 flex-1">
                     <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
@@ -401,6 +461,15 @@ export default function Debts() {
                               Interés: {debt.interest}%
                             </Badge>
                           ) : null}
+                          {getDebtAcquisitionAmount(transactions, debt.id) > 0 ? (
+                            <Badge variant="secondary" className="bg-amber-500/12 text-amber-200">
+                              Añadida al ahorro prestado
+                            </Badge>
+                          ) : (
+                            <Badge variant="secondary" className="bg-surface-container-high text-muted-gray">
+                              Solo histórica
+                            </Badge>
+                          )}
                         </div>
                       </div>
                       <div className="text-left sm:text-right">
@@ -429,7 +498,7 @@ export default function Debts() {
                         <div className="h-full rounded-full bg-primary transition-all duration-700" style={{ width: `${asPercent(debt.progress)}%` }} />
                       </div>
                       <p className="mt-2 text-xs text-muted-gray">
-                        Solo los abonos que confirmes se descuentan del salario disponible del mes actual.
+                        Los pagos solo se descuentan cuando pulsas Pagar deuda y siempre salen de tus ahorros.
                       </p>
                     </div>
                   </div>
@@ -437,9 +506,16 @@ export default function Debts() {
 
                 <div className="flex shrink-0 flex-wrap justify-end gap-2 lg:w-[220px]">
                   {!debt.isSettled ? (
-                    <Button variant="secondary" onClick={() => handleOpenPayment(debt)} className="bg-surface-container-high text-on-surface hover:bg-surface-container-high/80">
-                      Pagar deuda
-                    </Button>
+                    <>
+                      {getDebtAcquisitionAmount(transactions, debt.id) <= 0 ? (
+                        <Button variant="secondary" onClick={() => handleOpenAcquisition(debt)} className="border border-amber-500/20 bg-amber-500/10 text-amber-200 hover:bg-amber-500/15">
+                          Adquirir deuda
+                        </Button>
+                      ) : null}
+                      <Button variant="secondary" onClick={() => handleOpenPayment(debt)} className="bg-surface-container-high text-on-surface hover:bg-surface-container-high/80">
+                        Pagar deuda
+                      </Button>
+                    </>
                   ) : null}
                   <Button variant="ghost" size="icon" className="text-muted-gray hover:text-primary" onClick={() => handleOpen(debt)}>
                     <Pencil data-icon="inline-start" />
@@ -516,23 +592,72 @@ export default function Debts() {
         </DialogContent>
       </Dialog>
 
+      <Dialog open={acquisitionOpen} onOpenChange={(nextOpen) => { if (!isAcquiring) setAcquisitionOpen(nextOpen) }}>
+        <DialogContent className="border-graphite bg-surface sm:max-w-2xl">
+          <DialogHeader>
+            <DialogTitle className="text-on-surface">Adquirir deuda como dinero prestado</DialogTitle>
+            <DialogDescription>
+              Esta acción suma el dinero a tus ahorros, pero lo mantiene separado del ahorro propio. No registra ningún pago.
+            </DialogDescription>
+          </DialogHeader>
+
+          {acquisitionDebt ? (
+            <div className="space-y-4">
+              <Card className="border-amber-500/20 bg-amber-500/8 p-4 shadow-vault-sm">
+                <p className="text-xs uppercase tracking-[0.18em] text-amber-200">Capital que recibirás</p>
+                <p className="mt-2 text-3xl font-semibold tabular-nums text-on-surface">${asMoney(acquisitionDebt.remainingAmount)}</p>
+                <p className="mt-2 text-sm text-muted-gray">Procedente de “{acquisitionDebt.history}”.</p>
+              </Card>
+              <div className="grid gap-3 sm:grid-cols-3">
+                <div className="rounded-xl border border-graphite bg-abyss p-3">
+                  <p className="text-[10px] uppercase tracking-[0.16em] text-medium-gray">Ahorro propio</p>
+                  <p className="mt-2 font-semibold text-success">${asMoney(overview.ownSavings)}</p>
+                </div>
+                <div className="rounded-xl border border-graphite bg-abyss p-3">
+                  <p className="text-[10px] uppercase tracking-[0.16em] text-medium-gray">Prestado actual</p>
+                  <p className="mt-2 font-semibold text-amber-200">${asMoney(overview.borrowedSavings)}</p>
+                </div>
+                <div className="rounded-xl border border-graphite bg-abyss p-3">
+                  <p className="text-[10px] uppercase tracking-[0.16em] text-medium-gray">Total después</p>
+                  <p className="mt-2 font-semibold text-on-surface">${asMoney(overview.accumulatedSavings + acquisitionDebt.remainingAmount)}</p>
+                </div>
+              </div>
+              {acquisitionError ? <p className="text-sm text-error">{acquisitionError}</p> : null}
+            </div>
+          ) : null}
+
+          <DialogFooter>
+            <Button variant="ghost" disabled={isAcquiring} onClick={() => setAcquisitionOpen(false)} className="text-muted-gray">
+              Cancelar
+            </Button>
+            <Button loading={isAcquiring} onClick={() => void handleAcquireDebt()} className="bg-amber-500 text-abyss shadow-vault hover:bg-amber-400">
+              Confirmar adquisición
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       <Dialog open={paymentOpen} onOpenChange={(nextOpen) => { if (!isPaying) setPaymentOpen(nextOpen) }}>
         <DialogContent className="border-graphite bg-surface sm:max-w-2xl">
           <DialogHeader>
             <DialogTitle className="text-on-surface">Pagar deuda</DialogTitle>
             <DialogDescription>
               {paymentDebt
-                ? `Vas a registrar un nuevo abono para "${paymentDebt.history}".`
+                ? `Vas a registrar un nuevo abono para "${paymentDebt.history}" descontándolo de tus ahorros.`
                 : 'Registra cuanto vas a pagar ahora.'}
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
             {paymentDebt ? (
               <Card className="border-graphite bg-abyss p-4 shadow-vault-sm">
-                <div className="grid gap-3 sm:grid-cols-2">
+                <div className="grid gap-3 sm:grid-cols-3">
                   <div>
                     <p className="text-xs uppercase tracking-[0.18em] text-medium-gray">Abonado</p>
                     <p className="mt-2 text-lg font-semibold text-success">${asMoney(paymentDebt.paidAmount)}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs uppercase tracking-[0.18em] text-medium-gray">Ahorro disponible</p>
+                    <p className="mt-2 text-lg font-semibold text-on-surface">${asMoney(overview.freeSavings)}</p>
                   </div>
                   <div>
                     <p className="text-xs uppercase tracking-[0.18em] text-medium-gray">Restante</p>
@@ -546,13 +671,15 @@ export default function Debts() {
               <Label className="text-medium-gray">Monto a abonar ahora</Label>
               <Input
                 type="number"
+                max={paymentDebt ? Math.min(paymentDebt.remainingAmount, overview.freeSavings) : undefined}
                 value={paymentAmount}
                 onChange={(e) => { setPaymentError(null); setPaymentAmount(e.target.value) }}
                 className="bg-abyss border-graphite text-on-surface"
               />
               {paymentDebt ? (
                 <p className="text-xs text-muted-gray">
-                  Puedes abonar hasta ${asMoney(paymentDebt.remainingAmount)} en este momento.
+                  Puedes abonar hasta ${asMoney(Math.min(paymentDebt.remainingAmount, overview.freeSavings))} en este momento.
+                  El pago usará primero ahorro propio y después dinero prestado.
                 </p>
               ) : null}
             </div>

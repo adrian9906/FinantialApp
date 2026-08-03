@@ -291,6 +291,7 @@ export default function Wishlist() {
       await updateWishlistItem(item.id, {
         savedAmount: purchased ? 0 : Math.max(0, item.price - externalContribution),
         isPurchased: !purchased,
+        purchasedAt: purchased ? item.purchasedAt : new Date().toISOString(),
       })
     } finally {
       setIsSaving(false)

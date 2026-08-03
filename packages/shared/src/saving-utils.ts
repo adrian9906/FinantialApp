@@ -1,4 +1,5 @@
-import type { Transaction } from './types'
+import type { Transaction, WishlistItem } from './types'
+import { getWishlistReservedAmount, isWishlistPurchased } from './wishlist'
 
 export type SavingDescription =
   | {
@@ -16,10 +17,32 @@ export type SavingDescription =
     sourceGoalId?: string
     sourceGoalName?: string
   }
+  | {
+    kind: 'debt-acquisition'
+    debtId: string
+    label?: string
+  }
+  | {
+    kind: 'debt-payment'
+    debtId: string
+    label?: string
+  }
 
 const EXPENSE_TRANSFER_PREFIX = 'transfer::expense'
 const WANT_TRANSFER_PREFIX = 'transfer::want'
 const WITHDRAWAL_PREFIX = 'withdrawal'
+const DEBT_ACQUISITION_PREFIX = 'debt-acquisition'
+const DEBT_PAYMENT_PREFIX = 'debt-payment'
+
+function decodeValue(value?: string) {
+  if (!value) return undefined
+
+  try {
+    return decodeURIComponent(value) || undefined
+  } catch {
+    return value || undefined
+  }
+}
 
 export function buildExpenseTransferSavingDescription() {
   return EXPENSE_TRANSFER_PREFIX
@@ -48,6 +71,14 @@ export function buildSavingWithdrawalDescription(
     encodeURIComponent(sourceGoalId),
     encodeURIComponent(sourceGoalName),
   ].join('::')
+}
+
+export function buildDebtAcquisitionSavingDescription(debtId: string, label?: string) {
+  return [DEBT_ACQUISITION_PREFIX, encodeURIComponent(debtId.trim()), encodeURIComponent(label?.trim() ?? '')].join('::')
+}
+
+export function buildDebtPaymentSavingDescription(debtId: string, label?: string) {
+  return [DEBT_PAYMENT_PREFIX, encodeURIComponent(debtId.trim()), encodeURIComponent(label?.trim() ?? '')].join('::')
 }
 
 export function parseSavingDescription(description?: string): SavingDescription {
@@ -92,9 +123,189 @@ export function parseSavingDescription(description?: string): SavingDescription 
     }
   }
 
+  if (description.startsWith(`${DEBT_ACQUISITION_PREFIX}::`)) {
+    const [, encodedDebtId, encodedLabel] = description.split('::')
+    return {
+      kind: 'debt-acquisition',
+      debtId: decodeValue(encodedDebtId) ?? '',
+      label: decodeValue(encodedLabel),
+    }
+  }
+
+  if (description.startsWith(`${DEBT_PAYMENT_PREFIX}::`)) {
+    const [, encodedDebtId, encodedLabel] = description.split('::')
+    return {
+      kind: 'debt-payment',
+      debtId: decodeValue(encodedDebtId) ?? '',
+      label: decodeValue(encodedLabel),
+    }
+  }
+
   return {
     kind: 'manual',
     label: description,
+  }
+}
+
+export interface SavingsUsageEntry {
+  id: string
+  kind: 'withdrawal' | 'wishlist' | 'debt-payment'
+  label: string
+  category: string
+  date: string
+  amount: number
+  ownAmount: number
+  borrowedAmount: number
+  debtId?: string
+}
+
+export interface SavingsFundingBreakdown {
+  ownBalance: number
+  borrowedBalance: number
+  totalBalance: number
+  borrowedAcquired: number
+  borrowedUsed: number
+  usages: SavingsUsageEntry[]
+}
+
+type SavingsLedgerEvent = {
+  id: string
+  date: string
+  createdAt?: string
+  amount: number
+  source: 'own' | 'borrowed' | 'usage'
+  usage?: Omit<SavingsUsageEntry, 'ownAmount' | 'borrowedAmount'>
+}
+
+function getLedgerOrder(entry: SavingsLedgerEvent) {
+  const day = entry.date ? entry.date.slice(0, 10) : '9999-12-31'
+  const time = entry.createdAt?.includes('T') ? entry.createdAt.slice(11) : '12:00:00.000Z'
+  return `${day}T${time}:${entry.id}`
+}
+
+export function getDebtAcquisitionAmount(transactions: Transaction[], debtId: string) {
+  return transactions.reduce((sum, transaction) => {
+    if (transaction.type !== 'saving' || transaction.amount <= 0) return sum
+    const parsed = parseSavingDescription(transaction.description)
+    return parsed.kind === 'debt-acquisition' && parsed.debtId === debtId
+      ? sum + transaction.amount
+      : sum
+  }, 0)
+}
+
+export function getSavingsFundingBreakdown(
+  transactions: Transaction[],
+  wishlist: WishlistItem[] = [],
+): SavingsFundingBreakdown {
+  const transactionEvents = transactions.flatMap<SavingsLedgerEvent>((transaction) => {
+    if (transaction.type !== 'saving' || transaction.amount === 0) return []
+    const parsed = parseSavingDescription(transaction.description)
+
+    if (transaction.amount > 0) {
+      return [{
+        id: transaction.id,
+        date: transaction.date,
+        createdAt: transaction.createdAt,
+        amount: transaction.amount,
+        source: parsed.kind === 'debt-acquisition' ? 'borrowed' : 'own',
+      }]
+    }
+
+    const label = parsed.kind === 'debt-payment'
+      ? parsed.label ?? 'Pago de deuda'
+      : parsed.kind === 'withdrawal'
+        ? parsed.label ?? 'Salida de ahorros'
+        : parsed.kind === 'manual'
+          ? parsed.label ?? 'Salida de ahorros'
+          : 'Salida de ahorros'
+    const category = parsed.kind === 'debt-payment'
+      ? 'Pago de deuda'
+      : parsed.kind === 'withdrawal'
+        ? parsed.target === 'expense'
+          ? 'Gasto'
+          : parsed.target === 'want'
+            ? 'Gusto'
+            : parsed.sourceGoalName ?? 'Propósito'
+        : 'Movimiento de ahorro'
+
+    return [{
+      id: transaction.id,
+      date: transaction.date,
+      createdAt: transaction.createdAt,
+      amount: Math.abs(transaction.amount),
+      source: 'usage',
+      usage: {
+        id: transaction.id,
+        kind: parsed.kind === 'debt-payment' ? 'debt-payment' : 'withdrawal',
+        label,
+        category,
+        date: transaction.date,
+        amount: Math.abs(transaction.amount),
+        debtId: parsed.kind === 'debt-payment' ? parsed.debtId : undefined,
+      },
+    }]
+  })
+
+  const wishlistEvents = wishlist.flatMap<SavingsLedgerEvent>((item) => {
+    if (!isWishlistPurchased(item)) return []
+    const amount = getWishlistReservedAmount(item)
+    if (amount <= 0) return []
+
+    return [{
+      id: `wishlist:${item.id}`,
+      date: item.purchasedAt ?? '',
+      createdAt: item.purchasedAt,
+      amount,
+      source: 'usage',
+      usage: {
+        id: `wishlist:${item.id}`,
+        kind: 'wishlist',
+        label: item.name,
+        category: item.sourceStore?.trim() || 'Deseo comprado',
+        date: item.purchasedAt ?? '',
+        amount,
+      },
+    }]
+  })
+
+  const events = [...transactionEvents, ...wishlistEvents].sort((left, right) => getLedgerOrder(left).localeCompare(getLedgerOrder(right)))
+  let ownBalance = 0
+  let borrowedBalance = 0
+  let borrowedAcquired = 0
+  const usages: SavingsUsageEntry[] = []
+
+  events.forEach((event) => {
+    if (event.source === 'own') {
+      ownBalance += event.amount
+      return
+    }
+
+    if (event.source === 'borrowed') {
+      borrowedBalance += event.amount
+      borrowedAcquired += event.amount
+      return
+    }
+
+    const ownAmount = Math.min(ownBalance, event.amount)
+    const remaining = Math.max(0, event.amount - ownAmount)
+    const borrowedAmount = Math.min(borrowedBalance, remaining)
+    ownBalance = Math.max(0, ownBalance - ownAmount)
+    borrowedBalance = Math.max(0, borrowedBalance - borrowedAmount)
+
+    if (event.usage) {
+      usages.push({ ...event.usage, ownAmount, borrowedAmount })
+    }
+  })
+
+  const borrowedUsed = usages.reduce((sum, usage) => sum + usage.borrowedAmount, 0)
+
+  return {
+    ownBalance,
+    borrowedBalance,
+    totalBalance: ownBalance + borrowedBalance,
+    borrowedAcquired,
+    borrowedUsed,
+    usages,
   }
 }
 

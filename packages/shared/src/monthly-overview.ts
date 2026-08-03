@@ -4,6 +4,7 @@ import { getEffectiveExpenseTotal } from './expense-utils'
 import {
   getExpenseTransferTotal,
   getExpenseWithdrawalTotal,
+  parseSavingDescription,
   getWantTransferTotal,
   getWantWithdrawalTotal,
 } from './saving-utils'
@@ -65,18 +66,19 @@ export function getMonthlyOverview(
     .reduce((sum, transaction) => sum + transaction.amount, 0)
   const totalSavings = monthlyTransactions
     .filter((transaction) => transaction.type === 'saving')
-    .reduce((sum, transaction) => sum + transaction.amount, 0)
+    .reduce((sum, transaction) => {
+      const parsed = parseSavingDescription(transaction.description)
+      return parsed.kind === 'debt-acquisition' || parsed.kind === 'debt-payment'
+        ? sum
+        : sum + transaction.amount
+    }, 0)
   const totalDebtPaid = debts.reduce(
-    (sum, debt) => {
-      if (debt.isSettled) return sum
-
-      return sum + (debt.payments ?? [])
+    (sum, debt) => sum + (debt.payments ?? [])
         .filter((payment) => isInFinancialPeriod(payment, periodStart))
-        .reduce((paymentSum, payment) => paymentSum + payment.amount, 0)
-    },
+        .reduce((paymentSum, payment) => paymentSum + payment.amount, 0),
     0,
   )
-  const totalSalary = Math.max(0, grossSalary - totalDebtPaid)
+  const totalSalary = grossSalary
 
   const baseBudgetExpenses = totalSalary * (formula.expenses / 100)
   const baseBudgetSavings = totalSalary * (formula.savings / 100)
