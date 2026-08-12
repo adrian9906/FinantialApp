@@ -268,24 +268,20 @@ export function getSavingsFundingBreakdown(
     }]
   })
 
-  const events = [...transactionEvents, ...wishlistEvents].sort((left, right) => getLedgerOrder(left).localeCompare(getLedgerOrder(right)))
-  let ownBalance = 0
-  let borrowedBalance = 0
-  let borrowedAcquired = 0
+  const fundingEvents = transactionEvents.filter((event) => event.source !== 'usage')
+  const usageEvents = [...transactionEvents, ...wishlistEvents]
+    .filter((event) => event.source === 'usage')
+    .sort((left, right) => getLedgerOrder(left).localeCompare(getLedgerOrder(right)))
+  let ownBalance = fundingEvents
+    .filter((event) => event.source === 'own')
+    .reduce((sum, event) => sum + event.amount, 0)
+  let borrowedBalance = fundingEvents
+    .filter((event) => event.source === 'borrowed')
+    .reduce((sum, event) => sum + event.amount, 0)
+  const borrowedAcquired = borrowedBalance
   const usages: SavingsUsageEntry[] = []
 
-  events.forEach((event) => {
-    if (event.source === 'own') {
-      ownBalance += event.amount
-      return
-    }
-
-    if (event.source === 'borrowed') {
-      borrowedBalance += event.amount
-      borrowedAcquired += event.amount
-      return
-    }
-
+  usageEvents.forEach((event) => {
     const ownAmount = Math.min(ownBalance, event.amount)
     const remaining = Math.max(0, event.amount - ownAmount)
     const borrowedAmount = Math.min(borrowedBalance, remaining)

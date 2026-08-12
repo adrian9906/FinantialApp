@@ -346,37 +346,53 @@ export default function Savings() {
         </div>
       </header>
 
-      <div className="bg-surface rounded-xl shadow-vault p-6 relative overflow-hidden group">
-        <div className="absolute top-0 right-0 w-32 h-32 bg-tertiary-container opacity-5 rounded-bl-full translate-x-8 -translate-y-8 group-hover:scale-110 transition-transform duration-500" />
-        <div className="relative z-10">
-          <div className="flex justify-between items-center mb-2">
-            <p className="text-xs text-muted-gray uppercase tracking-wider">Presupuesto mensual (25%)</p>
-            <Badge variant="secondary" className={remaining >= 0 ? 'bg-success/10 text-success' : 'bg-tertiary-container/20 text-tertiary'}>
-              {remaining >= 0 ? `$${remaining.toLocaleString()} para ahorrar` : `$${Math.abs(remaining).toLocaleString()} excedido`}
+      <section className="grid gap-4 xl:grid-cols-[1.35fr_0.65fr]">
+        <Card className="relative overflow-hidden border-success/20 bg-surface p-6 shadow-vault md:p-8">
+          <div className="absolute right-0 top-0 size-40 translate-x-12 -translate-y-12 rounded-full bg-success/10" />
+          <div className="relative">
+            <p className="text-xs uppercase tracking-[0.22em] text-success">Ahorro total disponible</p>
+            <p className="mt-3 text-5xl font-semibold tracking-tight tabular-nums text-on-surface md:text-6xl">
+              ${overview.accumulatedSavings.toLocaleString()}
+            </p>
+            <p className="mt-3 max-w-xl text-sm text-muted-gray">
+              Este es tu saldo real después de compras de deseos, retiros y pagos de deuda.
+            </p>
+
+            <div className="mt-6 grid gap-3 sm:grid-cols-2">
+              <div className="rounded-xl border border-success/15 bg-success/5 p-4">
+                <p className="text-[10px] uppercase tracking-[0.18em] text-medium-gray">Ahorro propio disponible</p>
+                <p className="mt-2 text-xl font-semibold tabular-nums text-success">${overview.ownSavings.toLocaleString()}</p>
+              </div>
+              <div className="rounded-xl border border-amber-500/20 bg-amber-500/8 p-4">
+                <p className="text-[10px] uppercase tracking-[0.18em] text-amber-200">Adquirido en deuda disponible</p>
+                <p className="mt-2 text-xl font-semibold tabular-nums text-amber-200">${overview.borrowedSavings.toLocaleString()}</p>
+              </div>
+            </div>
+          </div>
+        </Card>
+
+        <Card className="border-primary/20 bg-surface p-5 shadow-vault md:p-6">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <p className="text-xs uppercase tracking-[0.22em] text-primary">Meta mensual de ahorro</p>
+            <Badge variant="secondary" className={budgetFull ? 'bg-success/10 text-success' : 'bg-primary/10 text-primary'}>
+              {budgetFull ? 'Meta cumplida' : `${pct}% completado`}
             </Badge>
           </div>
-          <h2 className="text-[28px] font-semibold text-on-surface mb-3">
-            +${overview.totalSavings.toLocaleString()} <span className="text-base font-normal text-muted-gray">/ ${overview.budgetSavings.toLocaleString()}</span>
-          </h2>
-          <div className="mb-4 grid gap-3 sm:grid-cols-3">
-            <div className="rounded-xl border border-graphite bg-abyss/80 p-3">
-              <p className="text-[10px] uppercase tracking-[0.16em] text-medium-gray">Ahorro propio</p>
-              <p className="mt-2 text-lg font-semibold tabular-nums text-success">${overview.ownSavings.toLocaleString()}</p>
-            </div>
-            <div className="rounded-xl border border-amber-500/20 bg-amber-500/8 p-3">
-              <p className="text-[10px] uppercase tracking-[0.16em] text-amber-200">Adquirido en deuda</p>
-              <p className="mt-2 text-lg font-semibold tabular-nums text-amber-200">${overview.borrowedSavings.toLocaleString()}</p>
-            </div>
-            <div className="rounded-xl border border-graphite bg-surface-container-low p-3">
-              <p className="text-[10px] uppercase tracking-[0.16em] text-medium-gray">Ahorro total</p>
-              <p className="mt-2 text-lg font-semibold tabular-nums text-on-surface">${overview.accumulatedSavings.toLocaleString()}</p>
-            </div>
+          <p className="mt-5 text-2xl font-semibold tabular-nums text-on-surface">
+            ${overview.totalSavings.toLocaleString()}
+            <span className="text-sm font-normal text-muted-gray"> de ${overview.budgetSavings.toLocaleString()}</span>
+          </p>
+          <p className="mt-2 text-sm text-muted-gray">
+            {budgetFull
+              ? 'La meta queda cumplida aunque uses después una parte de tus ahorros.'
+              : `Te faltan $${Math.max(0, remaining).toLocaleString()} para cumplirla.`}
+          </p>
+          <div className="mt-5 h-2 overflow-hidden rounded-full bg-surface-container-highest">
+            <div className="h-full rounded-full bg-primary transition-[width] duration-1000" style={{ width: `${pct}%` }} />
           </div>
-          <div className="w-full h-2 bg-surface-container-highest rounded-full overflow-hidden">
-            <div className="h-full bg-tertiary-container rounded-full transition-all duration-1000" style={{ width: `${pct}%` }} />
-          </div>
-        </div>
-      </div>
+          <p className="mt-4 text-xs text-muted-gray">Objetivo configurado: 25% del presupuesto mensual.</p>
+        </Card>
+      </section>
 
       <section className="grid gap-4 xl:grid-cols-[0.78fr_1.22fr]">
         <Card className="border-graphite bg-surface shadow-vault">

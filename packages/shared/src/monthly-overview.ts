@@ -65,7 +65,7 @@ export function getMonthlyOverview(
     .filter((transaction) => transaction.type === 'saving')
     .reduce((sum, transaction) => sum + transaction.amount, 0)
   const totalSavings = monthlyTransactions
-    .filter((transaction) => transaction.type === 'saving')
+    .filter((transaction) => transaction.type === 'saving' && transaction.amount > 0)
     .reduce((sum, transaction) => {
       const parsed = parseSavingDescription(transaction.description)
       return parsed.kind === 'debt-acquisition' || parsed.kind === 'debt-payment'

@@ -141,6 +141,24 @@ export default function Wishlist() {
 
   const currentFreeSavedAmount = Math.max(0, overview.freeSavings)
   const purchasedCount = wishlist.filter((item) => isWishlistPurchased(item)).length
+  const pendingWishlist = wishlist.filter((item) => !isWishlistPurchased(item))
+  const purchasedWishlist = wishlist.filter((item) => isWishlistPurchased(item))
+  const wishlistSections = [
+    {
+      id: 'pending',
+      title: 'Deseos pendientes',
+      description: 'Productos que todavía estás planificando o ahorrando para comprar.',
+      emptyMessage: 'No tienes deseos pendientes. Todo lo de tu lista ya está comprado.',
+      items: pendingWishlist,
+    },
+    {
+      id: 'purchased',
+      title: 'Deseos comprados',
+      description: 'Historial de productos conseguidos y descontados de tus ahorros.',
+      emptyMessage: 'Todavía no has marcado ningún deseo como comprado.',
+      items: purchasedWishlist,
+    },
+  ] as const
   const editItem = useMemo(() => wishlist.find((item) => item.id === editId) ?? null, [editId, wishlist])
   const reachedItems = wishlist.filter((item) => getWishlistAvailableAmount(item, currentFreeSavedAmount) >= item.price && item.price > 0).length
   const groupedSearchResults = useMemo(() => groupPriceScoutResultsByStore(searchResults), [searchResults])
@@ -355,9 +373,9 @@ export default function Wishlist() {
           <p className="mt-3 text-3xl font-semibold text-on-surface">{formatCurrency(currentFreeSavedAmount)}</p>
           <p className="mt-2 text-sm text-muted-gray">
             {overview.assignedSavingsGoals > 0
-              ? `${formatCurrency(overview.assignedSavingsGoals)} estan apartados en bolsillos de ahorro y no cuentan para deseos.`
+              ? `Saldo total real: ${formatCurrency(overview.accumulatedSavings)}. ${formatCurrency(overview.assignedSavingsGoals)} están apartados en bolsillos y no cuentan para deseos.`
               : overview.reservedForPurchasedWishlist > 0
-                ? `${formatCurrency(overview.reservedForPurchasedWishlist)} ya se descontaron por deseos marcados como comprados.`
+                ? `${formatCurrency(overview.reservedForPurchasedWishlist)} ya se descontaron del ahorro por deseos comprados.`
                 : 'Este total se compara automaticamente contra cada producto.'}
           </p>
         </Card>
@@ -386,8 +404,29 @@ export default function Wishlist() {
           </div>
         </Card>
       ) : viewMode === 'cards' ? (
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 2xl:grid-cols-3">
-          {wishlist.map((item) => {
+        <div className="space-y-8">
+          {wishlistSections.map((section) => (
+            <section key={section.id} className="space-y-4">
+              <div className="flex flex-col gap-2 border-b border-graphite pb-4 sm:flex-row sm:items-end sm:justify-between">
+                <div>
+                  <h2 className="text-xl font-semibold text-on-surface">{section.title}</h2>
+                  <p className="mt-1 text-sm text-muted-gray">{section.description}</p>
+                </div>
+                <Badge
+                  variant="secondary"
+                  className={section.id === 'purchased' ? 'w-fit bg-success/10 text-success' : 'w-fit bg-primary/10 text-primary'}
+                >
+                  {section.items.length} {section.items.length === 1 ? 'deseo' : 'deseos'}
+                </Badge>
+              </div>
+
+              {section.items.length === 0 ? (
+                <Card className="border-dashed border-graphite bg-surface/70 p-8 text-center text-sm text-muted-gray">
+                  {section.emptyMessage}
+                </Card>
+              ) : (
+                <div className="grid grid-cols-1 gap-4 md:grid-cols-2 2xl:grid-cols-3">
+          {section.items.map((item) => {
             const purchased = isWishlistPurchased(item)
             const reservedAmount = getWishlistReservedAmount(item)
             const externalContribution = getWishlistExternalContribution(item)
@@ -543,10 +582,35 @@ export default function Wishlist() {
               </article>
             )
           })}
+                </div>
+              )}
+            </section>
+          ))}
         </div>
       ) : (
-        <div className="space-y-4">
-          {wishlist.map((item) => {
+        <div className="space-y-8">
+          {wishlistSections.map((section) => (
+            <section key={section.id} className="space-y-4">
+              <div className="flex flex-col gap-2 border-b border-graphite pb-4 sm:flex-row sm:items-end sm:justify-between">
+                <div>
+                  <h2 className="text-xl font-semibold text-on-surface">{section.title}</h2>
+                  <p className="mt-1 text-sm text-muted-gray">{section.description}</p>
+                </div>
+                <Badge
+                  variant="secondary"
+                  className={section.id === 'purchased' ? 'w-fit bg-success/10 text-success' : 'w-fit bg-primary/10 text-primary'}
+                >
+                  {section.items.length} {section.items.length === 1 ? 'deseo' : 'deseos'}
+                </Badge>
+              </div>
+
+              {section.items.length === 0 ? (
+                <Card className="border-dashed border-graphite bg-surface/70 p-8 text-center text-sm text-muted-gray">
+                  {section.emptyMessage}
+                </Card>
+              ) : (
+                <div className="space-y-4">
+          {section.items.map((item) => {
             const purchased = isWishlistPurchased(item)
             const reservedAmount = getWishlistReservedAmount(item)
             const externalContribution = getWishlistExternalContribution(item)
@@ -661,6 +725,10 @@ export default function Wishlist() {
               </article>
             )
           })}
+                </div>
+              )}
+            </section>
+          ))}
         </div>
       )}
 
