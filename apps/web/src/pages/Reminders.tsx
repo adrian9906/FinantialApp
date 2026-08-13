@@ -8,6 +8,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog'
 import { DatePickerField } from '@/components/ui/date-picker-field'
 import { Plus, Trash2, Bell, BellOff, Calendar, Pencil } from 'lucide-react'
+import { getTodayDateKey } from '@/lib/date'
 
 interface FormState { title: string; description: string; date: string }
 
@@ -27,11 +28,11 @@ export default function Reminders() {
   const removeReminder = useFinanceStore((state) => state.removeReminder)
   const [open, setOpen] = useState(false)
   const [editId, setEditId] = useState<string | null>(null)
-  const [form, setForm] = useState<FormState>({ title: '', description: '', date: '' })
+  const [form, setForm] = useState<FormState>({ title: '', description: '', date: getTodayDateKey() })
   const [isSaving, setIsSaving] = useState(false)
 
   function resetForm() {
-    setForm({ title: '', description: '', date: '' })
+    setForm({ title: '', description: '', date: getTodayDateKey() })
     setEditId(null)
   }
 
@@ -65,20 +66,16 @@ export default function Reminders() {
   const activeReminders = reminders.filter((r) => !r.completed)
   const completedReminders = reminders.filter((r) => r.completed)
 
-  const [todayMs, setTodayMs] = useState<number | null>(null)
+  const [todayMs, setTodayMs] = useState(() => getStartOfTodayMs())
 
   useEffect(() => {
-    const todayFunc = () => {
-      setTodayMs(getStartOfTodayMs())
-      const id = setInterval(() => setTodayMs(getStartOfTodayMs()), 60_000)
-      return () => clearInterval(id)
-    }
-    todayFunc()
+    const intervalId = setInterval(() => setTodayMs(getStartOfTodayMs()), 60_000)
+
+    return () => clearInterval(intervalId)
   }, [])
 
   function getReminderDiff(date: string) {
     const dateMs = Date.parse(date)
-    if (todayMs === null) return null
     return Math.ceil((dateMs - todayMs) / DAY_IN_MS)
   }
 

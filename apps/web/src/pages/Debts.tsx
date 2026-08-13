@@ -16,6 +16,7 @@ import { buildDebtPlanSummary, type DebtStrategy } from '@/lib/debtPlanner'
 import { useFinanceStore } from '@/store/financeStore'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { formatMoney } from '@/lib/currency'
+import { getTodayDateKey } from '@/lib/date'
 
 interface DebtFormState {
   amount: string
@@ -55,8 +56,8 @@ export default function Debts() {
   const [form, setForm] = useState<DebtFormState>({
     amount: '',
     history: '',
-    startDate: '',
-    endDate: '',
+    startDate: getTodayDateKey(),
+    endDate: getTodayDateKey(),
     interest: '',
   })
 
@@ -81,8 +82,8 @@ export default function Debts() {
     setForm({
       amount: '',
       history: '',
-      startDate: '',
-      endDate: '',
+      startDate: getTodayDateKey(),
+      endDate: getTodayDateKey(),
       interest: '',
     })
     setEditId(null)

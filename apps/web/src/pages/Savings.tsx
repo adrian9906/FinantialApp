@@ -15,6 +15,7 @@ import { Badge } from '@/components/ui/badge'
 import { exportSavingsReport } from '@/lib/reportExports'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { usePreferencesStore } from '@/store/preferencesStore'
+import { getTodayDateKey } from '@/lib/date'
 
 const GOAL_CATEGORY_LABELS = {
   emergency: 'Emergencia',
@@ -37,7 +38,7 @@ export default function Savings() {
   const wantsEnabled = usePreferencesStore((state) => state.formula.wants > 0)
   const [open, setOpen] = useState(false)
   const [editId, setEditId] = useState<string | null>(null)
-  const [form, setForm] = useState({ amount: '', date: '' })
+  const [form, setForm] = useState({ amount: '', date: getTodayDateKey() })
   const [formError, setFormError] = useState<string | null>(null)
   const [isSaving, setIsSaving] = useState(false)
   const [isExporting, setIsExporting] = useState(false)
@@ -59,13 +60,13 @@ export default function Savings() {
     amount: '',
     target: 'purpose' as 'expense' | 'want' | 'purpose',
     itemName: '',
-    date: '',
+    date: getTodayDateKey(),
     sourceGoalId: '',
     sourceGoalName: '',
   })
 
   function resetForm() {
-    setForm({ amount: '', date: '' })
+    setForm({ amount: '', date: getTodayDateKey() })
     setEditId(null)
     setFormError(null)
   }
@@ -75,7 +76,7 @@ export default function Savings() {
       amount: String(Math.max(0, overview.accumulatedSavings)),
       target: 'purpose',
       itemName: '',
-      date: '',
+      date: getTodayDateKey(),
       sourceGoalId: '',
       sourceGoalName: '',
     })
@@ -100,7 +101,7 @@ export default function Savings() {
       setForm({ amount: String(entry.amount), date: entry.date })
     } else {
       setEditId(null)
-      setForm({ amount: String(Math.max(0, remaining)), date: '' })
+      setForm({ amount: String(Math.max(0, remaining)), date: getTodayDateKey() })
     }
     setFormError(null)
     setOpen(true)
@@ -128,7 +129,7 @@ export default function Savings() {
       amount: String(Math.max(0, goal?.currentAmount ?? overview.accumulatedSavings)),
       target: 'purpose',
       itemName: '',
-      date: '',
+      date: getTodayDateKey(),
       sourceGoalId: goal?.id ?? '',
       sourceGoalName: goal?.name ?? '',
     })

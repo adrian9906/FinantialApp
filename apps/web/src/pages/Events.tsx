@@ -15,6 +15,7 @@ import { exportEventsReport } from '@/lib/reportExports'
 import { useMonthlyOverview } from '@/lib/useMonthlyOverview'
 import { formatMoney } from '@/lib/currency'
 import { useFinanceStore } from '@/store/financeStore'
+import { getTodayDateKey } from '@/lib/date'
 
 interface FormState {
   name: string
@@ -67,7 +68,7 @@ export default function Events() {
   const [viewMode, setViewMode] = useState<'list' | 'calendar'>('calendar')
   const [isSaving, setIsSaving] = useState(false)
   const [isExporting, setIsExporting] = useState(false)
-  const [form, setForm] = useState<FormState>({ name: '', date: '', amount: '', isNotification: false })
+  const [form, setForm] = useState<FormState>({ name: '', date: getTodayDateKey(), amount: '', isNotification: false })
 
   const sortedEvents = useMemo(
     () => [...events].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()),
@@ -106,7 +107,7 @@ export default function Events() {
   }
 
   function resetForm() {
-    setForm({ name: '', date: '', amount: '', isNotification: false })
+    setForm({ name: '', date: getTodayDateKey(), amount: '', isNotification: false })
     setEditId(null)
     setFormError(null)
   }

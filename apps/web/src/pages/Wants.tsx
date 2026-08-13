@@ -29,6 +29,7 @@ import { PlanningHistoryPicker } from '@/components/planning/PlanningHistoryPick
 import { PlanningListHistory } from '@/components/planning/PlanningListHistory'
 import { buildPlanningHistorySuggestions, buildReusablePlanningListDrafts } from '@/lib/productivity'
 import { toast } from 'sonner'
+import { getTodayDateKey } from '@/lib/date'
 
 interface WantFormState {
   amount: string
@@ -202,7 +203,7 @@ export default function Wants() {
     amount: '',
     itemName: '',
     category: 'outings',
-    date: '',
+    date: getTodayDateKey(),
   })
 
   useEffect(() => {
@@ -220,7 +221,7 @@ export default function Wants() {
       amount: '',
       itemName: '',
       category: 'outings',
-      date: '',
+      date: getTodayDateKey(),
     })
     setEditId(null)
     setFormError(null)
@@ -765,7 +766,7 @@ export default function Wants() {
                     amount: String(suggestion.amount),
                     itemName: suggestion.itemName,
                     category: suggestion.category as WantCategory,
-                    date: '',
+                    date: getTodayDateKey(),
                   })
                 }}
               />

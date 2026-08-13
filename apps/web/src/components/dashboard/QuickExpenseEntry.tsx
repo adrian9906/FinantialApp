@@ -10,6 +10,7 @@ import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { useFinanceStore } from '@/store/financeStore'
 import { formatMoney } from '@/lib/currency'
+import { getTodayDateKey } from '@/lib/date'
 
 const categories = [
   { value: 'food', label: 'Alimentacion' },
@@ -25,12 +26,6 @@ const categoryKeywords: Array<{ category: ExpenseCategory; words: string[] }> = 
   { category: 'health', words: ['farmacia', 'medicina', 'doctor', 'consulta', 'salud'] },
   { category: 'gym', words: ['gym', 'gimnasio', 'deporte', 'entrenamiento'] },
 ]
-
-function todayKey() {
-  const now = new Date()
-  const offset = now.getTimezoneOffset() * 60_000
-  return new Date(now.getTime() - offset).toISOString().slice(0, 10)
-}
 
 function parseQuickEntry(value: string) {
   const normalized = value.trim()
@@ -88,7 +83,7 @@ export function QuickExpenseEntry() {
         amount: parsed.amount,
         type: 'expense',
         description: buildExpenseDescription(activeCategory, parsed.itemName, 'checked'),
-        date: todayKey(),
+        date: getTodayDateKey(),
       })
       toast.success(`${parsed.itemName} registrado por ${formatMoney(parsed.amount)}.`)
       setEntry('')

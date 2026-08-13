@@ -28,6 +28,7 @@ import { PlanningHistoryPicker } from '@/components/planning/PlanningHistoryPick
 import { PlanningListHistory } from '@/components/planning/PlanningListHistory'
 import { buildPlanningHistorySuggestions, buildReusablePlanningListDrafts } from '@/lib/productivity'
 import { toast } from 'sonner'
+import { getTodayDateKey } from '@/lib/date'
 
 interface ExpenseFormState {
   amount: string
@@ -199,7 +200,7 @@ export default function Expenses() {
     amount: '',
     itemName: '',
     category: 'food',
-    date: '',
+    date: getTodayDateKey(),
   })
 
   function resetForm() {
@@ -207,7 +208,7 @@ export default function Expenses() {
       amount: '',
       itemName: '',
       category: 'food',
-      date: '',
+      date: getTodayDateKey(),
     })
     setEditId(null)
     setFormError(null)
@@ -717,7 +718,7 @@ export default function Expenses() {
                     amount: String(suggestion.amount),
                     itemName: suggestion.itemName,
                     category: suggestion.category as ExpenseCategory,
-                    date: '',
+                    date: getTodayDateKey(),
                   })
                 }}
               />

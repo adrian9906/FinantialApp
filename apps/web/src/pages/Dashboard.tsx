@@ -336,7 +336,7 @@ export default function Dashboard() {
                     <div className="absolute inset-y-0 right-[10%] w-px bg-on-surface/40" aria-hidden="true" />
                   </div>
                   <div className="mt-2 flex justify-between text-[11px] text-muted-gray">
-                    <span>Hoy {formatMoney(item.forecast.current)}</span><span>{item.forecast.progress}% proyectado</span>
+                    <span>Hasta hoy {formatMoney(item.forecast.current)}</span><span>{item.forecast.progress}% proyectado</span>
                   </div>
                 </div>
               )
