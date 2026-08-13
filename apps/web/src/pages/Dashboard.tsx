@@ -12,6 +12,9 @@ import { useMonthlyOverview } from '@/lib/useMonthlyOverview'
 import { buildRecurringPlanningSuggestions, buildRepeatPlanDrafts } from '@/lib/productivity'
 import { formatFormulaLabel, usePreferencesStore } from '@/store/preferencesStore'
 import { Bar, BarChart, CartesianGrid, Pie, PieChart, XAxis, YAxis } from 'recharts'
+import { getFinancialPeriodStart, getPlannedExpenseTotal, getPlannedWantTotal } from '@plata/shared'
+import { QuickExpenseEntry } from '@/components/dashboard/QuickExpenseEntry'
+import { buildMonthlyForecast, type BudgetForecast } from '@/lib/monthlyForecast'
 
 function getScoreToneClasses(status: ReturnType<typeof buildFinancialScore>['status']) {
   if (status === 'fuerte') return 'border-emerald-500/30 bg-emerald-500/10 text-emerald-200'
@@ -25,6 +28,19 @@ function getAlertToneClasses(level: ReturnType<typeof buildSmartAlerts>[number][
   if (level === 'warning') return 'border-amber-500/25 bg-amber-500/10'
   if (level === 'critical') return 'border-rose-500/25 bg-rose-500/10'
   return 'border-primary/20 bg-primary/10'
+}
+
+function getForecastTone(forecast: BudgetForecast) {
+  if (forecast.status === 'over') return 'text-error'
+  if (forecast.status === 'watch') return 'text-warning'
+  return 'text-success'
+}
+
+function getForecastLabel(forecast: BudgetForecast) {
+  if (forecast.status === 'no-data') return 'Sin movimientos todavia'
+  if (forecast.status === 'over') return `$${Math.abs(forecast.difference).toLocaleString()} sobre el limite`
+  if (forecast.status === 'watch') return `$${forecast.difference.toLocaleString()} de margen proyectado`
+  return `$${forecast.difference.toLocaleString()} por debajo del limite`
 }
 
 export default function Dashboard() {
@@ -48,17 +64,6 @@ export default function Dashboard() {
     .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
   const activeDebts = debts.filter((debt) => !debt.isSettled)
   const totalDebt = activeDebts.reduce((sum, debt) => sum + debt.remainingAmount, 0)
-  const salaryHealth = overview.totalSalary - overview.totalExpenses - overview.totalWants - overview.totalSavings
-
-  const savingsPercentage = overview.budgetSavings > 0
-    ? Math.min(100, Math.round((overview.totalSavings / overview.budgetSavings) * 100))
-    : 0
-  const wantsPercentage = overview.budgetWants > 0
-    ? Math.min(100, Math.round((overview.totalWants / overview.budgetWants) * 100))
-    : 0
-  const expensesPercentage = overview.budgetExpenses > 0
-    ? Math.min(100, Math.round((overview.totalExpenses / overview.budgetExpenses) * 100))
-    : 0
   const allocationData = [
     { bucket: 'Salario', value: overview.totalSalary },
     { bucket: 'Gastos', value: overview.totalExpenses },
@@ -95,6 +100,38 @@ export default function Dashboard() {
   )
   const recurringPreview = smartPlanning.recurringItems.slice(0, 6)
   const latestHistory = smartPlanning.latestHistory
+  const forecast = useMemo(() => {
+    const periodStart = getFinancialPeriodStart(monthlyPlanningHistory).slice(0, 10)
+    const periodTransactions = transactions.filter((transaction) => transaction.date >= periodStart)
+
+    return buildMonthlyForecast({
+      currentExpenses: overview.totalExpenses,
+      currentWants: overview.totalWants,
+      plannedExpenses: getPlannedExpenseTotal(periodTransactions),
+      plannedWants: getPlannedWantTotal(periodTransactions),
+      budgetExpenses: overview.budgetExpenses,
+      budgetWants: overview.budgetWants,
+      totalSalary: overview.totalSalary,
+      totalDebtPaid: overview.totalDebtPaid,
+      totalSavings: overview.totalSavings,
+      budgetSavings: overview.budgetSavings,
+    })
+  }, [monthlyPlanningHistory, overview, transactions])
+  const primaryAlert = smartAlerts[0]
+  const decisionTitle = overview.totalSalary <= 0
+    ? 'Registra tu salario para calcular el mes'
+    : forecast.projectedBalance < 0
+      ? 'El cierre previsto necesita un ajuste'
+      : forecast.expenses.status === 'over'
+        ? 'Reduce gastos esenciales antes de cerrar el mes'
+        : forecast.wants.status === 'over'
+          ? 'Pausa gastos flexibles para proteger tu plan'
+          : 'Tu mes mantiene margen de maniobra'
+  const decisionDescription = overview.totalSalary <= 0
+    ? 'Con una base de ingreso podemos reservar ahorro, deuda y calcular cuanto puedes gastar con seguridad.'
+    : forecast.projectedBalance < 0
+      ? `Al ritmo actual cerrarías con un déficit de $${Math.abs(forecast.projectedBalance).toLocaleString()}.`
+      : `Puedes usar hasta $${forecast.safePerDay.toLocaleString()} por día durante los ${forecast.remainingDays} días restantes sin tocar el ahorro protegido.`
 
   async function handleRepeatRecurring(type: 'expenses' | 'wants' | 'all') {
     if (isRepeatingRecurring) return
@@ -178,121 +215,108 @@ export default function Dashboard() {
         </div>
       </header>
 
-      <section className="grid grid-cols-1 xl:grid-cols-12 gap-4">
-        <div className="xl:col-span-4 bg-surface p-6 rounded-xl shadow-vault flex flex-col justify-between relative overflow-hidden group border border-primary/10">
-          <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(124,58,237,0.18),transparent_42%)]" />
-          <div className="absolute inset-y-0 right-0 w-px bg-gradient-to-b from-transparent via-primary/30 to-transparent" />
-          <div className="flex justify-between items-start mb-8 relative z-10">
-            <div className="size-11 rounded-2xl bg-primary/10 flex items-center justify-center shadow-vault">
-              <Wallet className="size-5 text-primary" />
-            </div>
-            <Badge variant="secondary" className="bg-primary/10 text-primary border-primary/20">
-              <Sparkles className="size-3.5" />
-              Base del mes
-            </Badge>
-          </div>
-          <div className="relative z-10 space-y-4">
-            <div>
-              <p className="text-xs text-muted-gray uppercase tracking-[0.24em] mb-2">Salario Registrado</p>
-              <h2 className="text-[36px] md:text-[42px] font-semibold text-on-surface leading-none">
-                ${overview.totalSalary.toLocaleString()}
-              </h2>
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div className="rounded-xl bg-abyss/80 border border-primary/10 p-3">
-                <p className="text-[11px] uppercase tracking-[0.18em] text-muted-gray mb-1">Liquidez</p>
-                <p className={`text-lg font-semibold ${salaryHealth >= 0 ? 'text-primary' : 'text-warning'}`}>
-                  ${salaryHealth.toLocaleString()}
+      <section className="grid gap-4 xl:grid-cols-[minmax(0,1.25fr)_minmax(320px,0.75fr)]">
+        <Card className="relative overflow-hidden border-primary/15 bg-surface shadow-vault">
+          <div className="absolute inset-y-0 right-0 w-1/2 bg-[radial-gradient(circle_at_top_right,rgba(124,58,237,0.16),transparent_60%)]" />
+          <CardContent className="relative space-y-6 p-5 sm:p-7">
+            <div className="flex flex-col gap-5 md:flex-row md:items-start md:justify-between">
+              <div className="max-w-2xl">
+                <div className="mb-4 flex items-center gap-2">
+                  <Badge variant="secondary" className="border-primary/20 bg-primary/10 text-primary">
+                    <Sparkles className="size-3.5" /> Decision de hoy
+                  </Badge>
+                  <span className="text-xs text-muted-gray">Actualizado con tus movimientos</span>
+                </div>
+                <h2 className="text-2xl font-semibold tracking-tight text-on-surface sm:text-3xl">{decisionTitle}</h2>
+                <p className="mt-2 max-w-xl text-sm leading-6 text-muted-gray">{decisionDescription}</p>
+              </div>
+              <div className="min-w-52 rounded-2xl border border-graphite bg-abyss/80 p-4">
+                <p className="text-[11px] uppercase tracking-[0.2em] text-medium-gray">Disponible seguro</p>
+                <p className={`mt-2 text-3xl font-semibold tabular-nums ${forecast.projectedBalance < 0 ? 'text-error' : 'text-on-surface'}`}>
+                  ${forecast.safeRemaining.toLocaleString()}
                 </p>
-              </div>
-              <div className="rounded-xl bg-abyss/80 border border-primary/10 p-3">
-                <p className="text-[11px] uppercase tracking-[0.18em] text-muted-gray mb-1">Distribuido</p>
-                <p className="text-lg font-semibold text-on-surface">
-                  {overview.totalSalary > 0 ? Math.min(100, Math.round(((overview.totalExpenses + overview.totalWants + overview.totalSavings) / overview.totalSalary) * 100)) : 0}%
-                </p>
+                <p className="mt-1 text-xs text-muted-gray">despues de deuda, cierre y ahorro protegido</p>
               </div>
             </div>
-            <div className="rounded-2xl bg-abyss/70 border border-graphite px-4 py-3">
-              <div className="flex items-center justify-between text-xs text-muted-gray mb-2">
-                <span>Distribución del ingreso</span>
-                <span>{new Date().toLocaleString('default', { month: 'short' })}</span>
-              </div>
-              <div className="flex h-2 w-full overflow-hidden rounded-full bg-surface-container-highest">
-                <div className="bg-primary transition-all duration-700" style={{ width: `${expensesPercentage}%` }} />
-                <div className="bg-secondary transition-all duration-700" style={{ width: `${wantsPercentage}%` }} />
-                <div className="bg-tertiary-container transition-all duration-700" style={{ width: `${savingsPercentage}%` }} />
-              </div>
-            </div>
-          </div>
-        </div>
 
-        <div className="xl:col-span-8 grid grid-cols-1 md:grid-cols-3 gap-4">
-          <div className="bg-surface p-6 rounded-xl shadow-vault flex flex-col justify-between relative overflow-hidden group">
-            <div className="absolute top-0 right-0 w-32 h-32 bg-primary opacity-5 rounded-bl-full translate-x-8 -translate-y-8 group-hover:scale-110 transition-transform duration-500" />
-            <div className="flex justify-between items-start mb-6 relative z-10">
-              <div className="size-10 rounded-lg bg-surface-container-high flex items-center justify-center shadow-vault">
-                <Building2 className="size-5 text-primary" />
+            <div className="grid gap-3 sm:grid-cols-3">
+              <div className="rounded-2xl border border-graphite bg-surface-container-low p-4">
+                <p className="text-xs text-medium-gray">Margen diario</p>
+                <p className="mt-2 text-xl font-semibold tabular-nums text-on-surface">${forecast.safePerDay.toLocaleString()}</p>
+                <p className="mt-1 text-xs text-muted-gray">durante {forecast.remainingDays} dias</p>
               </div>
-              <span className="bg-tertiary-container/20 text-tertiary rounded-full px-3 py-0.5 text-xs">
-                Objetivo: ${overview.budgetExpenses.toLocaleString()}
-              </span>
-            </div>
-            <div className="relative z-10">
-              <p className="text-xs text-muted-gray uppercase tracking-wider mb-1">Gastos Esenciales</p>
-              <h3 className="text-[28px] font-semibold text-on-surface mb-2">
-                ${overview.totalExpenses.toLocaleString()}
-              </h3>
-              <div className="w-full h-1.5 bg-surface-container-highest rounded-full overflow-hidden">
-                <div className="h-full bg-primary rounded-full transition-all duration-1000" style={{ width: `${expensesPercentage}%` }} />
+              <div className="rounded-2xl border border-graphite bg-surface-container-low p-4">
+                <p className="text-xs text-medium-gray">Ahorro protegido</p>
+                <p className="mt-2 text-xl font-semibold tabular-nums text-success">${forecast.protectedSavings.toLocaleString()}</p>
+                <p className="mt-1 text-xs text-muted-gray">fuera del margen disponible</p>
               </div>
-              <p className="text-xs text-muted-gray mt-2 text-right">{expensesPercentage}% consumido</p>
+              <div className="rounded-2xl border border-graphite bg-surface-container-low p-4">
+                <p className="text-xs text-medium-gray">Proximo foco</p>
+                <p className="mt-2 line-clamp-2 text-sm font-semibold text-on-surface">{primaryAlert?.title ?? 'Sin alertas urgentes'}</p>
+                <Button variant="ghost" size="sm" onClick={() => navigate(primaryAlert?.href ?? '/reports')} className="mt-1 h-7 px-0 text-primary hover:bg-transparent">
+                  {primaryAlert?.actionLabel ?? 'Revisar analisis'} <ArrowRight className="size-3.5" />
+                </Button>
+              </div>
             </div>
-          </div>
 
-          <div className="bg-surface p-6 rounded-xl shadow-vault flex flex-col justify-between relative overflow-hidden group">
-            <div className="absolute top-0 right-0 w-32 h-32 bg-secondary opacity-5 rounded-bl-full translate-x-8 -translate-y-8 group-hover:scale-110 transition-transform duration-500" />
-            <div className="flex justify-between items-start mb-6 relative z-10">
-              <div className="size-10 rounded-lg bg-surface-container-high flex items-center justify-center shadow-vault">
-                <Coffee className="size-5 text-secondary" />
-              </div>
-              <span className="bg-secondary-container/20 text-secondary rounded-full px-3 py-0.5 text-xs">
-                Objetivo: ${overview.budgetWants.toLocaleString()}
-              </span>
-            </div>
-            <div className="relative z-10">
-              <p className="text-xs text-muted-gray uppercase tracking-wider mb-1">Gustos</p>
-              <h3 className="text-[28px] font-semibold text-on-surface mb-2">
-                ${overview.totalWants.toLocaleString()}
-              </h3>
-              <div className="w-full h-1.5 bg-surface-container-highest rounded-full overflow-hidden">
-                <div className="h-full bg-secondary rounded-full transition-all duration-1000" style={{ width: `${wantsPercentage}%` }} />
-              </div>
-              <p className="text-xs text-muted-gray mt-2 text-right">{wantsPercentage}% consumido</p>
-            </div>
-          </div>
+            <QuickExpenseEntry />
+          </CardContent>
+        </Card>
 
-          <div className="bg-surface p-6 rounded-xl shadow-vault flex flex-col justify-between relative overflow-hidden group">
-            <div className="absolute top-0 right-0 w-32 h-32 bg-tertiary-container opacity-5 rounded-bl-full translate-x-8 -translate-y-8 group-hover:scale-110 transition-transform duration-500" />
-            <div className="flex justify-between items-start mb-6 relative z-10">
-              <div className="size-10 rounded-lg bg-surface-container-high flex items-center justify-center shadow-vault">
-                <PiggyBank className="size-5 text-tertiary-container" />
+        <Card className="border-graphite bg-surface shadow-vault">
+          <CardHeader className="pb-4">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <CardTitle className="text-on-surface">Cierre previsto</CardTitle>
+                <CardDescription className="mt-1 text-muted-gray">Ritmo actual y partidas planificadas.</CardDescription>
               </div>
-              <span className="bg-tertiary-container/20 text-tertiary rounded-full px-3 py-0.5 text-xs">
-                Objetivo: ${overview.budgetSavings.toLocaleString()}
-              </span>
+              <Badge variant="secondary" className="bg-surface-container-high text-on-surface">Dia {forecast.elapsedDays}/{forecast.daysInMonth}</Badge>
             </div>
-            <div className="relative z-10">
-              <p className="text-xs text-muted-gray uppercase tracking-wider mb-1">Ahorros</p>
-              <h3 className="text-[28px] font-semibold text-on-surface mb-2">
-                ${overview.totalSavings.toLocaleString()}
-              </h3>
-              <div className="w-full h-1.5 bg-surface-container-highest rounded-full overflow-hidden">
-                <div className="h-full bg-tertiary-container rounded-full transition-all duration-1000" style={{ width: `${savingsPercentage}%` }} />
+          </CardHeader>
+          <CardContent className="space-y-5">
+            {[
+              { label: 'Gastos esenciales', icon: Building2, forecast: forecast.expenses, color: 'bg-primary' },
+              { label: 'Gastos flexibles', icon: Coffee, forecast: forecast.wants, color: 'bg-secondary' },
+            ].map((item) => {
+              const Icon = item.icon
+              const width = Math.min(100, Math.max(0, item.forecast.progress))
+              return (
+                <div key={item.label} className="rounded-2xl border border-graphite bg-abyss/70 p-4">
+                  <div className="flex items-center justify-between gap-4">
+                    <div className="flex items-center gap-3">
+                      <div className="flex size-9 items-center justify-center rounded-xl bg-surface-container-high text-on-surface"><Icon className="size-4" /></div>
+                      <div>
+                        <p className="text-sm font-semibold text-on-surface">{item.label}</p>
+                        <p className={`text-xs ${getForecastTone(item.forecast)}`}>{getForecastLabel(item.forecast)}</p>
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-sm font-semibold tabular-nums text-on-surface">${item.forecast.projected.toLocaleString()}</p>
+                      <p className="text-[11px] text-muted-gray">de ${item.forecast.budget.toLocaleString()}</p>
+                    </div>
+                  </div>
+                  <div className="relative mt-4 h-2 overflow-hidden rounded-full bg-surface-container-highest">
+                    <div className={`h-full rounded-full transition-[width] duration-500 ${item.forecast.status === 'over' ? 'bg-error' : item.color}`} style={{ width: `${width}%` }} />
+                    <div className="absolute inset-y-0 right-[10%] w-px bg-on-surface/40" aria-hidden="true" />
+                  </div>
+                  <div className="mt-2 flex justify-between text-[11px] text-muted-gray">
+                    <span>Hoy ${item.forecast.current.toLocaleString()}</span><span>{item.forecast.progress}% proyectado</span>
+                  </div>
+                </div>
+              )
+            })}
+
+            <div className={`rounded-2xl border p-4 ${forecast.projectedBalance < 0 ? 'border-error/30 bg-error/10' : 'border-success/25 bg-success/10'}`}>
+              <div className="flex items-center gap-3">
+                {forecast.projectedBalance < 0 ? <AlertTriangle className="size-5 text-error" /> : <CheckCircle2 className="size-5 text-success" />}
+                <div>
+                  <p className="text-sm font-semibold text-on-surface">Cierre estimado: {forecast.projectedBalance < 0 ? '-' : ''}${Math.abs(forecast.projectedBalance).toLocaleString()}</p>
+                  <p className="mt-1 text-xs text-muted-gray">Se recalcula con cada movimiento.</p>
+                </div>
               </div>
-              <p className="text-xs text-muted-gray mt-2 text-right">{savingsPercentage}% reservado</p>
             </div>
-          </div>
-        </div>
+          </CardContent>
+        </Card>
       </section>
 
       <section className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,0.95fr)_minmax(0,1.05fr)]">
