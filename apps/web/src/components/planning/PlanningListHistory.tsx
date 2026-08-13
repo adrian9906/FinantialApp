@@ -2,6 +2,7 @@ import type { MonthlyPlanningHistory } from '@plata/shared'
 import { CalendarDays, History, ListRestart } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
+import { formatMoney } from '@/lib/currency'
 
 type PlanningListHistoryProps = {
   history: MonthlyPlanningHistory[]
@@ -77,7 +78,7 @@ export function PlanningListHistory({
                     <span className="truncate capitalize">{formatMonth(entry.month)}</span>
                   </div>
                   <p className="mt-3 text-xl font-semibold text-on-surface">
-                    ${total.toLocaleString()}
+                    {formatMoney(total)}
                   </p>
                 </div>
                 <span className="rounded-full bg-surface-container-high px-2.5 py-1 text-xs font-semibold text-on-surface">

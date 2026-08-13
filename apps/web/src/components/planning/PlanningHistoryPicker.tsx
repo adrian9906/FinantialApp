@@ -1,6 +1,7 @@
 import { History, RotateCcw } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
+import { formatMoney } from '@/lib/currency'
 import type { PlanningHistorySuggestion } from '@/lib/productivity'
 
 type PlanningHistoryPickerProps = {
@@ -83,7 +84,7 @@ export function PlanningHistoryPicker({
               </span>
               <span className="flex shrink-0 items-center gap-2">
                 <span className="text-sm font-semibold text-primary">
-                  ${suggestion.amount.toLocaleString()}
+                  {formatMoney(suggestion.amount)}
                 </span>
                 <RotateCcw className="size-3.5 text-muted-gray" />
               </span>

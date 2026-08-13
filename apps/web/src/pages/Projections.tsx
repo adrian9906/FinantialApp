@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { useFinanceStore } from '@/store/financeStore'
+import { formatMoney } from '@/lib/currency'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -72,7 +73,7 @@ export default function Projections() {
             <span className="text-base font-medium">Salario actual</span>
             <TrendingUp className="size-5 text-primary" />
           </div>
-          <div className="text-[28px] font-semibold text-on-surface">${latestSalary?.amount.toLocaleString() ?? '0'}</div>
+          <div className="text-[28px] font-semibold text-on-surface">{formatMoney(latestSalary?.amount ?? 0)}</div>
           <p className="text-xs text-muted-gray mt-1">{latestSalary?.month ?? 'Sin salario base'}</p>
         </div>
         <div className="bg-surface rounded-xl p-5 shadow-vault">
@@ -88,7 +89,7 @@ export default function Projections() {
             <Target className="size-5 text-primary" />
           </div>
           <div className="text-[28px] font-semibold text-on-surface">
-            ${Math.max(0, ...projections.map((projection) => projection.targetSalary)).toLocaleString()}
+            {formatMoney(Math.max(0, ...projections.map((projection) => projection.targetSalary)))}
           </div>
         </div>
       </div>
@@ -117,9 +118,9 @@ export default function Projections() {
               const reached = gap <= 0
               return (
                 <div key={projection.id} className="grid grid-cols-1 md:grid-cols-[1fr_1fr_1fr_80px] gap-3 md:gap-4 p-4 hover:bg-surface-container-low transition-colors items-center group">
-                  <div className="text-sm font-medium text-on-surface">${projection.targetSalary.toLocaleString()}</div>
+                  <div className="text-sm font-medium text-on-surface">{formatMoney(projection.targetSalary)}</div>
                   <div className={`text-sm ${gap > 0 ? 'text-warning' : 'text-success'}`}>
-                    {gap > 0 ? `Faltan $${gap.toLocaleString()}` : `Superado por $${Math.abs(gap).toLocaleString()}`}
+                    {gap > 0 ? `Faltan ${formatMoney(gap)}` : `Superado por ${formatMoney(Math.abs(gap))}`}
                   </div>
                   <div>
                     <Badge variant="secondary" className={reached ? 'bg-success/10 text-success' : 'bg-primary/15 text-primary'}>
@@ -155,13 +156,13 @@ export default function Projections() {
             <Card className="border-graphite bg-abyss p-4 shadow-vault-sm">
               <p className="text-xs uppercase tracking-[0.22em] text-medium-gray">Vista previa</p>
               <p className="mt-2 text-lg font-semibold text-on-surface">
-                {targetSalary ? `$${Number(targetSalary).toLocaleString()}` : 'Define una meta'}
+                {targetSalary ? formatMoney(Number(targetSalary)) : 'Define una meta'}
               </p>
               <p className="mt-1 text-sm text-muted-gray">
                 {targetSalary && latestSalary
                   ? Number(targetSalary) - latestSalary.amount > 0
-                    ? `Te faltan $${(Number(targetSalary) - latestSalary.amount).toLocaleString()} para alcanzarla.`
-                    : `Ya superaste esta meta por $${Math.abs(Number(targetSalary) - latestSalary.amount).toLocaleString()}.`
+                    ? `Te faltan ${formatMoney(Number(targetSalary) - latestSalary.amount)} para alcanzarla.`
+                    : `Ya superaste esta meta por ${formatMoney(Math.abs(Number(targetSalary) - latestSalary.amount))}.`
                   : 'Usa esta tarjeta para validar el impacto antes de guardar.'}
               </p>
             </Card>

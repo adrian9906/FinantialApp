@@ -6,7 +6,7 @@ import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { ChartContainer, ChartLegend, ChartLegendContent, ChartTooltip, ChartTooltipContent, type ChartConfig } from '@/components/ui/chart'
 import { useNavigate } from 'react-router-dom'
-import { AlertTriangle, ArrowRight, Bell, Building2, Calendar, CheckCircle2, ChevronRight, Coffee, Landmark, PiggyBank, Plus, RotateCcw, ShieldAlert, Sparkles, TrendingDown, TrendingUp, Wallet } from 'lucide-react'
+import { AlertTriangle, ArrowRight, Bell, Building2, Calendar, CheckCircle2, ChevronRight, Coffee, FileDown, Landmark, PiggyBank, Plus, RotateCcw, ShieldAlert, Sparkles, TrendingDown, TrendingUp, Wallet } from 'lucide-react'
 import { buildFinancialScore, buildSmartAlerts } from '@/lib/financialInsights'
 import { useMonthlyOverview } from '@/lib/useMonthlyOverview'
 import { buildRecurringPlanningSuggestions, buildRepeatPlanDrafts } from '@/lib/productivity'
@@ -15,6 +15,8 @@ import { Bar, BarChart, CartesianGrid, Pie, PieChart, XAxis, YAxis } from 'recha
 import { getFinancialPeriodStart, getPlannedExpenseTotal, getPlannedWantTotal } from '@plata/shared'
 import { QuickExpenseEntry } from '@/components/dashboard/QuickExpenseEntry'
 import { buildMonthlyForecast, type BudgetForecast } from '@/lib/monthlyForecast'
+import { convertFromUsd, formatMoney } from '@/lib/currency'
+import { downloadMonthlyPdfReport } from '@/lib/monthlyPdfReport'
 
 function getScoreToneClasses(status: ReturnType<typeof buildFinancialScore>['status']) {
   if (status === 'fuerte') return 'border-emerald-500/30 bg-emerald-500/10 text-emerald-200'
@@ -38,9 +40,9 @@ function getForecastTone(forecast: BudgetForecast) {
 
 function getForecastLabel(forecast: BudgetForecast) {
   if (forecast.status === 'no-data') return 'Sin movimientos todavia'
-  if (forecast.status === 'over') return `$${Math.abs(forecast.difference).toLocaleString()} sobre el limite`
-  if (forecast.status === 'watch') return `$${forecast.difference.toLocaleString()} de margen proyectado`
-  return `$${forecast.difference.toLocaleString()} por debajo del limite`
+  if (forecast.status === 'over') return `${formatMoney(Math.abs(forecast.difference))} sobre el limite`
+  if (forecast.status === 'watch') return `${formatMoney(forecast.difference)} de margen proyectado`
+  return `${formatMoney(forecast.difference)} por debajo del limite`
 }
 
 export default function Dashboard() {
@@ -57,6 +59,7 @@ export default function Dashboard() {
   const formula = usePreferencesStore((state) => state.formula)
   const [isRepeatingRecurring, setIsRepeatingRecurring] = useState(false)
   const [restoringScope, setRestoringScope] = useState<'expenses' | 'wants' | 'all' | null>(null)
+  const [isDownloadingPdf, setIsDownloadingPdf] = useState(false)
 
   const pendingReminders = reminders.filter((r) => !r.completed)
   const upcomingEvents = events
@@ -65,15 +68,15 @@ export default function Dashboard() {
   const activeDebts = debts.filter((debt) => !debt.isSettled)
   const totalDebt = activeDebts.reduce((sum, debt) => sum + debt.remainingAmount, 0)
   const allocationData = [
-    { bucket: 'Salario', value: overview.totalSalary },
-    { bucket: 'Gastos', value: overview.totalExpenses },
-    { bucket: 'Gustos', value: overview.totalWants },
-    { bucket: 'Ahorros', value: overview.totalSavings },
+    { bucket: 'Salario', value: convertFromUsd(overview.totalSalary) },
+    { bucket: 'Gastos', value: convertFromUsd(overview.totalExpenses) },
+    { bucket: 'Gustos', value: convertFromUsd(overview.totalWants) },
+    { bucket: 'Ahorros', value: convertFromUsd(overview.totalSavings) },
   ]
   const compositionData = [
-    { name: 'gastos', value: overview.totalExpenses, fill: 'var(--color-gastos)' },
-    { name: 'gustos', value: overview.totalWants, fill: 'var(--color-gustos)' },
-    { name: 'ahorros', value: overview.totalSavings, fill: 'var(--color-ahorros)' },
+    { name: 'gastos', value: convertFromUsd(overview.totalExpenses), fill: 'var(--color-gastos)' },
+    { name: 'gustos', value: convertFromUsd(overview.totalWants), fill: 'var(--color-gustos)' },
+    { name: 'ahorros', value: convertFromUsd(overview.totalSavings), fill: 'var(--color-ahorros)' },
   ].filter((entry) => entry.value > 0)
   const allocationConfig = {
     Salario: { label: 'Salario', color: 'var(--color-primary)' },
@@ -117,6 +120,27 @@ export default function Dashboard() {
       budgetSavings: overview.budgetSavings,
     })
   }, [monthlyPlanningHistory, overview, transactions])
+
+  async function handleDownloadCurrentReport() {
+    if (isDownloadingPdf) return
+    setIsDownloadingPdf(true)
+    try {
+      await downloadMonthlyPdfReport({
+        overview,
+        transactions,
+        wishlist,
+        debts,
+        reminders,
+        periodStart: getFinancialPeriodStart(monthlyPlanningHistory),
+        mode: 'current',
+      })
+      toast.success('Informe financiero actual descargado en PDF.')
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'No se pudo generar el informe PDF.')
+    } finally {
+      setIsDownloadingPdf(false)
+    }
+  }
   const primaryAlert = smartAlerts[0]
   const decisionTitle = overview.totalSalary <= 0
     ? 'Registra tu salario para calcular el mes'
@@ -130,8 +154,8 @@ export default function Dashboard() {
   const decisionDescription = overview.totalSalary <= 0
     ? 'Con una base de ingreso podemos reservar ahorro, deuda y calcular cuanto puedes gastar con seguridad.'
     : forecast.projectedBalance < 0
-      ? `Al ritmo actual cerrarías con un déficit de $${Math.abs(forecast.projectedBalance).toLocaleString()}.`
-      : `Puedes usar hasta $${forecast.safePerDay.toLocaleString()} por día durante los ${forecast.remainingDays} días restantes sin tocar el ahorro protegido.`
+      ? `Al ritmo actual cerrarías con un déficit de ${formatMoney(Math.abs(forecast.projectedBalance))}.`
+      : `Puedes usar hasta ${formatMoney(forecast.safePerDay)} por día durante los ${forecast.remainingDays} días restantes sin tocar el ahorro protegido.`
 
   async function handleRepeatRecurring(type: 'expenses' | 'wants' | 'all') {
     if (isRepeatingRecurring) return
@@ -207,11 +231,23 @@ export default function Dashboard() {
             Vista consolidada de salario, gastos, gustos y ahorro.
           </p>
         </div>
-        <div className="flex items-center gap-3 bg-surface rounded-full px-4 py-1.5 shadow-vault text-sm">
-          <Calendar className="size-4 text-muted-gray" />
-          <span className="font-medium text-on-surface">
-            {new Date().toLocaleString('default', { month: 'long', year: 'numeric' })}
-          </span>
+        <div className="flex flex-wrap items-center gap-3">
+          <Button
+            variant="outline"
+            loading={isDownloadingPdf}
+            disabled={isDownloadingPdf}
+            onClick={() => void handleDownloadCurrentReport()}
+            className="border-graphite bg-surface text-on-surface shadow-vault-sm hover:bg-surface-container-high"
+          >
+            <FileDown className="size-4" />
+            Descargar informe PDF
+          </Button>
+          <div className="flex items-center gap-3 bg-surface rounded-full px-4 py-1.5 shadow-vault text-sm">
+            <Calendar className="size-4 text-muted-gray" />
+            <span className="font-medium text-on-surface">
+              {new Date().toLocaleString('default', { month: 'long', year: 'numeric' })}
+            </span>
+          </div>
         </div>
       </header>
 
@@ -233,7 +269,7 @@ export default function Dashboard() {
               <div className="min-w-52 rounded-2xl border border-graphite bg-abyss/80 p-4">
                 <p className="text-[11px] uppercase tracking-[0.2em] text-medium-gray">Disponible seguro</p>
                 <p className={`mt-2 text-3xl font-semibold tabular-nums ${forecast.projectedBalance < 0 ? 'text-error' : 'text-on-surface'}`}>
-                  ${forecast.safeRemaining.toLocaleString()}
+                  {formatMoney(forecast.safeRemaining)}
                 </p>
                 <p className="mt-1 text-xs text-muted-gray">despues de deuda, cierre y ahorro protegido</p>
               </div>
@@ -242,12 +278,12 @@ export default function Dashboard() {
             <div className="grid gap-3 sm:grid-cols-3">
               <div className="rounded-2xl border border-graphite bg-surface-container-low p-4">
                 <p className="text-xs text-medium-gray">Margen diario</p>
-                <p className="mt-2 text-xl font-semibold tabular-nums text-on-surface">${forecast.safePerDay.toLocaleString()}</p>
+                <p className="mt-2 text-xl font-semibold tabular-nums text-on-surface">{formatMoney(forecast.safePerDay)}</p>
                 <p className="mt-1 text-xs text-muted-gray">durante {forecast.remainingDays} dias</p>
               </div>
               <div className="rounded-2xl border border-graphite bg-surface-container-low p-4">
                 <p className="text-xs text-medium-gray">Ahorro protegido</p>
-                <p className="mt-2 text-xl font-semibold tabular-nums text-success">${forecast.protectedSavings.toLocaleString()}</p>
+                <p className="mt-2 text-xl font-semibold tabular-nums text-success">{formatMoney(forecast.protectedSavings)}</p>
                 <p className="mt-1 text-xs text-muted-gray">fuera del margen disponible</p>
               </div>
               <div className="rounded-2xl border border-graphite bg-surface-container-low p-4">
@@ -291,8 +327,8 @@ export default function Dashboard() {
                       </div>
                     </div>
                     <div className="text-right">
-                      <p className="text-sm font-semibold tabular-nums text-on-surface">${item.forecast.projected.toLocaleString()}</p>
-                      <p className="text-[11px] text-muted-gray">de ${item.forecast.budget.toLocaleString()}</p>
+                      <p className="text-sm font-semibold tabular-nums text-on-surface">{formatMoney(item.forecast.projected)}</p>
+                      <p className="text-[11px] text-muted-gray">de {formatMoney(item.forecast.budget)}</p>
                     </div>
                   </div>
                   <div className="relative mt-4 h-2 overflow-hidden rounded-full bg-surface-container-highest">
@@ -300,7 +336,7 @@ export default function Dashboard() {
                     <div className="absolute inset-y-0 right-[10%] w-px bg-on-surface/40" aria-hidden="true" />
                   </div>
                   <div className="mt-2 flex justify-between text-[11px] text-muted-gray">
-                    <span>Hoy ${item.forecast.current.toLocaleString()}</span><span>{item.forecast.progress}% proyectado</span>
+                    <span>Hoy {formatMoney(item.forecast.current)}</span><span>{item.forecast.progress}% proyectado</span>
                   </div>
                 </div>
               )
@@ -310,7 +346,7 @@ export default function Dashboard() {
               <div className="flex items-center gap-3">
                 {forecast.projectedBalance < 0 ? <AlertTriangle className="size-5 text-error" /> : <CheckCircle2 className="size-5 text-success" />}
                 <div>
-                  <p className="text-sm font-semibold text-on-surface">Cierre estimado: {forecast.projectedBalance < 0 ? '-' : ''}${Math.abs(forecast.projectedBalance).toLocaleString()}</p>
+                  <p className="text-sm font-semibold text-on-surface">Cierre estimado: {forecast.projectedBalance < 0 ? '-' : ''}{formatMoney(Math.abs(forecast.projectedBalance))}</p>
                   <p className="mt-1 text-xs text-muted-gray">Se recalcula con cada movimiento.</p>
                 </div>
               </div>
@@ -541,7 +577,7 @@ export default function Dashboard() {
               <p className="mt-4 text-sm font-semibold text-on-surface">Pagar deuda</p>
               <p className="mt-1 text-xs text-muted-gray">
                 {activeDebts.length > 0
-                  ? `${activeDebts.length} deuda(s) activas con ${`$${totalDebt.toLocaleString()}`} pendientes.`
+                  ? `${activeDebts.length} deuda(s) activas con ${formatMoney(totalDebt)} pendientes.`
                   : 'No tienes deudas activas por pagar ahora mismo.'}
               </p>
             </button>
@@ -687,7 +723,7 @@ export default function Dashboard() {
                       </p>
                     </div>
                     <div className="text-sm font-semibold text-on-surface">
-                      ${item.amount.toLocaleString()}
+                      {formatMoney(item.amount)}
                     </div>
                   </div>
                 ))}
@@ -751,7 +787,7 @@ export default function Dashboard() {
                 <Landmark className="size-4" />
                 Deuda activa
               </div>
-              <p className="text-lg font-semibold text-on-surface">${totalDebt.toLocaleString()}</p>
+              <p className="text-lg font-semibold text-on-surface">{formatMoney(totalDebt)}</p>
               <p className="text-xs text-muted-gray mt-1">
                 {activeDebts[0] ? activeDebts[0].history : 'No hay deudas pendientes'}
               </p>

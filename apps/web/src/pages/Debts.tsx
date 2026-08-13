@@ -15,6 +15,7 @@ import { useMonthlyOverview } from '@/lib/useMonthlyOverview'
 import { buildDebtPlanSummary, type DebtStrategy } from '@/lib/debtPlanner'
 import { useFinanceStore } from '@/store/financeStore'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { formatMoney } from '@/lib/currency'
 
 interface DebtFormState {
   amount: string
@@ -69,7 +70,7 @@ export default function Debts() {
   )
 
   function asMoney(value: number | undefined) {
-    return Number(value ?? 0).toLocaleString()
+    return formatMoney(Number(value ?? 0))
   }
 
   function asPercent(value: number | undefined) {
@@ -167,12 +168,12 @@ export default function Debts() {
     }
 
     if (nextPayment > paymentDebt.remainingAmount) {
-      setPaymentError(`Solo puedes abonar hasta $${asMoney(paymentDebt.remainingAmount)}.`)
+      setPaymentError(`Solo puedes abonar hasta ${asMoney(paymentDebt.remainingAmount)}.`)
       return
     }
 
     if (nextPayment > overview.freeSavings) {
-      setPaymentError(`Solo tienes $${asMoney(overview.freeSavings)} disponibles en ahorros para realizar este pago.`)
+      setPaymentError(`Solo tienes ${asMoney(overview.freeSavings)} disponibles en ahorros para realizar este pago.`)
       return
     }
 
@@ -279,21 +280,21 @@ export default function Debts() {
             <span className="text-base font-medium">Total adeudado</span>
             <Landmark className="size-5 text-primary" />
           </div>
-          <div className="text-[28px] font-semibold text-on-surface">${asMoney(totalDebt)}</div>
+          <div className="text-[28px] font-semibold text-on-surface">{asMoney(totalDebt)}</div>
         </div>
         <div className="rounded-xl bg-surface p-5 shadow-vault">
           <div className="mb-2 flex items-center justify-between text-muted-gray">
             <span className="text-base font-medium">Abonado</span>
             <CheckCheck className="size-5 text-success" />
           </div>
-          <div className="text-[28px] font-semibold text-on-surface">${asMoney(totalPaid)}</div>
+          <div className="text-[28px] font-semibold text-on-surface">{asMoney(totalPaid)}</div>
         </div>
         <div className="rounded-xl bg-surface p-5 shadow-vault">
           <div className="mb-2 flex items-center justify-between text-muted-gray">
             <span className="text-base font-medium">Pendiente</span>
             <ReceiptText className="size-5 text-warning" />
           </div>
-          <div className="text-[28px] font-semibold text-on-surface">${asMoney(totalRemaining)}</div>
+          <div className="text-[28px] font-semibold text-on-surface">{asMoney(totalRemaining)}</div>
         </div>
         <div className="rounded-xl bg-surface p-5 shadow-vault">
           <div className="mb-2 flex items-center justify-between text-muted-gray">
@@ -308,9 +309,9 @@ export default function Debts() {
             <span className="text-base font-medium">Ahorro disponible</span>
             <Wallet className="size-5 text-primary" />
           </div>
-          <div className="text-[28px] font-semibold text-on-surface">${asMoney(overview.freeSavings)}</div>
+          <div className="text-[28px] font-semibold text-on-surface">{asMoney(overview.freeSavings)}</div>
           <p className="mt-1 text-xs text-muted-gray">
-            Propio ${asMoney(overview.ownSavings)} · Prestado ${asMoney(overview.borrowedSavings)}
+            Propio {asMoney(overview.ownSavings)} · Prestado {asMoney(overview.borrowedSavings)}
           </p>
         </div>
       </div>
@@ -395,7 +396,7 @@ export default function Debts() {
                     <div>
                       <p className="text-sm font-semibold text-on-surface">{index + 1}. {entry.history}</p>
                       <p className="mt-1 text-xs text-muted-gray">
-                        Restante ${asMoney(entry.remainingAmount)} · Interés {entry.interest.toFixed(2)}%
+                        Restante {asMoney(entry.remainingAmount)} · Interés {entry.interest.toFixed(2)}%
                       </p>
                     </div>
                     <Badge variant="secondary" className={index === 0 ? 'bg-primary/15 text-primary' : 'bg-surface-container-high text-on-surface'}>
@@ -405,11 +406,11 @@ export default function Debts() {
                   <div className="mt-4 grid gap-3 md:grid-cols-3">
                     <div>
                       <p className="text-xs uppercase tracking-[0.16em] text-medium-gray">Pago base</p>
-                      <p className="mt-2 text-lg font-semibold text-on-surface">${asMoney(entry.estimatedMinimum)}</p>
+                      <p className="mt-2 text-lg font-semibold text-on-surface">{asMoney(entry.estimatedMinimum)}</p>
                     </div>
                     <div>
                       <p className="text-xs uppercase tracking-[0.16em] text-medium-gray">Extra sugerido</p>
-                      <p className="mt-2 text-lg font-semibold text-success">${asMoney(entry.recommendedExtra)}</p>
+                      <p className="mt-2 text-lg font-semibold text-success">{asMoney(entry.recommendedExtra)}</p>
                     </div>
                     <div>
                       <p className="text-xs uppercase tracking-[0.16em] text-medium-gray">Tiempo estimado</p>
@@ -473,7 +474,7 @@ export default function Debts() {
                         </div>
                       </div>
                       <div className="text-left sm:text-right">
-                        <p className="text-lg font-semibold text-on-surface">${asMoney(debt.amount)}</p>
+                        <p className="text-lg font-semibold text-on-surface">{asMoney(debt.amount)}</p>
                         <p className="text-xs text-muted-gray">Total original</p>
                       </div>
                     </div>
@@ -481,11 +482,11 @@ export default function Debts() {
                     <div className="mt-4 grid gap-3 md:grid-cols-3">
                       <Card className="border-graphite bg-abyss p-3 shadow-vault-sm">
                         <p className="text-xs uppercase tracking-[0.16em] text-medium-gray">Abonado</p>
-                        <p className="mt-2 text-lg font-semibold text-success">${asMoney(debt.paidAmount)}</p>
+                        <p className="mt-2 text-lg font-semibold text-success">{asMoney(debt.paidAmount)}</p>
                       </Card>
                       <Card className="border-graphite bg-abyss p-3 shadow-vault-sm">
                         <p className="text-xs uppercase tracking-[0.16em] text-medium-gray">Restante</p>
-                        <p className="mt-2 text-lg font-semibold text-on-surface">${asMoney(debt.remainingAmount)}</p>
+                        <p className="mt-2 text-lg font-semibold text-on-surface">{asMoney(debt.remainingAmount)}</p>
                       </Card>
                       <Card className="border-graphite bg-abyss p-3 shadow-vault-sm">
                         <p className="text-xs uppercase tracking-[0.16em] text-medium-gray">Progreso</p>
@@ -605,21 +606,21 @@ export default function Debts() {
             <div className="space-y-4">
               <Card className="border-amber-500/20 bg-amber-500/8 p-4 shadow-vault-sm">
                 <p className="text-xs uppercase tracking-[0.18em] text-amber-200">Capital que recibirás</p>
-                <p className="mt-2 text-3xl font-semibold tabular-nums text-on-surface">${asMoney(acquisitionDebt.remainingAmount)}</p>
+                <p className="mt-2 text-3xl font-semibold tabular-nums text-on-surface">{asMoney(acquisitionDebt.remainingAmount)}</p>
                 <p className="mt-2 text-sm text-muted-gray">Procedente de “{acquisitionDebt.history}”.</p>
               </Card>
               <div className="grid gap-3 sm:grid-cols-3">
                 <div className="rounded-xl border border-graphite bg-abyss p-3">
                   <p className="text-[10px] uppercase tracking-[0.16em] text-medium-gray">Ahorro propio</p>
-                  <p className="mt-2 font-semibold text-success">${asMoney(overview.ownSavings)}</p>
+                  <p className="mt-2 font-semibold text-success">{asMoney(overview.ownSavings)}</p>
                 </div>
                 <div className="rounded-xl border border-graphite bg-abyss p-3">
                   <p className="text-[10px] uppercase tracking-[0.16em] text-medium-gray">Prestado actual</p>
-                  <p className="mt-2 font-semibold text-amber-200">${asMoney(overview.borrowedSavings)}</p>
+                  <p className="mt-2 font-semibold text-amber-200">{asMoney(overview.borrowedSavings)}</p>
                 </div>
                 <div className="rounded-xl border border-graphite bg-abyss p-3">
                   <p className="text-[10px] uppercase tracking-[0.16em] text-medium-gray">Total después</p>
-                  <p className="mt-2 font-semibold text-on-surface">${asMoney(overview.accumulatedSavings + acquisitionDebt.remainingAmount)}</p>
+                  <p className="mt-2 font-semibold text-on-surface">{asMoney(overview.accumulatedSavings + acquisitionDebt.remainingAmount)}</p>
                 </div>
               </div>
               {acquisitionError ? <p className="text-sm text-error">{acquisitionError}</p> : null}
@@ -653,15 +654,15 @@ export default function Debts() {
                 <div className="grid gap-3 sm:grid-cols-3">
                   <div>
                     <p className="text-xs uppercase tracking-[0.18em] text-medium-gray">Abonado</p>
-                    <p className="mt-2 text-lg font-semibold text-success">${asMoney(paymentDebt.paidAmount)}</p>
+                    <p className="mt-2 text-lg font-semibold text-success">{asMoney(paymentDebt.paidAmount)}</p>
                   </div>
                   <div>
                     <p className="text-xs uppercase tracking-[0.18em] text-medium-gray">Ahorro disponible</p>
-                    <p className="mt-2 text-lg font-semibold text-on-surface">${asMoney(overview.freeSavings)}</p>
+                    <p className="mt-2 text-lg font-semibold text-on-surface">{asMoney(overview.freeSavings)}</p>
                   </div>
                   <div>
                     <p className="text-xs uppercase tracking-[0.18em] text-medium-gray">Restante</p>
-                    <p className="mt-2 text-lg font-semibold text-on-surface">${asMoney(paymentDebt.remainingAmount)}</p>
+                    <p className="mt-2 text-lg font-semibold text-on-surface">{asMoney(paymentDebt.remainingAmount)}</p>
                   </div>
                 </div>
               </Card>
@@ -678,7 +679,7 @@ export default function Debts() {
               />
               {paymentDebt ? (
                 <p className="text-xs text-muted-gray">
-                  Puedes abonar hasta ${asMoney(Math.min(paymentDebt.remainingAmount, overview.freeSavings))} en este momento.
+                  Puedes abonar hasta {asMoney(Math.min(paymentDebt.remainingAmount, overview.freeSavings))} en este momento.
                   El pago usará primero ahorro propio y después dinero prestado.
                 </p>
               ) : null}

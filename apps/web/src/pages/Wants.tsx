@@ -4,6 +4,7 @@ import { Clapperboard, Gamepad2, Heart, LockKeyhole, Pencil, Plus, ShoppingBag, 
 import { useFinanceStore } from '@/store/financeStore'
 import { buildWantDescription, createCustomWantCategory, getPlannedWantTotal, getWantCategoryLabel, parseWantDescription, type WantBuiltInCategory, type WantCategory } from '@/lib/want-utils'
 import { useMonthlyOverview } from '@/lib/useMonthlyOverview'
+import { formatMoney } from '@/lib/currency'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
@@ -307,9 +308,9 @@ export default function Wants() {
     : !Number.isFinite(typedAmount) || typedAmount <= 0
       ? 'El precio debe ser mayor que cero.'
       : typedAmount > availableToPlan
-        ? `Te pasas por $${(typedAmount - availableToPlan).toLocaleString()}. Solo te quedan $${availableToPlan.toLocaleString()} disponibles para planificar.`
+        ? `Te pasas por ${formatMoney(typedAmount - availableToPlan)}. Solo te quedan ${formatMoney(availableToPlan)} disponibles para planificar.`
         : plannedTotal + typedAmount > overview.budgetWants
-          ? `No puedes agregar este gusto porque la lista subiria a $${(plannedTotal + typedAmount).toLocaleString()} y tu limite es $${overview.budgetWants.toLocaleString()}.`
+          ? `No puedes agregar este gusto porque la lista subiria a ${formatMoney(plannedTotal + typedAmount)} y tu limite es ${formatMoney(overview.budgetWants)}.`
           : null
 
   function handleCreateCategory() {
@@ -338,12 +339,12 @@ export default function Wants() {
     }
 
     if (nextAmount > availableToPlan) {
-      setFormError(`Ese precio supera el disponible para planificar: $${availableToPlan.toLocaleString()}.`)
+      setFormError(`Ese precio supera el disponible para planificar: ${formatMoney(availableToPlan)}.`)
       return
     }
 
     if (plannedTotal + nextAmount > overview.budgetWants) {
-      setFormError(`No puedes agregarlo porque la lista total se iria a $${(plannedTotal + nextAmount).toLocaleString()} y tu limite es $${overview.budgetWants.toLocaleString()}.`)
+      setFormError(`No puedes agregarlo porque la lista total se iria a ${formatMoney(plannedTotal + nextAmount)} y tu limite es ${formatMoney(overview.budgetWants)}.`)
       return
     }
 
@@ -385,7 +386,7 @@ export default function Wants() {
 
     const total = drafts.reduce((sum, draft) => sum + draft.amount, 0)
     if (total > availableToPlan) {
-      toast.error(`La lista necesita $${total.toLocaleString()} y solo tienes $${availableToPlan.toLocaleString()} disponibles.`)
+      toast.error(`La lista necesita ${formatMoney(total)} y solo tienes ${formatMoney(availableToPlan)} disponibles.`)
       return
     }
 
@@ -430,7 +431,7 @@ export default function Wants() {
       return
     }
     if (nextAmount > remaining) {
-      setTransferError(`Solo puedes mover hasta $${Math.max(0, remaining).toLocaleString()}.`)
+      setTransferError(`Solo puedes mover hasta ${formatMoney(Math.max(0, remaining))}.`)
       return
     }
 
@@ -489,7 +490,7 @@ export default function Wants() {
             <div>
               <p className="text-sm font-semibold text-on-surface">Sección Gustos desactivada</p>
               <p className="mt-1 text-sm text-muted-gray">
-                La fórmula asigna 0% a Gustos. El presupuesto se mantiene en $0 y no se pueden agregar, editar ni marcar gustos hasta asignarle un porcentaje mayor que cero.
+                La fórmula asigna 0% a Gustos. El presupuesto se mantiene en {formatMoney(0)} y no se pueden agregar, editar ni marcar gustos hasta asignarle un porcentaje mayor que cero.
               </p>
             </div>
           </div>
@@ -506,12 +507,12 @@ export default function Wants() {
                 {isWantsDisabled
                   ? 'Sección desactivada'
                   : remaining >= 0
-                    ? `$${remaining.toLocaleString()} disponible`
-                    : `$${Math.abs(remaining).toLocaleString()} excedido`}
+                    ? `${formatMoney(remaining)} disponible`
+                    : `${formatMoney(Math.abs(remaining))} excedido`}
               </Badge>
             </div>
             <h2 className="mb-3 break-words text-[28px] font-semibold leading-tight text-on-surface sm:text-[30px]">
-              ${overview.totalWants.toLocaleString()} <span className="text-base font-normal text-muted-gray">/ ${overview.budgetWants.toLocaleString()}</span>
+              {formatMoney(overview.totalWants)} <span className="text-base font-normal text-muted-gray">/ {formatMoney(overview.budgetWants)}</span>
             </h2>
             <div className="h-2 w-full overflow-hidden rounded-full bg-surface-container-highest">
               <div className="h-full rounded-full bg-secondary transition-all duration-1000" style={{ width: `${pct}%` }} />
@@ -595,7 +596,7 @@ export default function Wants() {
                 <div className="grid grid-cols-1 gap-3 border-b border-graphite px-4 py-4 sm:grid-cols-2 sm:px-5">
                   <div className="rounded-xl bg-abyss p-3 shadow-vault-sm">
                     <p className="text-xs uppercase tracking-[0.16em] text-medium-gray">Total</p>
-                    <p className="mt-2 text-lg font-semibold text-on-surface">${total.toLocaleString()}</p>
+                    <p className="mt-2 text-lg font-semibold text-on-surface">{formatMoney(total)}</p>
                   </div>
                   <div className="rounded-xl bg-abyss p-3 shadow-vault-sm">
                     <p className="text-xs uppercase tracking-[0.16em] text-medium-gray">Completados</p>
@@ -644,7 +645,7 @@ export default function Wants() {
                                     <p className="mt-1 text-xs text-muted-gray">{item.date}</p>
                                   </div>
                                   <span className={`text-sm font-semibold ${isChecked ? 'text-muted-gray' : 'text-secondary'} sm:text-right`}>
-                                    ${item.amount.toLocaleString()}
+                                    {formatMoney(item.amount)}
                                   </span>
                                 </div>
 
@@ -739,7 +740,7 @@ export default function Wants() {
                   onChange={(e) => { setFormError(null); setForm((current) => ({ ...current, amount: e.target.value })) }}
                   className="bg-abyss border-graphite text-on-surface"
                 />
-                {liveBudgetError ? <p className="text-xs text-error">{liveBudgetError}</p> : <p className="text-xs text-muted-gray">Puedes planificar hasta ${availableToPlan.toLocaleString()} sin pasarte.</p>}
+                {liveBudgetError ? <p className="text-xs text-error">{liveBudgetError}</p> : <p className="text-xs text-muted-gray">Puedes planificar hasta {formatMoney(availableToPlan)} sin pasarte.</p>}
               </div>
             </div>
 
@@ -787,14 +788,14 @@ export default function Wants() {
                   {getCategoryMeta(form.category).label}
                 </Badge>
                 <span className="text-sm text-muted-gray">
-                  {form.amount ? `$${Number(form.amount).toLocaleString()}` : 'Sin precio'}
+                  {form.amount ? formatMoney(Number(form.amount)) : 'Sin precio'}
                 </span>
                 <span className="text-sm text-muted-gray">
                   {form.date || 'Sin fecha'}
                 </span>
               </div>
               <p className="mt-3 text-sm text-muted-gray">
-                Disponible para planificar: ${availableToPlan.toLocaleString()}
+                Disponible para planificar: {formatMoney(availableToPlan)}
               </p>
               <p className="mt-1 text-xs text-muted-gray">
                 El dinero solo se descuenta del presupuesto cuando marques el checkbox del gusto.
@@ -839,7 +840,7 @@ export default function Wants() {
                 className="bg-abyss border-graphite text-on-surface"
               />
               <p className="text-xs text-muted-gray">
-                Disponible para mover: ${Math.max(0, remaining).toLocaleString()}
+                Disponible para mover: {formatMoney(Math.max(0, remaining))}
               </p>
             </div>
             {transferError ? <p className="text-sm text-error">{transferError}</p> : null}

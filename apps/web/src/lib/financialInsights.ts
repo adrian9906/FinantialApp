@@ -1,4 +1,5 @@
 import type { Debt, Reminder, WishlistItem } from '@plata/shared'
+import { formatMoney } from '@/lib/currency'
 
 type OverviewLike = {
   totalSalary: number
@@ -50,9 +51,7 @@ function ratioToPoints(current: number, target: number, max: number) {
   return Math.round(clamp(current / target, 0, 1) * max)
 }
 
-function formatCurrency(value: number) {
-  return `$${Math.round(value).toLocaleString()}`
-}
+const formatCurrency = formatMoney
 
 function getDateDiffInDays(value: string) {
   const today = new Date()

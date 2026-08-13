@@ -40,6 +40,7 @@ import { useFinanceStore } from '@/store/financeStore'
 import { formatFormulaLabel, usePreferencesStore } from '@/store/preferencesStore'
 import { AppTour } from '@/components/onboarding/AppTour'
 import { InstallAppPrompt } from '@/components/onboarding/InstallAppPrompt'
+import { CurrencySwitcher } from '@/components/layout/CurrencySwitcher'
 
 const navItems = [
   { to: '/', icon: LayoutDashboard, label: 'Dashboard' },
@@ -213,6 +214,10 @@ export function Sidebar() {
 export function AppLayout({ children }: { children: React.ReactNode }) {
   const authMode = useAuthStore((state) => state.authMode)
   const background = usePreferencesStore((state) => state.background)
+  const activeCurrencyCode = usePreferencesStore((state) => state.activeCurrencyCode)
+  const activeCurrencyRate = usePreferencesStore((state) =>
+    state.currencies.find((currency) => currency.code === state.activeCurrencyCode)?.exchangeRate ?? 1
+  )
 
   return (
     <div
@@ -240,6 +245,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
             <div data-tour="global-search" className="min-w-0 flex-1">
               <GlobalSearchDialog />
             </div>
+            <CurrencySwitcher />
             <AppTour />
           </div>
 
@@ -272,7 +278,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
 
           <InstallAppPrompt />
 
-          <div data-tour="workspace">{children}</div>
+          <div key={`${activeCurrencyCode}:${activeCurrencyRate}`} data-tour="workspace">{children}</div>
         </div>
       </main>
     </div>

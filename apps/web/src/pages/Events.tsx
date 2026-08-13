@@ -13,6 +13,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { exportEventsReport } from '@/lib/reportExports'
 import { useMonthlyOverview } from '@/lib/useMonthlyOverview'
+import { formatMoney } from '@/lib/currency'
 import { useFinanceStore } from '@/store/financeStore'
 
 interface FormState {
@@ -131,7 +132,7 @@ export default function Events() {
     if (!form.name || !form.date || isSaving) return
 
     if (typedAmount > availableForCurrentForm) {
-      setFormError(`No puedes reservar $${typedAmount.toLocaleString()} porque solo te quedan $${availableForCurrentForm.toLocaleString()} para eventos.`)
+      setFormError(`No puedes reservar ${formatMoney(typedAmount)} porque solo te quedan ${formatMoney(availableForCurrentForm)} para eventos.`)
       return
     }
 
@@ -185,7 +186,7 @@ export default function Events() {
             <span className="text-base font-medium">Presupuesto eventos</span>
             <Wallet className="size-5 text-primary" />
           </div>
-          <div className="text-[28px] font-semibold text-on-surface">${eventsBudget.toLocaleString()}</div>
+          <div className="text-[28px] font-semibold text-on-surface">{formatMoney(eventsBudget)}</div>
           <p className="mt-2 text-sm text-muted-gray">Sale de tu presupuesto de gustos menos lo que ya gastaste en gustos.</p>
         </div>
 
@@ -194,7 +195,7 @@ export default function Events() {
             <span className="text-base font-medium">Ya reservado</span>
             <CalendarDays className="size-5 text-warning" />
           </div>
-          <div className="text-[28px] font-semibold text-on-surface">${totalReserved.toLocaleString()}</div>
+          <div className="text-[28px] font-semibold text-on-surface">{formatMoney(totalReserved)}</div>
           <p className="mt-2 text-sm text-muted-gray">Suma total de todos los eventos planeados este mes.</p>
         </div>
 
@@ -203,7 +204,7 @@ export default function Events() {
             <span className="text-base font-medium">Disponible ahora</span>
             <Wallet className="size-5 text-emerald-400" />
           </div>
-          <div className="text-[28px] font-semibold text-on-surface">${availableForNewEvents.toLocaleString()}</div>
+          <div className="text-[28px] font-semibold text-on-surface">{formatMoney(availableForNewEvents)}</div>
           <p className="mt-2 text-sm text-muted-gray">Lo que aun puedes apartar sin pasarte del dinero libre de gustos.</p>
         </div>
 
@@ -309,14 +310,14 @@ export default function Events() {
                           {dayEvents.length > 0 ? (
                             <div className="mt-2 space-y-1 sm:mt-3 sm:space-y-2">
                               <p className="text-[10px] font-medium leading-4 text-on-surface sm:text-xs">
-                                ${totalDayAmount.toLocaleString()}
+                                {formatMoney(totalDayAmount)}
                               </p>
                               <div className="space-y-1 sm:space-y-2">
                                 {dayEvents.slice(0, 2).map((event) => (
                                   <div key={event.id} className="rounded-lg border border-graphite bg-surface px-1.5 py-1 sm:rounded-xl sm:px-2 sm:py-1.5">
                                     <p className="truncate text-[10px] font-medium text-on-surface sm:text-xs">{event.name}</p>
                                     <p className="mt-0.5 hidden text-[11px] text-muted-gray sm:block">
-                                      ${event.amount.toLocaleString()} {event.isNotification ? '- con aviso' : '- sin aviso'}
+                                      {formatMoney(event.amount)} {event.isNotification ? '- con aviso' : '- sin aviso'}
                                     </p>
                                   </div>
                                 ))}
@@ -370,7 +371,7 @@ export default function Events() {
                         </div>
                       </div>
                       <div className="hidden text-sm text-muted-gray md:block">{event.date}</div>
-                      <div className="text-sm text-on-surface md:text-right">${event.amount.toLocaleString()}</div>
+                      <div className="text-sm text-on-surface md:text-right">{formatMoney(event.amount)}</div>
                       <div className="text-center text-sm">
                         <Badge variant="secondary" className={event.isNotification ? 'bg-primary/15 text-primary' : 'bg-surface-container-high text-muted-gray'}>
                           {event.isNotification ? 'Si' : 'No'}
@@ -441,10 +442,10 @@ export default function Events() {
                     }}
                     className="border-graphite bg-abyss text-on-surface"
                   />
-                  <p className="text-xs text-muted-gray">Disponible para este formulario: ${availableForCurrentForm.toLocaleString()}</p>
+                  <p className="text-xs text-muted-gray">Disponible para este formulario: {formatMoney(availableForCurrentForm)}</p>
                   {exceedsBudget ? (
                     <p className="text-xs text-red-300">
-                      Ese monto se pasa del presupuesto. Solo puedes reservar hasta ${availableForCurrentForm.toLocaleString()}.
+                      Ese monto se pasa del presupuesto. Solo puedes reservar hasta {formatMoney(availableForCurrentForm)}.
                     </p>
                   ) : null}
                 </div>
@@ -470,20 +471,20 @@ export default function Events() {
                 <div className="mt-4 space-y-3 text-sm text-muted-gray">
                   <div className="flex items-center justify-between">
                     <span>Tope de gustos</span>
-                    <span className="font-medium text-on-surface">${overview.budgetWants.toLocaleString()}</span>
+                    <span className="font-medium text-on-surface">{formatMoney(overview.budgetWants)}</span>
                   </div>
                   <div className="flex items-center justify-between">
                     <span>Gastado en gustos</span>
-                    <span className="font-medium text-on-surface">${overview.totalWants.toLocaleString()}</span>
+                    <span className="font-medium text-on-surface">{formatMoney(overview.totalWants)}</span>
                   </div>
                   <div className="flex items-center justify-between">
                     <span>Reservado en eventos</span>
-                    <span className="font-medium text-on-surface">${totalReserved.toLocaleString()}</span>
+                    <span className="font-medium text-on-surface">{formatMoney(totalReserved)}</span>
                   </div>
                   <div className="h-px bg-graphite" />
                   <div className="flex items-center justify-between">
                     <span>Disponible ahora</span>
-                    <span className="text-base font-semibold text-on-surface">${availableForCurrentForm.toLocaleString()}</span>
+                    <span className="text-base font-semibold text-on-surface">{formatMoney(availableForCurrentForm)}</span>
                   </div>
                 </div>
               </Card>
@@ -495,7 +496,7 @@ export default function Events() {
                   {form.date ? `Fecha seleccionada: ${form.date}` : 'Selecciona una fecha para ubicarlo en el calendario.'}
                 </p>
                 <p className="mt-1 text-sm text-muted-gray">
-                  {form.amount ? `Reservara: $${typedAmount.toLocaleString()}` : 'Agrega un monto para reservar presupuesto.'}
+                  {form.amount ? `Reservara: ${formatMoney(typedAmount)}` : 'Agrega un monto para reservar presupuesto.'}
                 </p>
                 {formError ? <p className="mt-2 text-sm text-red-300">{formError}</p> : null}
               </Card>

@@ -10,6 +10,7 @@ import { DatePickerField } from '@/components/ui/date-picker-field'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog'
 import { Plus, Trash2, PiggyBank, Pencil, ArrowUpRight } from 'lucide-react'
 import { useMonthlyOverview } from '@/lib/useMonthlyOverview'
+import { formatMoney } from '@/lib/currency'
 import { Badge } from '@/components/ui/badge'
 import { exportSavingsReport } from '@/lib/reportExports'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
@@ -143,11 +144,11 @@ export default function Savings() {
       const currentAmount = transactions.find((t) => t.id === editId)?.amount ?? 0
       const availableForEdit = Math.max(0, remaining + currentAmount)
       if (amount > availableForEdit) {
-        setFormError(`Solo puedes ajustar hasta $${availableForEdit.toLocaleString()}.`)
+        setFormError(`Solo puedes ajustar hasta ${formatMoney(availableForEdit)}.`)
         return
       }
     } else if (amount > remaining) {
-      setFormError(`Solo puedes ahorrar hasta $${remaining.toLocaleString()}.`)
+      setFormError(`Solo puedes ahorrar hasta ${formatMoney(remaining)}.`)
       return
     }
 
@@ -216,7 +217,7 @@ export default function Savings() {
     const availableForGoal = Math.max(0, freeSavings + currentGoalAmount)
 
     if (currentAmount > availableForGoal) {
-      setGoalError(`Solo puedes asignar hasta $${availableForGoal.toLocaleString()} segun el ahorro libre actual.`)
+      setGoalError(`Solo puedes asignar hasta ${formatMoney(availableForGoal)} segun el ahorro libre actual.`)
       return
     }
 
@@ -259,8 +260,8 @@ export default function Savings() {
     if (amount > availableWithdrawAmount) {
       setWithdrawError(
         selectedSourceGoal
-          ? `Solo puedes sacar hasta $${availableWithdrawAmount.toLocaleString()} del bolsillo ${selectedSourceGoal.name}.`
-          : `Solo puedes sacar hasta $${availableWithdrawAmount.toLocaleString()} de tus ahorros.`,
+          ? `Solo puedes sacar hasta ${formatMoney(availableWithdrawAmount)} del bolsillo ${selectedSourceGoal.name}.`
+          : `Solo puedes sacar hasta ${formatMoney(availableWithdrawAmount)} de tus ahorros.`,
       )
       return
     }
@@ -352,7 +353,7 @@ export default function Savings() {
           <div className="relative">
             <p className="text-xs uppercase tracking-[0.22em] text-success">Ahorro total disponible</p>
             <p className="mt-3 text-5xl font-semibold tracking-tight tabular-nums text-on-surface md:text-6xl">
-              ${overview.accumulatedSavings.toLocaleString()}
+              {formatMoney(overview.accumulatedSavings)}
             </p>
             <p className="mt-3 max-w-xl text-sm text-muted-gray">
               Este es tu saldo real después de compras de deseos, retiros y pagos de deuda.
@@ -361,11 +362,11 @@ export default function Savings() {
             <div className="mt-6 grid gap-3 sm:grid-cols-2">
               <div className="rounded-xl border border-success/15 bg-success/5 p-4">
                 <p className="text-[10px] uppercase tracking-[0.18em] text-medium-gray">Ahorro propio disponible</p>
-                <p className="mt-2 text-xl font-semibold tabular-nums text-success">${overview.ownSavings.toLocaleString()}</p>
+                <p className="mt-2 text-xl font-semibold tabular-nums text-success">{formatMoney(overview.ownSavings)}</p>
               </div>
               <div className="rounded-xl border border-amber-500/20 bg-amber-500/8 p-4">
                 <p className="text-[10px] uppercase tracking-[0.18em] text-amber-200">Adquirido en deuda disponible</p>
-                <p className="mt-2 text-xl font-semibold tabular-nums text-amber-200">${overview.borrowedSavings.toLocaleString()}</p>
+                <p className="mt-2 text-xl font-semibold tabular-nums text-amber-200">{formatMoney(overview.borrowedSavings)}</p>
               </div>
             </div>
           </div>
@@ -379,13 +380,13 @@ export default function Savings() {
             </Badge>
           </div>
           <p className="mt-5 text-2xl font-semibold tabular-nums text-on-surface">
-            ${overview.totalSavings.toLocaleString()}
-            <span className="text-sm font-normal text-muted-gray"> de ${overview.budgetSavings.toLocaleString()}</span>
+            {formatMoney(overview.totalSavings)}
+            <span className="text-sm font-normal text-muted-gray"> de {formatMoney(overview.budgetSavings)}</span>
           </p>
           <p className="mt-2 text-sm text-muted-gray">
             {budgetFull
               ? 'La meta queda cumplida aunque uses después una parte de tus ahorros.'
-              : `Te faltan $${Math.max(0, remaining).toLocaleString()} para cumplirla.`}
+              : `Te faltan ${formatMoney(Math.max(0, remaining))} para cumplirla.`}
           </p>
           <div className="mt-5 h-2 overflow-hidden rounded-full bg-surface-container-highest">
             <div className="h-full rounded-full bg-primary transition-[width] duration-1000" style={{ width: `${pct}%` }} />
@@ -406,13 +407,13 @@ export default function Savings() {
           <div className="grid gap-3 p-5 md:grid-cols-2">
             <Card className="border-graphite bg-abyss p-4 shadow-vault-sm">
               <p className="text-xs uppercase tracking-[0.18em] text-medium-gray">Ahorro libre</p>
-              <p className="mt-2 text-2xl font-semibold text-on-surface">${freeSavings.toLocaleString()}</p>
+              <p className="mt-2 text-2xl font-semibold text-on-surface">{formatMoney(freeSavings)}</p>
               <p className="mt-1 text-xs text-muted-gray">Disponible para asignar a nuevas metas.</p>
             </Card>
             <Card className="border-graphite bg-abyss p-4 shadow-vault-sm">
               <p className="text-xs uppercase tracking-[0.18em] text-medium-gray">Aporte mensual total</p>
               <p className="mt-2 text-2xl font-semibold text-on-surface">
-                ${savingsGoals.reduce((sum, goal) => sum + goal.monthlyContribution, 0).toLocaleString()}
+                {formatMoney(savingsGoals.reduce((sum, goal) => sum + goal.monthlyContribution, 0))}
               </p>
               <p className="mt-1 text-xs text-muted-gray">Cuanto piensas meter cada mes entre todas tus metas.</p>
             </Card>
@@ -448,10 +449,10 @@ export default function Savings() {
                   <div className="flex items-end justify-between gap-3">
                     <div>
                       <p className="text-xs uppercase tracking-[0.18em] text-medium-gray">Guardado</p>
-                      <p className="mt-2 text-2xl font-semibold text-on-surface">${goal.currentAmount.toLocaleString()}</p>
+                      <p className="mt-2 text-2xl font-semibold text-on-surface">{formatMoney(goal.currentAmount)}</p>
                     </div>
                     <Badge variant="secondary" className="bg-surface-container-high text-on-surface">
-                      Restan ${remainingGoal.toLocaleString()}
+                      Restan {formatMoney(remainingGoal)}
                     </Badge>
                   </div>
                   <div className="h-2 overflow-hidden rounded-full bg-surface-container-highest">
@@ -460,11 +461,11 @@ export default function Savings() {
                   <div className="grid gap-3 sm:grid-cols-2">
                     <div className="rounded-xl bg-abyss p-3 shadow-vault-sm">
                       <p className="text-xs uppercase tracking-[0.16em] text-medium-gray">Meta</p>
-                      <p className="mt-2 text-lg font-semibold text-on-surface">${goal.targetAmount.toLocaleString()}</p>
+                      <p className="mt-2 text-lg font-semibold text-on-surface">{formatMoney(goal.targetAmount)}</p>
                     </div>
                     <div className="rounded-xl bg-abyss p-3 shadow-vault-sm">
                       <p className="text-xs uppercase tracking-[0.16em] text-medium-gray">Aporte mensual</p>
-                      <p className="mt-2 text-lg font-semibold text-success">${goal.monthlyContribution.toLocaleString()}</p>
+                      <p className="mt-2 text-lg font-semibold text-success">{formatMoney(goal.monthlyContribution)}</p>
                     </div>
                   </div>
                   <Button
@@ -533,7 +534,7 @@ export default function Savings() {
                   <p className="text-xs text-muted-gray">{transaction.date}</p>
                 </div>
                 <span className={`text-sm font-medium md:text-right ${transaction.amount >= 0 ? 'text-success' : 'text-error'}`}>
-                  {transaction.amount >= 0 ? '+' : '-'}${Math.abs(transaction.amount).toLocaleString()}
+                  {transaction.amount >= 0 ? '+' : '-'}{formatMoney(Math.abs(transaction.amount))}
                 </span>
                 <div className="opacity-100 transition-opacity md:text-right md:opacity-0 md:group-hover:opacity-100">
                   <div className="flex justify-end gap-1">
@@ -572,7 +573,7 @@ export default function Savings() {
               <Label className="text-medium-gray">Monto</Label>
               <Input type="number" placeholder="500" value={form.amount} onChange={(e) => { setFormError(null); setForm({ ...form, amount: e.target.value }) }} className="bg-abyss border-graphite text-on-surface" />
               {!editId && remaining > 0 && (
-                <p className="text-xs text-muted-gray">Disponible para ahorrar: ${Math.max(0, remaining).toLocaleString()}</p>
+                <p className="text-xs text-muted-gray">Disponible para ahorrar: {formatMoney(Math.max(0, remaining))}</p>
               )}
             </div>
             <DatePickerField
@@ -615,7 +616,7 @@ export default function Savings() {
                   className="bg-abyss border-graphite text-on-surface"
                 />
                 <p className="text-xs text-muted-gray">
-                  Disponible: ${availableWithdrawAmount.toLocaleString()}
+                  Disponible: {formatMoney(availableWithdrawAmount)}
                   {selectedSourceGoal ? ` en ${selectedSourceGoal.name}` : ' en ahorro total'}
                 </p>
               </div>
@@ -797,7 +798,7 @@ export default function Savings() {
 
             <Card className="border-graphite bg-abyss p-4 shadow-vault-sm">
               <p className="text-xs uppercase tracking-[0.18em] text-medium-gray">Ahorro libre actual</p>
-              <p className="mt-2 text-lg font-semibold text-on-surface">${freeSavings.toLocaleString()}</p>
+              <p className="mt-2 text-lg font-semibold text-on-surface">{formatMoney(freeSavings)}</p>
               <p className="mt-1 text-xs text-muted-gray">
                 Si editas una meta, se te permite reutilizar tambien lo que ya tiene asignado esa meta.
               </p>

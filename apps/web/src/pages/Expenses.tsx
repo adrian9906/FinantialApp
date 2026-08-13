@@ -4,6 +4,7 @@ import { ArrowUpRight, Dumbbell, HeartPulse, House, Package, Pencil, Plus, Shopp
 import { useFinanceStore } from '@/store/financeStore'
 import { buildExpenseDescription, createCustomExpenseCategory, getExpenseCategoryLabel, getPlannedExpenseTotal, parseExpenseDescription, type ExpenseBuiltInCategory, type ExpenseCategory } from '@/lib/expense-utils'
 import { useMonthlyOverview } from '@/lib/useMonthlyOverview'
+import { formatMoney } from '@/lib/currency'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
@@ -240,12 +241,12 @@ export default function Expenses() {
     }
 
     if (nextAmount > availableToPlan) {
-      setFormError(`Ese precio supera el disponible para planificar: $${availableToPlan.toLocaleString()}.`)
+      setFormError(`Ese precio supera el disponible para planificar: ${formatMoney(availableToPlan)}.`)
       return
     }
 
     if (plannedTotal + nextAmount > overview.budgetExpenses) {
-      setFormError(`No puedes agregarlo porque la lista total se iria a $${(plannedTotal + nextAmount).toLocaleString()} y tu limite es $${overview.budgetExpenses.toLocaleString()}.`)
+      setFormError(`No puedes agregarlo porque la lista total se iria a ${formatMoney(plannedTotal + nextAmount)} y tu limite es ${formatMoney(overview.budgetExpenses)}.`)
       return
     }
 
@@ -337,9 +338,9 @@ export default function Expenses() {
     : !Number.isFinite(typedAmount) || typedAmount <= 0
       ? 'El precio debe ser mayor que cero.'
       : typedAmount > availableToPlan
-        ? `Te pasas por $${(typedAmount - availableToPlan).toLocaleString()}. Solo te quedan $${availableToPlan.toLocaleString()} disponibles para planificar.`
+        ? `Te pasas por ${formatMoney(typedAmount - availableToPlan)}. Solo te quedan ${formatMoney(availableToPlan)} disponibles para planificar.`
         : plannedTotal + typedAmount > overview.budgetExpenses
-          ? `No puedes agregar este producto porque la lista subiria a $${(plannedTotal + typedAmount).toLocaleString()} y tu limite es $${overview.budgetExpenses.toLocaleString()}.`
+          ? `No puedes agregar este producto porque la lista subiria a ${formatMoney(plannedTotal + typedAmount)} y tu limite es ${formatMoney(overview.budgetExpenses)}.`
           : null
 
   function handleCreateCategory() {
@@ -365,7 +366,7 @@ export default function Expenses() {
 
     const total = drafts.reduce((sum, draft) => sum + draft.amount, 0)
     if (total > availableToPlan) {
-      toast.error(`La lista necesita $${total.toLocaleString()} y solo tienes $${availableToPlan.toLocaleString()} disponibles.`)
+      toast.error(`La lista necesita ${formatMoney(total)} y solo tienes ${formatMoney(availableToPlan)} disponibles.`)
       return
     }
 
@@ -407,7 +408,7 @@ export default function Expenses() {
       return
     }
     if (nextAmount > remaining) {
-      setTransferError(`Solo puedes mover hasta $${Math.max(0, remaining).toLocaleString()}.`)
+      setTransferError(`Solo puedes mover hasta ${formatMoney(Math.max(0, remaining))}.`)
       return
     }
 
@@ -461,11 +462,11 @@ export default function Expenses() {
             <div className="mb-2 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
               <p className="text-xs uppercase tracking-wider text-muted-gray">Presupuesto mensual (50%)</p>
               <Badge variant="secondary" className={`w-fit ${remaining >= 0 ? 'bg-success/10 text-success' : 'bg-error/10 text-error'}`}>
-                {remaining >= 0 ? `$${remaining.toLocaleString()} disponible` : `$${Math.abs(remaining).toLocaleString()} excedido`}
+                {remaining >= 0 ? `${formatMoney(remaining)} disponible` : `${formatMoney(Math.abs(remaining))} excedido`}
               </Badge>
             </div>
             <h2 className="mb-3 break-words text-[28px] font-semibold leading-tight text-on-surface sm:text-[30px]">
-              ${overview.totalExpenses.toLocaleString()} <span className="text-base font-normal text-muted-gray">/ ${overview.budgetExpenses.toLocaleString()}</span>
+              {formatMoney(overview.totalExpenses)} <span className="text-base font-normal text-muted-gray">/ {formatMoney(overview.budgetExpenses)}</span>
             </h2>
             <div className="h-2 w-full overflow-hidden rounded-full bg-surface-container-highest">
               <div className="h-full rounded-full bg-primary transition-all duration-1000" style={{ width: `${pct}%` }} />
@@ -548,7 +549,7 @@ export default function Expenses() {
                 <div className="grid grid-cols-1 gap-3 border-b border-graphite px-4 py-4 sm:grid-cols-2 sm:px-5">
                   <div className="rounded-xl bg-abyss p-3 shadow-vault-sm">
                     <p className="text-xs uppercase tracking-[0.16em] text-medium-gray">Total</p>
-                    <p className="mt-2 text-lg font-semibold text-on-surface">${total.toLocaleString()}</p>
+                    <p className="mt-2 text-lg font-semibold text-on-surface">{formatMoney(total)}</p>
                   </div>
                   <div className="rounded-xl bg-abyss p-3 shadow-vault-sm">
                     <p className="text-xs uppercase tracking-[0.16em] text-medium-gray">Completados</p>
@@ -596,7 +597,7 @@ export default function Expenses() {
                                     <p className="mt-1 text-xs text-muted-gray">{item.date}</p>
                                   </div>
                                   <span className={`text-sm font-semibold ${isChecked ? 'text-muted-gray' : 'text-error'} sm:text-right`}>
-                                    ${item.amount.toLocaleString()}
+                                    {formatMoney(item.amount)}
                                   </span>
                                 </div>
 
@@ -691,7 +692,7 @@ export default function Expenses() {
                   onChange={(e) => { setFormError(null); setForm((current) => ({ ...current, amount: e.target.value })) }}
                   className="bg-abyss border-graphite text-on-surface"
                 />
-                {liveBudgetError ? <p className="text-xs text-error">{liveBudgetError}</p> : <p className="text-xs text-muted-gray">Puedes planificar hasta ${availableToPlan.toLocaleString()} sin pasarte.</p>}
+                {liveBudgetError ? <p className="text-xs text-error">{liveBudgetError}</p> : <p className="text-xs text-muted-gray">Puedes planificar hasta {formatMoney(availableToPlan)} sin pasarte.</p>}
               </div>
             </div>
 
@@ -739,14 +740,14 @@ export default function Expenses() {
                   {getCategoryMeta(form.category).label}
                 </Badge>
                 <span className="text-sm text-muted-gray">
-                  {form.amount ? `$${Number(form.amount).toLocaleString()}` : 'Sin precio'}
+                  {form.amount ? formatMoney(Number(form.amount)) : 'Sin precio'}
                 </span>
                 <span className="text-sm text-muted-gray">
                   {form.date || 'Sin fecha'}
                 </span>
               </div>
               <p className="mt-3 text-sm text-muted-gray">
-                Disponible para planificar: ${availableToPlan.toLocaleString()}
+                Disponible para planificar: {formatMoney(availableToPlan)}
               </p>
               <p className="mt-1 text-xs text-muted-gray">
                 El dinero solo se descuenta del presupuesto cuando marques el checkbox del producto.
@@ -791,7 +792,7 @@ export default function Expenses() {
                 className="bg-abyss border-graphite text-on-surface"
               />
               <p className="text-xs text-muted-gray">
-                Disponible para mover: ${Math.max(0, remaining).toLocaleString()}
+                Disponible para mover: {formatMoney(Math.max(0, remaining))}
               </p>
             </div>
             {transferError ? <p className="text-sm text-error">{transferError}</p> : null}

@@ -9,6 +9,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { useFinanceStore } from '@/store/financeStore'
+import { formatMoney } from '@/lib/currency'
 
 const categories = [
   { value: 'food', label: 'Alimentacion' },
@@ -89,7 +90,7 @@ export function QuickExpenseEntry() {
         description: buildExpenseDescription(activeCategory, parsed.itemName, 'checked'),
         date: todayKey(),
       })
-      toast.success(`${parsed.itemName} registrado por $${parsed.amount.toLocaleString()}.`)
+      toast.success(`${parsed.itemName} registrado por ${formatMoney(parsed.amount)}.`)
       setEntry('')
       setCategory('essentials')
       setCategoryWasChanged(false)
@@ -162,7 +163,7 @@ export function QuickExpenseEntry() {
           <span>Escribe concepto y monto; Enter confirma.</span>
           {parsed.amount > 0 ? (
             <Badge variant="secondary" className="bg-primary/10 text-primary">
-              ${parsed.amount.toLocaleString()} · {activeCategoryLabel}
+              {formatMoney(parsed.amount)} · {activeCategoryLabel}
             </Badge>
           ) : null}
         </div>

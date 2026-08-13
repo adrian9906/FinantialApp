@@ -3,6 +3,9 @@ import {
   Archive,
   Check,
   History,
+  Coins,
+  Globe2,
+  FileDown,
   MoonStar,
   Palette,
   RefreshCcw,
@@ -10,8 +13,10 @@ import {
   SlidersHorizontal,
   Sparkles,
   SunMedium,
+  Trash2,
 } from 'lucide-react'
 import { toast } from 'sonner'
+import { getFinancialPeriodStart } from '@plata/shared'
 
 import {
   AlertDialog,
@@ -30,6 +35,10 @@ import { Card } from '@/components/ui/card'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { CURRENCY_CATALOG, formatMoney } from '@/lib/currency'
+import { downloadMonthlyPdfReport } from '@/lib/monthlyPdfReport'
+import { useMonthlyOverview } from '@/lib/useMonthlyOverview'
 import { parseExpenseDescription } from '@/lib/expense-utils'
 import { parseWantDescription } from '@/lib/want-utils'
 import { useFinanceStore } from '@/store/financeStore'
@@ -42,6 +51,7 @@ import {
   type AppAppearance,
   type AppBackground,
   type AppTheme,
+  type CurrencyPreference,
   usePreferencesStore,
 } from '@/store/preferencesStore'
 
@@ -562,10 +572,14 @@ function BackgroundCard({
 
 function MonthlyResetCard() {
   const transactions = useFinanceStore((state) => state.transactions)
+  const debts = useFinanceStore((state) => state.debts)
+  const wishlist = useFinanceStore((state) => state.wishlist)
+  const reminders = useFinanceStore((state) => state.reminders)
   const monthlyPlanningHistory = useFinanceStore((state) => state.monthlyPlanningHistory)
   const resetMonthlyPlans = useFinanceStore((state) => state.resetMonthlyPlans)
   const restoreMonthlyPlan = useFinanceStore((state) => state.restoreMonthlyPlan)
   const wantsDisabled = usePreferencesStore((state) => state.formula.wants === 0)
+  const overview = useMonthlyOverview()
   const [isResetting, setIsResetting] = useState(false)
   const [restoringKey, setRestoringKey] = useState<string | null>(null)
 
@@ -595,8 +609,17 @@ function MonthlyResetCard() {
 
     setIsResetting(true)
     try {
+      await downloadMonthlyPdfReport({
+        overview,
+        transactions,
+        wishlist,
+        debts,
+        reminders,
+        periodStart: getFinancialPeriodStart(monthlyPlanningHistory),
+        mode: 'closing',
+      })
       await resetMonthlyPlans()
-      toast.success('Nuevo ciclo iniciado. El presupuesto cuenta desde este momento.')
+      toast.success('Informe PDF descargado y nuevo ciclo iniciado correctamente.')
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'No se pudo cerrar el mes.')
     } finally {
@@ -672,9 +695,9 @@ function MonthlyResetCard() {
               </AlertDialogTrigger>
               <AlertDialogContent>
                 <AlertDialogHeader>
-                  <AlertDialogTitle>Iniciar un nuevo ciclo financiero</AlertDialogTitle>
+                  <AlertDialogTitle>Descargar informe e iniciar un nuevo ciclo</AlertDialogTitle>
                   <AlertDialogDescription>
-                    El presupuesto empezará a contar desde este momento. Se guardará el historial actual y las listas de gastos y gustos quedarán vacías.
+                    Primero se descargará el informe PDF del período. Después, el presupuesto empezará a contar desde este momento y las listas activas quedarán vacías.
                   </AlertDialogDescription>
                 </AlertDialogHeader>
                 <AlertDialogFooter>
@@ -684,7 +707,8 @@ function MonthlyResetCard() {
                     loading={isResetting}
                     onClick={() => void handleResetMonth()}
                   >
-                    Confirmar nuevo ciclo
+                    <FileDown className="size-4" />
+                    Descargar y cerrar mes
                   </AlertDialogAction>
                 </AlertDialogFooter>
               </AlertDialogContent>
@@ -777,6 +801,152 @@ function MonthlyResetCard() {
   )
 }
 
+function CurrencySettingsCard() {
+  const currencies = usePreferencesStore((state) => state.currencies)
+  const activeCurrencyCode = usePreferencesStore((state) => state.activeCurrencyCode)
+  const saveCurrency = usePreferencesStore((state) => state.saveCurrency)
+  const removeCurrency = usePreferencesStore((state) => state.removeCurrency)
+  const setActiveCurrency = usePreferencesStore((state) => state.setActiveCurrency)
+  const [draft, setDraft] = useState<CurrencyPreference>(CURRENCY_CATALOG[1])
+  const [rate, setRate] = useState(String(CURRENCY_CATALOG[1].exchangeRate))
+
+  function selectCurrency(code: string) {
+    const next = currencies.find((entry) => entry.code === code)
+      ?? CURRENCY_CATALOG.find((entry) => entry.code === code)
+      ?? CURRENCY_CATALOG[1]
+    setDraft(next)
+    setRate(String(next.exchangeRate))
+  }
+
+  function handleSaveCurrency() {
+    const exchangeRate = Number(rate)
+    if (!Number.isFinite(exchangeRate) || exchangeRate <= 0) {
+      toast.error('La tasa debe ser un número mayor que cero.')
+      return
+    }
+
+    saveCurrency({ ...draft, country: draft.country.trim(), exchangeRate })
+    toast.success(`${draft.code} quedó disponible en el selector superior.`)
+  }
+
+  return (
+    <Card className="border-graphite bg-surface p-6 shadow-vault">
+      <SectionIntro
+        eyebrow="Moneda de visualización"
+        title="Convierte tus cifras sin alterar tus datos"
+        description="Plata App guarda la contabilidad en USD. Aquí defines cuántas unidades de otra moneda equivalen a 1 USD; al seleccionarla arriba, todos los importes se multiplican por esa tasa."
+        icon={
+          <div className="flex size-11 items-center justify-center rounded-2xl bg-primary/10 text-primary shadow-vault-sm">
+            <Globe2 className="size-5" />
+          </div>
+        }
+      />
+
+      <div className="mt-6 grid gap-5 xl:grid-cols-[minmax(0,1fr)_minmax(320px,0.85fr)]">
+        <div className="rounded-2xl border border-graphite bg-abyss p-4 sm:p-5">
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div className="space-y-2">
+              <Label>Moneda</Label>
+              <Select value={draft.code} onValueChange={(value) => selectCurrency(value ?? 'CUP')}>
+                <SelectTrigger className="border-graphite bg-surface-container-low text-on-surface">
+                  <SelectValue>{draft.code} · {draft.name}</SelectValue>
+                </SelectTrigger>
+                <SelectContent className="border-graphite bg-surface text-on-surface">
+                  {CURRENCY_CATALOG.filter((currency) => currency.code !== 'USD').map((currency) => (
+                    <SelectItem key={currency.code} value={currency.code}>
+                      {currency.code} · {currency.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="currency-country">País o región</Label>
+              <Input
+                id="currency-country"
+                value={draft.country}
+                onChange={(event) => setDraft((current) => ({ ...current, country: event.target.value }))}
+                className="border-graphite bg-surface-container-low text-on-surface"
+              />
+            </div>
+
+            <div className="space-y-2 sm:col-span-2">
+              <Label htmlFor="currency-rate">1 USD equivale a</Label>
+              <div className="flex gap-2">
+                <Input
+                  id="currency-rate"
+                  type="number"
+                  min="0.000001"
+                  step="any"
+                  inputMode="decimal"
+                  value={rate}
+                  onChange={(event) => setRate(event.target.value)}
+                  className="border-graphite bg-surface-container-low text-on-surface"
+                  aria-describedby="currency-rate-help"
+                />
+                <div className="flex h-10 min-w-16 items-center justify-center rounded-lg border border-graphite bg-surface-container-high px-3 text-sm font-semibold text-on-surface">
+                  {draft.code}
+                </div>
+              </div>
+              <p id="currency-rate-help" className="text-xs text-muted-gray">
+                Ejemplo Cuba: 1 USD = 670 CUP. Puedes actualizar la tasa cuando cambie el mercado que utilizas.
+              </p>
+            </div>
+          </div>
+
+          <div className="mt-5 flex flex-col gap-3 rounded-xl border border-primary/20 bg-primary/5 p-4 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <p className="text-xs uppercase tracking-[0.18em] text-primary">Vista previa</p>
+              <p className="mt-1 text-lg font-semibold tabular-nums text-on-surface">
+                $100 USD → {formatMoney(100, { ...draft, exchangeRate: Number(rate) || 0 })}
+              </p>
+            </div>
+            <Button onClick={handleSaveCurrency} className="bg-primary-container text-primary-foreground hover:brightness-110">
+              <Coins className="size-4" />
+              Guardar moneda
+            </Button>
+          </div>
+        </div>
+
+        <div className="space-y-3">
+          <div>
+            <p className="text-sm font-semibold text-on-surface">Monedas disponibles</p>
+            <p className="mt-1 text-xs text-muted-gray">La activa aparece resaltada y controla el selector superior.</p>
+          </div>
+          {currencies.map((currency) => (
+            <div
+              key={currency.code}
+              className={`flex items-center gap-3 rounded-2xl border p-4 ${activeCurrencyCode === currency.code ? 'border-primary/40 bg-primary/8' : 'border-graphite bg-abyss'}`}
+            >
+              <button type="button" className="min-w-0 flex-1 text-left" onClick={() => setActiveCurrency(currency.code)}>
+                <div className="flex items-center gap-2">
+                  <span className="font-semibold text-on-surface">{currency.code}</span>
+                  {activeCurrencyCode === currency.code ? <Badge className="bg-primary/15 text-primary">Activa</Badge> : null}
+                </div>
+                <p className="mt-1 truncate text-xs text-muted-gray">
+                  {currency.country} · {currency.code === 'USD' ? 'Moneda base' : `1 USD = ${currency.exchangeRate.toLocaleString('es-ES')} ${currency.code}`}
+                </p>
+              </button>
+              {currency.code !== 'USD' ? (
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  aria-label={`Eliminar ${currency.code}`}
+                  onClick={() => removeCurrency(currency.code)}
+                  className="shrink-0 text-muted-gray hover:bg-error/10 hover:text-error"
+                >
+                  <Trash2 className="size-4" />
+                </Button>
+              ) : null}
+            </div>
+          ))}
+        </div>
+      </div>
+    </Card>
+  )
+}
+
 export default function Settings() {
   const appearance = usePreferencesStore((state) => state.appearance)
   const theme = usePreferencesStore((state) => state.theme)
@@ -859,6 +1029,8 @@ export default function Settings() {
           background={background}
         />
       </section>
+
+      <CurrencySettingsCard />
 
       <section className="grid gap-4 xl:grid-cols-2">
         <AppearanceCard appearance={appearance} setAppearance={setAppearance} />

@@ -12,6 +12,7 @@ import {
   type Transaction,
   type WishlistItem,
 } from '@plata/shared'
+import { formatMoney } from '@/lib/currency'
 
 export type SearchSection = 'expense' | 'want' | 'wishlist' | 'debt' | 'reminder'
 
@@ -56,9 +57,7 @@ export type PlanningHistorySuggestion = {
 
 const MONTH_FORMATTER = new Intl.DateTimeFormat('es-ES', { month: 'long', year: 'numeric' })
 
-function formatCurrency(value: number) {
-  return `$${Math.round(value).toLocaleString()}`
-}
+const formatCurrency = formatMoney
 
 function formatMonthLabel(month: string | null) {
   if (!month) return 'Sin mes'
@@ -417,7 +416,7 @@ export function buildGlobalSearchIndex({
     title: item.title,
     subtitle: item.description || 'Recordatorio financiero',
     amount: 0,
-    amountLabel: '$0',
+    amountLabel: formatCurrency(0),
     month: item.date ? item.date.slice(0, 7) : null,
     monthLabel: formatMonthLabel(item.date ? item.date.slice(0, 7) : null),
     category: 'reminder',

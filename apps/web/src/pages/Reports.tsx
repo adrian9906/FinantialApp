@@ -23,6 +23,7 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { ChartContainer, ChartTooltip, ChartTooltipContent, type ChartConfig } from '@/components/ui/chart'
 import { exportMonthlyReport } from '@/lib/reportExports'
+import { formatMoney } from '@/lib/currency'
 import {
   buildFinancialTimeline,
   buildMonthComparison,
@@ -46,9 +47,7 @@ type ReportMetric = {
 
 const shortMonthFormatter = new Intl.DateTimeFormat('es-ES', { month: 'short' })
 
-function formatCurrency(value: number) {
-  return `$${Math.round(value).toLocaleString()}`
-}
+const formatCurrency = formatMoney
 
 function toneClasses(tone: ReportMetric['tone']) {
   if (tone === 'danger') return 'bg-rose-500/12 text-rose-200 border-rose-500/20'

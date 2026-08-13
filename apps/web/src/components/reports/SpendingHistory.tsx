@@ -24,6 +24,7 @@ import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { ChartContainer, ChartTooltip, ChartTooltipContent, type ChartConfig } from '@/components/ui/chart'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { formatMoney } from '@/lib/currency'
 
 type HistoryKind = 'expense' | 'want' | 'saving'
 
@@ -85,9 +86,7 @@ const historyMeta = {
 const monthFormatter = new Intl.DateTimeFormat('es-ES', { month: 'short', year: '2-digit' })
 const longDateFormatter = new Intl.DateTimeFormat('es-ES', { day: '2-digit', month: 'short', year: 'numeric' })
 
-function formatCurrency(value: number) {
-  return `$${Math.round(value).toLocaleString('es-ES')}`
-}
+const formatCurrency = formatMoney
 
 function formatDate(date: string) {
   if (!date) return 'Fecha no registrada'

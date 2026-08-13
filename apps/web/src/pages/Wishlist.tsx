@@ -34,6 +34,7 @@ import { searchPriceScout, PRICESCOUT_STORE_OPTIONS, groupPriceScoutResultsBySto
 import { exportWishlistReport } from '@/lib/reportExports'
 import { useMonthlyOverview } from '@/lib/useMonthlyOverview'
 import { useFinanceStore } from '@/store/financeStore'
+import { formatMoney } from '@/lib/currency'
 
 interface FormState {
   name: string
@@ -49,7 +50,6 @@ interface FormState {
 type ViewMode = 'cards' | 'list'
 
 const DEFAULT_STORES: PriceScoutStoreValue[] = PRICESCOUT_STORE_OPTIONS.map((option) => option.value)
-const currencyFormatter = new Intl.NumberFormat('en-US')
 const dateFormatter = new Intl.DateTimeFormat('es-ES', {
   day: 'numeric',
   month: 'short',
@@ -63,9 +63,7 @@ function parseMoneyInput(value: string) {
   return Number.isFinite(parsed) ? parsed : 0
 }
 
-function formatCurrency(value: number) {
-  return `$${currencyFormatter.format(value)}`
-}
+const formatCurrency = formatMoney
 
 function getPriorityLabel(priority: FormState['priority']) {
   if (priority === 'high') return 'Alta'
