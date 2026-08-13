@@ -17,6 +17,7 @@ import { QuickExpenseEntry } from '@/components/dashboard/QuickExpenseEntry'
 import { buildMonthlyForecast, type BudgetForecast } from '@/lib/monthlyForecast'
 import { convertFromUsd, formatMoney } from '@/lib/currency'
 import { downloadMonthlyPdfReport } from '@/lib/monthlyPdfReport'
+import { useAuthStore } from '@/store/authStore'
 
 function getScoreToneClasses(status: ReturnType<typeof buildFinancialScore>['status']) {
   if (status === 'fuerte') return 'border-emerald-500/30 bg-emerald-500/10 text-emerald-200'
@@ -48,6 +49,8 @@ function getForecastLabel(forecast: BudgetForecast) {
 export default function Dashboard() {
   const navigate = useNavigate()
   const overview = useMonthlyOverview()
+  const authMode = useAuthStore((state) => state.authMode)
+  const user = useAuthStore((state) => state.user)
   const transactions = useFinanceStore((state) => state.transactions)
   const reminders = useFinanceStore((state) => state.reminders)
   const events = useFinanceStore((state) => state.events)
@@ -132,6 +135,7 @@ export default function Dashboard() {
         debts,
         reminders,
         periodStart: getFinancialPeriodStart(monthlyPlanningHistory),
+        userName: authMode === 'guest' ? 'Invitado local' : user?.name ?? 'Usuario',
         mode: 'current',
       })
       toast.success('Informe financiero actual descargado en PDF.')

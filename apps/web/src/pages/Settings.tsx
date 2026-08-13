@@ -42,6 +42,7 @@ import { useMonthlyOverview } from '@/lib/useMonthlyOverview'
 import { parseExpenseDescription } from '@/lib/expense-utils'
 import { parseWantDescription } from '@/lib/want-utils'
 import { useFinanceStore } from '@/store/financeStore'
+import { useAuthStore } from '@/store/authStore'
 import {
   defaultFormula,
   type AllocationFormula,
@@ -571,6 +572,8 @@ function BackgroundCard({
 }
 
 function MonthlyResetCard() {
+  const authMode = useAuthStore((state) => state.authMode)
+  const user = useAuthStore((state) => state.user)
   const transactions = useFinanceStore((state) => state.transactions)
   const debts = useFinanceStore((state) => state.debts)
   const wishlist = useFinanceStore((state) => state.wishlist)
@@ -616,6 +619,7 @@ function MonthlyResetCard() {
         debts,
         reminders,
         periodStart: getFinancialPeriodStart(monthlyPlanningHistory),
+        userName: authMode === 'guest' ? 'Invitado local' : user?.name ?? 'Usuario',
         mode: 'closing',
       })
       await resetMonthlyPlans()
