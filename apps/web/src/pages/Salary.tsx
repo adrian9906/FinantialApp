@@ -16,7 +16,7 @@ import { Label } from '@/components/ui/label'
 import { ChevronLeft, ChevronRight, Plus, Pencil, Trash2, Wallet, Receipt } from 'lucide-react'
 import { exportSalariesReport } from '@/lib/reportExports'
 import { useMonthlyOverview } from '@/lib/useMonthlyOverview'
-import { formatMoney } from '@/lib/currency'
+import { formatMoney, useMoneyWithCode } from '@/lib/currency'
 import { formatFormulaLabel, usePreferencesStore } from '@/store/preferencesStore'
 import { getMonthKey, getSalaryForMonth, normalizeSalaryHistory } from '@plata/shared'
 
@@ -42,6 +42,7 @@ export default function Salary() {
   const updateSalary = useFinanceStore((state) => state.updateSalary)
   const removeSalary = useFinanceStore((state) => state.removeSalary)
   const overview = useMonthlyOverview()
+  const formatSalary = useMoneyWithCode()
   const formula = usePreferencesStore((state) => state.formula)
   const [open, setOpen] = useState(false)
   const [editId, setEditId] = useState<string | null>(null)
@@ -161,10 +162,7 @@ export default function Salary() {
             <>
               <div className="flex flex-col gap-1">
                 <label htmlFor="active-salary" className="text-xs text-medium-gray uppercase tracking-widest">Salario Neto</label>
-                <div className="relative flex items-center">
-                  <span className="absolute left-3 text-muted-gray text-sm font-semibold">USD</span>
-                  <Input id="active-salary" className="bg-abyss border-graphite pl-8 text-lg font-medium text-on-surface" type="text" value={overview.totalSalary.toLocaleString()} readOnly />
-                </div>
+                <Input id="active-salary" className="bg-abyss border-graphite text-lg font-medium text-on-surface" type="text" value={formatSalary(overview.totalSalary)} readOnly />
                 <p className="text-xs text-muted-gray mt-1">{activeSalary.month}</p>
                 {overview.totalDebtPaid > 0 && (
                   <p className="text-xs text-muted-gray">
@@ -176,21 +174,21 @@ export default function Salary() {
               <div className="flex flex-col gap-2 bg-abyss rounded-lg p-4 shadow-vault-sm">
                 <div className="flex justify-between items-center text-sm">
                   <span className="text-muted-gray">{formula.expenses}% Necesidades</span>
-                  <span className="text-base font-semibold text-primary-fixed">{formatMoney(formulaDistribution.expenses)}</span>
+                  <span className="text-base font-semibold text-primary-fixed">{formatSalary(formulaDistribution.expenses)}</span>
                 </div>
                 <div className="w-full h-1 bg-graphite rounded-full overflow-hidden">
                   <div className="h-full rounded-full bg-primary" style={{ width: `${formula.expenses}%` }} />
                 </div>
                 <div className="flex justify-between items-center text-sm mt-1">
                   <span className="text-muted-gray">{formula.wants}% Gustos</span>
-                  <span className="text-base font-semibold text-secondary">{formatMoney(formulaDistribution.wants)}</span>
+                  <span className="text-base font-semibold text-secondary">{formatSalary(formulaDistribution.wants)}</span>
                 </div>
                 <div className="w-full h-1 bg-graphite rounded-full overflow-hidden">
                   <div className="h-full rounded-full bg-secondary" style={{ width: `${formula.wants}%` }} />
                 </div>
                 <div className="flex justify-between items-center text-sm mt-1">
                   <span className="text-muted-gray">{formula.savings}% Ahorros</span>
-                  <span className="text-base font-semibold text-tertiary-container">{formatMoney(formulaDistribution.savings)}</span>
+                  <span className="text-base font-semibold text-tertiary-container">{formatSalary(formulaDistribution.savings)}</span>
                 </div>
                 <div className="w-full h-1 bg-graphite rounded-full overflow-hidden">
                   <div className="h-full rounded-full bg-tertiary-container" style={{ width: `${formula.savings}%` }} />
@@ -228,7 +226,7 @@ export default function Salary() {
                       <Wallet className="size-4" />
                     </div>
                     <div>
-                      <p className="text-base font-medium text-on-surface">{formatMoney(entry.amount)}</p>
+                      <p className="text-base font-medium text-on-surface">{formatSalary(entry.amount)}</p>
                       <p className="text-xs text-muted-gray">{entry.month}</p>
                     </div>
                   </div>

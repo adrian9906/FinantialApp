@@ -16,6 +16,7 @@ export const CURRENCY_CATALOG: CurrencyPreference[] = [
 ]
 
 const formatterCache = new Map<string, Intl.NumberFormat>()
+const decimalFormatterCache = new Map<string, Intl.NumberFormat>()
 
 function getFormatter(currency: CurrencyPreference) {
   const key = `${currency.locale}:${currency.code}`
@@ -47,10 +48,34 @@ export function formatMoney(value: number, currency = getActiveCurrency()) {
   return getFormatter(currency).format(converted)
 }
 
+export function formatMoneyWithCode(value: number, currency = getActiveCurrency()) {
+  const key = `${currency.locale}:decimal`
+  let formatter = decimalFormatterCache.get(key)
+
+  if (!formatter) {
+    formatter = new Intl.NumberFormat(currency.locale, {
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 2,
+    })
+    decimalFormatterCache.set(key, formatter)
+  }
+
+  const converted = convertFromUsd(Number.isFinite(value) ? value : 0, currency)
+  return `${formatter.format(converted)} ${currency.code}`
+}
+
 export function useMoney() {
   const currencies = usePreferencesStore((state) => state.currencies)
   const activeCurrencyCode = usePreferencesStore((state) => state.activeCurrencyCode)
   const currency = currencies.find((entry) => entry.code === activeCurrencyCode) ?? USD_CURRENCY
 
   return useMemo(() => (value: number) => formatMoney(value, currency), [currency])
+}
+
+export function useMoneyWithCode() {
+  const currencies = usePreferencesStore((state) => state.currencies)
+  const activeCurrencyCode = usePreferencesStore((state) => state.activeCurrencyCode)
+  const currency = currencies.find((entry) => entry.code === activeCurrencyCode) ?? USD_CURRENCY
+
+  return useMemo(() => (value: number) => formatMoneyWithCode(value, currency), [currency])
 }
