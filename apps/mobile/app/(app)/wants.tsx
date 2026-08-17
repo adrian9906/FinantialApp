@@ -16,7 +16,6 @@ import { resolvePalette } from '../../src/theme/palette'
 import { radius, spacing } from '../../src/theme/tokens'
 import { getMonthlyOverview } from '@plata/shared'
 import { ReceiptOcrPanel } from '../../src/components/ocr/receipt-ocr-panel'
-import { WantCelebration } from '../../src/components/celebration/want-celebration'
 
 type WantViewItem = {
   id: string
@@ -102,7 +101,6 @@ export default function WantsScreen() {
   const [formError, setFormError] = useState<string | null>(null)
   const [customCategoryName, setCustomCategoryName] = useState('')
   const categoryWasChanged = useRef(false)
-  const [celebration, setCelebration] = useState<{ id: number } | null>(null)
   const [calendarMonth, setCalendarMonth] = useState(() => new Date(new Date().getFullYear(), new Date().getMonth(), 1))
 
   const overview = getMonthlyOverview(salaries, transactions, debts, formula, { periodStart: getFinancialPeriodStart(monthlyPlanningHistory) })
@@ -266,9 +264,6 @@ async function toggleChecked(item: WantViewItem) {
     if (isWantsDisabled) return
 
     const nextStatus = item.status === 'checked' ? 'pending' : 'checked'
-    if (nextStatus === 'checked') {
-      setCelebration((current) => (current ? { id: current.id + 1 } : { id: 1 }))
-    }
     await updateTransaction(item.id, {
       amount: item.amount,
       type: 'want',
@@ -278,8 +273,7 @@ async function toggleChecked(item: WantViewItem) {
   }
 
   return (
-    <>
-      <AppFrame
+    <AppFrame
       title="Gustos"
       subtitle="Tus caprichos y experiencias, organizados por categoria y respetando el presupuesto libre."
       actions={
@@ -485,11 +479,6 @@ async function toggleChecked(item: WantViewItem) {
           {formError && formError !== inlineAmountError ? <Text style={{ color: palette.danger, fontSize: 13 }}>{formError}</Text> : null}
         </View>
       </Dialog>
-      </AppFrame>
-
-      {celebration ? (
-        <WantCelebration key={celebration.id} onClose={() => setCelebration(null)} />
-      ) : null}
-    </>
+    </AppFrame>
   )
 }

@@ -33,7 +33,6 @@ import { toast } from 'sonner'
 import { getTodayDateKey } from '@/lib/date'
 import { ReceiptOcrPanel } from '@/components/ocr/ReceiptOcrPanel'
 import { useAuthStore } from '@/store/authStore'
-import { WantCelebration } from '@/components/celebration/WantCelebration'
 
 interface WantFormState {
   amount: string
@@ -206,9 +205,8 @@ export default function Wants() {
 const [transferAmount, setTransferAmount] = useState('')
   const [transferError, setTransferError] = useState<string | null>(null)
   const [restoringListId, setRestoringListId] = useState<string | null>(null)
-  const [customCategoryName, setCustomCategoryName] = useState('')
+const [customCategoryName, setCustomCategoryName] = useState('')
   const categoryWasChanged = useRef(false)
-  const [celebration, setCelebration] = useState<{ id: number } | null>(null)
   const [form, setForm] = useState<WantFormState>({
     amount: '',
     itemName: '',
@@ -482,7 +480,6 @@ setCustomCategoryName('')
         ...bursts,
         [item.id]: (bursts[item.id] ?? 0) + 1,
       }))
-      setCelebration((current) => (current ? { id: current.id + 1 } : { id: 1 }))
     }
 
     await updateTransaction(item.id, {
@@ -942,10 +939,6 @@ setCustomCategoryName('')
           </DialogFooter>
         </DialogContent>
       </Dialog>
-
-      {celebration ? (
-        <WantCelebration key={celebration.id} onClose={() => setCelebration(null)} />
-      ) : null}
     </div>
   )
 }

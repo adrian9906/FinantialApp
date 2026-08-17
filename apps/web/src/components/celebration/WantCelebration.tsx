@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { Sparkles, Trophy, X } from 'lucide-react'
 
 interface WantCelebrationProps {
@@ -43,7 +44,7 @@ export function WantCelebration({ onClose }: WantCelebrationProps) {
     return () => window.clearTimeout(timer)
   }, [])
 
-  return (
+  return createPortal(
     <>
       <style>{`
         @keyframes wantConfettiFall {
@@ -102,6 +103,7 @@ export function WantCelebration({ onClose }: WantCelebrationProps) {
           </div>
         </div>
       </div>
-    </>
+    </>,
+    document.body,
   )
 }
