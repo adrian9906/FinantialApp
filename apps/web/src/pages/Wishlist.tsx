@@ -35,6 +35,7 @@ import { exportWishlistReport } from '@/lib/reportExports'
 import { useMonthlyOverview } from '@/lib/useMonthlyOverview'
 import { useFinanceStore } from '@/store/financeStore'
 import { convertToUsd, formatMoney, getCurrencyByCode, useCurrencyInput } from '@/lib/currency'
+import { WantCelebration } from '@/components/celebration/WantCelebration'
 
 interface FormState {
   name: string
@@ -102,6 +103,7 @@ export default function Wishlist() {
   const [searchResults, setSearchResults] = useState<PriceScoutResult[]>([])
   const [searchError, setSearchError] = useState<string | null>(null)
   const [isSearchingCatalog, setIsSearchingCatalog] = useState(false)
+  const [celebration, setCelebration] = useState<{ id: number } | null>(null)
   const searchAbortRef = useRef<AbortController | null>(null)
   const [form, setForm] = useState<FormState>({
     name: '',
@@ -313,6 +315,9 @@ export default function Wishlist() {
         isPurchased: !purchased,
         purchasedAt: purchased ? item.purchasedAt : new Date().toISOString(),
       })
+      if (!purchased) {
+        setCelebration((current) => (current ? { id: current.id + 1 } : { id: 1 }))
+      }
     } finally {
       setIsSaving(false)
     }
@@ -985,6 +990,10 @@ export default function Wishlist() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {celebration ? (
+        <WantCelebration key={celebration.id} onClose={() => setCelebration(null)} />
+      ) : null}
     </div>
   )
 }

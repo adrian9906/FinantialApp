@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useShallow } from 'zustand/react/shallow'
-import { buildWantTransferSavingDescription, createLearnedCategorizationRule, findCategorizationRule } from '@plata/shared'
+import { buildWantTransferSavingDescription, createLearnedCategorizationRule, findCategorizationRule, type ReceiptOCRLineItem, type ReceiptOCRParsedDraft } from '@plata/shared'
 import { Clapperboard, Gamepad2, Heart, LockKeyhole, Pencil, Plus, ShoppingBag, Sparkles, Ticket, Trash2, type LucideIcon } from 'lucide-react'
 import { useFinanceStore } from '@/store/financeStore'
 import { buildWantDescription, createCustomWantCategory, getPlannedWantTotal, getWantCategoryLabel, parseWantDescription, type WantBuiltInCategory, type WantCategory } from '@/lib/want-utils'
@@ -31,7 +31,9 @@ import { PlanningListHistory } from '@/components/planning/PlanningListHistory'
 import { buildPlanningHistorySuggestions, buildReusablePlanningListDrafts } from '@/lib/productivity'
 import { toast } from 'sonner'
 import { getTodayDateKey } from '@/lib/date'
+import { ReceiptOcrPanel } from '@/components/ocr/ReceiptOcrPanel'
 import { useAuthStore } from '@/store/authStore'
+import { WantCelebration } from '@/components/celebration/WantCelebration'
 
 interface WantFormState {
   amount: string
@@ -201,11 +203,12 @@ export default function Wants() {
   const [isTransferring, setIsTransferring] = useState(false)
   const [isExporting, setIsExporting] = useState(false)
   const [transferOpen, setTransferOpen] = useState(false)
-  const [transferAmount, setTransferAmount] = useState('')
+const [transferAmount, setTransferAmount] = useState('')
   const [transferError, setTransferError] = useState<string | null>(null)
   const [restoringListId, setRestoringListId] = useState<string | null>(null)
   const [customCategoryName, setCustomCategoryName] = useState('')
   const categoryWasChanged = useRef(false)
+  const [celebration, setCelebration] = useState<{ id: number } | null>(null)
   const [form, setForm] = useState<WantFormState>({
     amount: '',
     itemName: '',
@@ -333,7 +336,56 @@ export default function Wants() {
     setFormError(null)
     setForm((current) => ({ ...current, category }))
     categoryWasChanged.current = true
-    setCustomCategoryName('')
+setCustomCategoryName('')
+  }
+
+  function applyReceiptDraft(draft: ReceiptOCRParsedDraft) {
+    setFormError(null)
+    setForm((current) => ({
+      ...current,
+      amount: draft.amount !== undefined ? String(draft.amount) : current.amount,
+      itemName: draft.suggestedName ?? current.itemName,
+      date: draft.date ?? current.date,
+      category: !categoryWasChanged.current && draft.suggestedCategory
+        ? (draft.suggestedCategory as WantCategory)
+        : current.category,
+    }))
+  }
+
+  async function handleAddReceiptItems(items: ReceiptOCRLineItem[], date?: string) {
+    if (items.length === 0 || isSaving) return
+    if (isWantsDisabled) {
+      toast.error('La sección Gustos está desactivada porque su porcentaje es 0%.')
+      return
+    }
+    const total = items.reduce((sum, item) => sum + moneyInput.toUsd(item.price), 0)
+    if (total > availableToPlan) {
+      toast.error(`Los productos suman ${formatMoney(total)} y solo tienes ${formatMoney(availableToPlan)} disponibles para planificar.`)
+      return
+    }
+    if (plannedTotal + total > overview.budgetWants) {
+      toast.error(`No puedes agregarlos porque la lista subiria a ${formatMoney(plannedTotal + total)} y tu limite es ${formatMoney(overview.budgetWants)}.`)
+      return
+    }
+    setIsSaving(true)
+    try {
+      const targetDate = date ?? getTodayDateKey()
+      for (const item of items) {
+        const rule = findCategorizationRule(item.name, userRules)
+        const category = rule && rule.transactionType === 'want'
+          ? (rule.category as WantCategory)
+          : (item.category as WantCategory | undefined) ?? 'outings'
+        await addTransaction({
+          amount: moneyInput.toUsd(item.price),
+          type: 'want',
+          description: buildWantDescription(category, item.name.trim(), 'pending'),
+          date: targetDate,
+        })
+      }
+      toast.success(`Se agregaron ${items.length} producto${items.length === 1 ? '' : 's'} del recibo.`)
+    } finally {
+      setIsSaving(false)
+    }
   }
 
   async function handleSave() {
@@ -430,6 +482,7 @@ export default function Wants() {
         ...bursts,
         [item.id]: (bursts[item.id] ?? 0) + 1,
       }))
+      setCelebration((current) => (current ? { id: current.id + 1 } : { id: 1 }))
     }
 
     await updateTransaction(item.id, {
@@ -790,12 +843,14 @@ export default function Wants() {
               />
             ) : null}
 
-            <DatePickerField
+<DatePickerField
               label="Fecha"
               value={form.date}
               onChange={(value) => { setFormError(null); setForm((current) => ({ ...current, date: value })) }}
               description="Marca el dia en que planeas comprar o disfrutar este gusto."
             />
+
+            <ReceiptOcrPanel transactionType="want" userRules={userRules} onApply={applyReceiptDraft} onAddItems={handleAddReceiptItems} />
 
             <Card className="border-graphite bg-abyss p-4 shadow-vault-sm">
               <p className="text-xs uppercase tracking-[0.22em] text-medium-gray">Vista previa</p>
@@ -887,6 +942,10 @@ export default function Wants() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {celebration ? (
+        <WantCelebration key={celebration.id} onClose={() => setCelebration(null)} />
+      ) : null}
     </div>
   )
 }

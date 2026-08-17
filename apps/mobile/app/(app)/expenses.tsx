@@ -1,7 +1,7 @@
 import { useMemo, useRef, useState } from 'react'
 import { Calendar, ChevronLeft, ChevronRight, Dumbbell, HeartPulse, House, Package, Pencil, Plus, ShoppingBasket, Trash2, Wifi } from 'lucide-react-native'
 import { Pressable, View } from 'react-native'
-import { buildExpenseDescription, createCustomExpenseCategory, createLearnedCategorizationRule, findCategorizationRule, getExpenseCategoryLabel, getFinancialPeriodStart, getPlannedExpenseTotal, parseExpenseDescription, type ExpenseBuiltInCategory, type ExpenseCategory } from '@plata/shared'
+import { buildExpenseDescription, createCustomExpenseCategory, createLearnedCategorizationRule, findCategorizationRule, getExpenseCategoryLabel, getFinancialPeriodStart, getPlannedExpenseTotal, parseExpenseDescription, type ExpenseBuiltInCategory, type ExpenseCategory, type ReceiptOCRLineItem, type ReceiptOCRParsedDraft } from '@plata/shared'
 
 import { AppFrame } from '../../src/components/app-frame'
 import { Button } from '../../src/components/ui/button'
@@ -15,6 +15,7 @@ import { usePreferencesStore } from '../../src/store/preferences-store'
 import { resolvePalette } from '../../src/theme/palette'
 import { radius, spacing } from '../../src/theme/tokens'
 import { getMonthlyOverview } from '@plata/shared'
+import { ReceiptOcrPanel } from '../../src/components/ocr/receipt-ocr-panel'
 
 type ExpenseViewItem = {
   id: string
@@ -169,6 +170,45 @@ export default function ExpensesScreen() {
     setFormError(null)
     setCalendarMonth(new Date(new Date().getFullYear(), new Date().getMonth(), 1))
     setOpen(true)
+  }
+
+function applyReceiptDraft(draft: ReceiptOCRParsedDraft) {
+    setFormError(null)
+    setForm((current) => ({
+      ...current,
+      amount: draft.amount !== undefined ? String(draft.amount) : current.amount,
+      itemName: draft.suggestedName ?? current.itemName,
+      date: draft.date ?? current.date,
+      category: !categoryWasChanged.current && draft.suggestedCategory
+        ? (draft.suggestedCategory as ExpenseCategory)
+        : current.category,
+    }))
+  }
+
+  async function handleAddReceiptItems(items: ReceiptOCRLineItem[], date?: string) {
+    if (items.length === 0) return
+    const total = items.reduce((sum, item) => sum + item.price, 0)
+    if (total > availableToPlan || plannedTotal + total > overview.budgetExpenses) {
+      setFormError(`No puedes agregarlos porque superan el limite disponible de ${formatMoney(availableToPlan)}.`)
+      return
+    }
+    try {
+      const targetDate = date ?? new Date().toISOString().slice(0, 10)
+      for (const item of items) {
+        const rule = findCategorizationRule(item.name, userRules)
+        const category = rule && rule.transactionType === 'expense'
+          ? (rule.category as ExpenseCategory)
+          : (item.category as ExpenseCategory | undefined) ?? 'essentials'
+        await addTransaction({
+          amount: item.price,
+          type: 'expense',
+          description: buildExpenseDescription(category, item.name.trim(), 'pending'),
+          date: targetDate,
+        })
+      }
+    } catch (error) {
+      setFormError(error instanceof Error ? error.message : 'No se pudieron agregar los productos del recibo.')
+    }
   }
 
   async function handleSave() {
@@ -412,7 +452,8 @@ export default function ExpensesScreen() {
               </View>
               <Button variant="outline" onPress={handleCreateCategory} disabled={!customCategoryName.trim()}><Text>Crear</Text></Button>
             </View>
-          </View>
+</View>
+          <ReceiptOcrPanel transactionType="expense" userRules={userRules} onApply={applyReceiptDraft} onAddItems={handleAddReceiptItems} />
           {formError && formError !== inlineAmountError ? <Text style={{ color: palette.danger, fontSize: 13 }}>{formError}</Text> : null}
         </View>
       </Dialog>

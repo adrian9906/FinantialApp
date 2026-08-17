@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useShallow } from 'zustand/react/shallow'
-import { buildExpenseTransferSavingDescription, createLearnedCategorizationRule, findCategorizationRule } from '@plata/shared'
+import { buildExpenseTransferSavingDescription, createLearnedCategorizationRule, findCategorizationRule, type ReceiptOCRLineItem, type ReceiptOCRParsedDraft } from '@plata/shared'
 import { ArrowUpRight, Dumbbell, HeartPulse, House, Package, Pencil, Plus, ShoppingBasket, Trash2, Wifi, type LucideIcon } from 'lucide-react'
 import { useFinanceStore } from '@/store/financeStore'
 import { buildExpenseDescription, createCustomExpenseCategory, getExpenseCategoryLabel, getPlannedExpenseTotal, parseExpenseDescription, type ExpenseBuiltInCategory, type ExpenseCategory } from '@/lib/expense-utils'
@@ -30,6 +30,7 @@ import { PlanningListHistory } from '@/components/planning/PlanningListHistory'
 import { buildPlanningHistorySuggestions, buildReusablePlanningListDrafts } from '@/lib/productivity'
 import { toast } from 'sonner'
 import { getTodayDateKey } from '@/lib/date'
+import { ReceiptOcrPanel } from '@/components/ocr/ReceiptOcrPanel'
 import { useAuthStore } from '@/store/authStore'
 import { usePreferencesStore } from '@/store/preferencesStore'
 
@@ -248,6 +249,51 @@ export default function Expenses() {
       resetForm()
     }
     setOpen(true)
+  }
+
+  function applyReceiptDraft(draft: ReceiptOCRParsedDraft) {
+    setFormError(null)
+    setForm((current) => ({
+      ...current,
+      amount: draft.amount !== undefined ? String(draft.amount) : current.amount,
+      itemName: draft.suggestedName ?? current.itemName,
+      date: draft.date ?? current.date,
+      category: !categoryWasChanged.current && draft.suggestedCategory
+        ? (draft.suggestedCategory as ExpenseCategory)
+        : current.category,
+    }))
+  }
+
+  async function handleAddReceiptItems(items: ReceiptOCRLineItem[], date?: string) {
+    if (items.length === 0 || isSaving) return
+    const total = items.reduce((sum, item) => sum + moneyInput.toUsd(item.price), 0)
+    if (total > availableToPlan) {
+      toast.error(`Los productos suman ${formatMoney(total)} y solo tienes ${formatMoney(availableToPlan)} disponibles para planificar.`)
+      return
+    }
+    if (plannedTotal + total > overview.budgetExpenses) {
+      toast.error(`No puedes agregarlos porque la lista subiria a ${formatMoney(plannedTotal + total)} y tu limite es ${formatMoney(overview.budgetExpenses)}.`)
+      return
+    }
+    setIsSaving(true)
+    try {
+      const targetDate = date ?? getTodayDateKey()
+      for (const item of items) {
+        const rule = findCategorizationRule(item.name, userRules)
+        const category = rule && rule.transactionType === 'expense'
+          ? (rule.category as ExpenseCategory)
+          : (item.category as ExpenseCategory | undefined) ?? 'essentials'
+        await addTransaction({
+          amount: moneyInput.toUsd(item.price),
+          type: 'expense',
+          description: buildExpenseDescription(category, item.name.trim(), 'pending'),
+          date: targetDate,
+        })
+      }
+      toast.success(`Se agregaron ${items.length} producto${items.length === 1 ? '' : 's'} del recibo.`)
+    } finally {
+      setIsSaving(false)
+    }
   }
 
   async function handleSave() {
@@ -760,12 +806,14 @@ export default function Expenses() {
               />
             ) : null}
 
-            <DatePickerField
+<DatePickerField
               label="Fecha"
               value={form.date}
               onChange={(value) => { setFormError(null); setForm((current) => ({ ...current, date: value })) }}
               description="Ubica el dia en que este producto entra en tu lista o se compra."
             />
+
+            <ReceiptOcrPanel transactionType="expense" userRules={userRules} onApply={applyReceiptDraft} onAddItems={handleAddReceiptItems} />
 
             <Card className="border-graphite bg-abyss p-4 shadow-vault-sm">
               <p className="text-xs uppercase tracking-[0.22em] text-medium-gray">Vista previa</p>
