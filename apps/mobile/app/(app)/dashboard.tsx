@@ -1,6 +1,6 @@
 import { useMemo } from 'react'
 import { router } from 'expo-router'
-import { getFinancialPeriodStart, getMonthlyOverview } from '@plata/shared'
+import { dashboardWidgetCatalog, defaultDashboardWidgets, getFinancialPeriodStart, getMonthlyOverview, type DashboardWidgetId } from '@plata/shared'
 import {
   Bell,
   Calendar,
@@ -206,6 +206,7 @@ export default function DashboardScreen() {
   const salaries = useFinanceStore((state) => state.salaries)
   const transactions = useFinanceStore((state) => state.transactions)
   const wishlist = useFinanceStore((state) => state.wishlist)
+  const savingsGoals = useFinanceStore((state) => state.savingsGoals)
   const reminders = useFinanceStore((state) => state.reminders)
   const events = useFinanceStore((state) => state.events)
   const debts = useFinanceStore((state) => state.debts)
@@ -216,6 +217,8 @@ export default function DashboardScreen() {
   const formula = usePreferencesStore((state) => state.formula)
   const appearance = usePreferencesStore((state) => state.appearance)
   const theme = usePreferencesStore((state) => state.theme)
+  const profileId = user?.id ?? 'guest'
+  const dashboardWidgets = usePreferencesStore((state) => state.dashboardWidgetsByProfile[profileId] ?? defaultDashboardWidgets)
   const palette = resolvePalette(appearance, theme)
   const overview = getMonthlyOverview(salaries, transactions, debts, formula, { periodStart: getFinancialPeriodStart(monthlyPlanningHistory) })
   const featuredWish = wishlist[0] ?? null
@@ -234,17 +237,52 @@ export default function DashboardScreen() {
     [events],
   )
 
-  const totalDebt = debts.reduce((sum, debt) => sum + debt.amount, 0)
+  const totalDebt = debts.filter((debt) => debt.direction !== 'receivable').reduce((sum, debt) => sum + debt.amount, 0)
   const salaryHealth = overview.totalSalary - overview.totalExpenses - overview.totalWants - overview.totalSavings
   const savingsPercentage = overview.budgetSavings > 0 ? Math.min(100, Math.round((overview.totalSavings / overview.budgetSavings) * 100)) : 0
   const wantsPercentage = overview.budgetWants > 0 ? Math.min(100, Math.round((overview.totalWants / overview.budgetWants) * 100)) : 0
   const expensesPercentage = overview.budgetExpenses > 0 ? Math.min(100, Math.round((overview.totalExpenses / overview.budgetExpenses) * 100)) : 0
+  const daysInMonth = new Date(new Date().getFullYear(), new Date().getMonth() + 1, 0).getDate()
+  const remainingDays = Math.max(1, daysInMonth - new Date().getDate())
+  const safeAvailable = Math.max(0, salaryHealth)
+  const dailyMargin = safeAvailable / remainingDays
+  const financialScore = Math.max(0, Math.min(100, Math.round(100 - Math.max(0, expensesPercentage - 100) / 2 - Math.max(0, wantsPercentage - 100) / 2 - (overview.totalSalary > 0 ? Math.min(30, (totalDebt / overview.totalSalary) * 20) : 0))))
+  const widgetCatalogById = new Map(dashboardWidgetCatalog.map((widget) => [widget.id, widget]))
+
+  function getWidgetSummary(widgetId: DashboardWidgetId) {
+    if (widgetId === 'decision-today') return salaryHealth < 0 ? 'Reduce gastos flexibles hoy' : overview.totalSavings < overview.budgetSavings ? 'Protege primero tu meta de ahorro' : 'Mantén el ritmo actual'
+    if (widgetId === 'safe-available') return formatMoney(safeAvailable)
+    if (widgetId === 'daily-margin') return `${formatMoney(dailyMargin)} al día`
+    if (widgetId === 'financial-score') return `${financialScore} de 100`
+    if (widgetId === 'accounts-balances') return `${formatMoney(overview.totalSalary)} ingresados · ${formatMoney(overview.totalExpenses + overview.totalWants)} usados`
+    if (widgetId === 'expenses-by-category') return `${formatMoney(overview.totalExpenses)} en gastos categorizados`
+    if (widgetId === 'savings-goals') return savingsGoals[0] ? `${savingsGoals[0].name}: ${formatMoney(savingsGoals[0].currentAmount)} de ${formatMoney(savingsGoals[0].targetAmount)}` : 'Sin objetivos activos'
+    if (widgetId === 'upcoming-payments') return `${pendingReminders.length} pago(s) pendiente(s)`
+    if (widgetId === 'debts') return `${formatMoney(totalDebt)} por pagar`
+    if (widgetId === 'wishlist') return featuredWish ? `${featuredWish.name}: meta de ${formatMoney(featuredWish.price)}` : 'Wishlist vacía'
+    if (widgetId === 'net-worth') return formatMoney(overview.accumulatedSavings + salaryHealth - totalDebt)
+    return `${transactions.length} movimiento(s) recientes en este perfil`
+  }
 
   return (
     <AppFrame
       title="Dashboard"
       subtitle="Resumen mensual con pulso financiero, distribucion real y accesos directos parecidos a la version web."
     >
+      <View style={{ gap: spacing.md }}>
+        {dashboardWidgets.map((widgetId) => (
+          <Card key={widgetId} style={{ borderColor: widgetId === 'decision-today' ? `${palette.primary}55` : palette.border }}>
+            <CardContent className="pt-5">
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.md }}>
+                <View style={{ width: 38, height: 38, borderRadius: 14, backgroundColor: palette.primarySoft, alignItems: 'center', justifyContent: 'center' }}><SparklesIcon size={16} color={palette.primary} /></View>
+                <View style={{ flex: 1 }}><Text style={{ color: palette.textMuted, fontSize: 11, textTransform: 'uppercase' }}>{widgetCatalogById.get(widgetId)?.label}</Text><Text style={{ color: palette.text, fontSize: widgetId === 'decision-today' ? 17 : 20, fontWeight: '800', marginTop: 5 }}>{getWidgetSummary(widgetId)}</Text></View>
+              </View>
+            </CardContent>
+          </Card>
+        ))}
+        {dashboardWidgets.length === 0 ? <Card><CardContent className="items-center pt-6"><Text className="text-muted-foreground text-center">Activa bloques del panel desde Ajustes.</Text></CardContent></Card> : null}
+      </View>
+
       <Card
         style={{
           overflow: 'hidden',

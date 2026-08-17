@@ -43,6 +43,7 @@ import { parseExpenseDescription } from '@/lib/expense-utils'
 import { parseWantDescription } from '@/lib/want-utils'
 import { useFinanceStore } from '@/store/financeStore'
 import { useAuthStore } from '@/store/authStore'
+import { AutomationSettings } from '@/components/settings/AutomationSettings'
 import {
   defaultFormula,
   type AllocationFormula,
@@ -1035,6 +1036,8 @@ export default function Settings() {
       </section>
 
       <CurrencySettingsCard />
+
+      <AutomationSettings />
 
       <section className="grid gap-4 xl:grid-cols-2">
         <AppearanceCard appearance={appearance} setAppearance={setAppearance} />

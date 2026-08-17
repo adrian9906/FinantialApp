@@ -124,6 +124,7 @@ async function loadLogoDataUrl() {
 const EXPENSE_LABELS: Record<string, string> = {
   food: 'Alimentación',
   home: 'Hogar',
+  services: 'Servicios',
   gym: 'Gimnasio',
   health: 'Salud',
   essentials: 'Esenciales',

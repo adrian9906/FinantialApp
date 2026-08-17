@@ -1,7 +1,7 @@
-import { useMemo, useState } from 'react'
-import { Calendar, ChevronLeft, ChevronRight, Dumbbell, HeartPulse, House, Package, Pencil, Plus, ShoppingBasket, Trash2 } from 'lucide-react-native'
+import { useMemo, useRef, useState } from 'react'
+import { Calendar, ChevronLeft, ChevronRight, Dumbbell, HeartPulse, House, Package, Pencil, Plus, ShoppingBasket, Trash2, Wifi } from 'lucide-react-native'
 import { Pressable, View } from 'react-native'
-import { buildExpenseDescription, createCustomExpenseCategory, getExpenseCategoryLabel, getFinancialPeriodStart, getPlannedExpenseTotal, parseExpenseDescription, type ExpenseBuiltInCategory, type ExpenseCategory } from '@plata/shared'
+import { buildExpenseDescription, createCustomExpenseCategory, createLearnedCategorizationRule, findCategorizationRule, getExpenseCategoryLabel, getFinancialPeriodStart, getPlannedExpenseTotal, parseExpenseDescription, type ExpenseBuiltInCategory, type ExpenseCategory } from '@plata/shared'
 
 import { AppFrame } from '../../src/components/app-frame'
 import { Button } from '../../src/components/ui/button'
@@ -10,6 +10,7 @@ import { Dialog } from '../../src/components/ui/dialog'
 import { Input } from '../../src/components/ui/input'
 import { Text } from '../../src/components/ui/text'
 import { useFinanceStore } from '../../src/store/finance-store'
+import { useAuthStore } from '../../src/store/auth-store'
 import { usePreferencesStore } from '../../src/store/preferences-store'
 import { resolvePalette } from '../../src/theme/palette'
 import { radius, spacing } from '../../src/theme/tokens'
@@ -26,6 +27,7 @@ type ExpenseViewItem = {
 
 const ShoppingBasketIcon = ShoppingBasket as any
 const HouseIcon = House as any
+const WifiIcon = Wifi as any
 const DumbbellIcon = Dumbbell as any
 const HeartPulseIcon = HeartPulse as any
 const PackageIcon = Package as any
@@ -43,6 +45,7 @@ type ExpenseCategoryMeta = { label: string; hint: string; icon: any; color: stri
 const CATEGORY_META: Record<ExpenseBuiltInCategory, ExpenseCategoryMeta> = {
   food: { label: 'Comida', hint: 'Mercado, frutas, snacks y cocina diaria.', icon: ShoppingBasketIcon, color: '#8b5cf6' },
   home: { label: 'Pagos del hogar', hint: 'Luz, agua, internet, gas y mantenimiento.', icon: HouseIcon, color: '#38bdf8' },
+  services: { label: 'Servicios', hint: 'Telefonía, datos y otros servicios recurrentes.', icon: WifiIcon, color: '#22d3ee' },
   gym: { label: 'Gym', hint: 'Cuota, suplementos y accesorios.', icon: DumbbellIcon, color: '#34d399' },
   health: { label: 'Salud', hint: 'Medicinas, consultas y cuidado personal.', icon: HeartPulseIcon, color: '#fb7185' },
   essentials: { label: 'Otros esenciales', hint: 'Lo necesario que no cae en otra categoria.', icon: PackageIcon, color: '#fbbf24' },
@@ -86,6 +89,9 @@ export default function ExpensesScreen() {
   const updateTransaction = useFinanceStore((state) => state.updateTransaction)
   const removeTransaction = useFinanceStore((state) => state.removeTransaction)
   const formula = usePreferencesStore((state) => state.formula)
+  const profileId = useAuthStore((state) => state.user?.id) ?? 'guest'
+  const userRules = usePreferencesStore((state) => state.categoryRulesByProfile[profileId] ?? [])
+  const saveCategoryRule = usePreferencesStore((state) => state.saveCategoryRule)
   const appearance = usePreferencesStore((state) => state.appearance)
   const theme = usePreferencesStore((state) => state.theme)
   const palette = resolvePalette(appearance, theme)
@@ -94,6 +100,7 @@ export default function ExpensesScreen() {
   const [form, setForm] = useState({ amount: '', itemName: '', category: 'food' as ExpenseCategory, date: '' })
   const [formError, setFormError] = useState<string | null>(null)
   const [customCategoryName, setCustomCategoryName] = useState('')
+  const categoryWasChanged = useRef(false)
   const [calendarMonth, setCalendarMonth] = useState(() => new Date(new Date().getFullYear(), new Date().getMonth(), 1))
 
   const overview = getMonthlyOverview(salaries, transactions, debts, formula, { periodStart: getFinancialPeriodStart(monthlyPlanningHistory) })
@@ -139,12 +146,14 @@ export default function ExpensesScreen() {
     setEditId(null)
     setFormError(null)
     setCustomCategoryName('')
+    categoryWasChanged.current = false
     setCalendarMonth(new Date(new Date().getFullYear(), new Date().getMonth(), 1))
     setOpen(false)
   }
 
   function handleOpen(entry?: ExpenseViewItem) {
     setCustomCategoryName('')
+    categoryWasChanged.current = false
     if (entry) {
       setEditId(entry.id)
       setForm({ amount: String(entry.amount), itemName: entry.itemName, category: entry.category, date: entry.date })
@@ -180,6 +189,13 @@ export default function ExpensesScreen() {
 
     if (editId) await updateTransaction(editId, payload)
     else await addTransaction(payload)
+    if (categoryWasChanged.current) {
+      const suggested = findCategorizationRule(form.itemName, userRules)
+      if (!suggested || suggested.transactionType !== 'expense' || suggested.category !== form.category) {
+        const learned = createLearnedCategorizationRule(form.itemName, { transactionType: 'expense', category: form.category })
+        if (learned) saveCategoryRule(profileId, learned)
+      }
+    }
     resetForm()
   }
 
@@ -191,6 +207,7 @@ export default function ExpensesScreen() {
     }
     setFormError(null)
     setForm((current) => ({ ...current, category }))
+    categoryWasChanged.current = true
     setCustomCategoryName('')
   }
 
@@ -296,7 +313,7 @@ export default function ExpensesScreen() {
         <View style={{ gap: spacing.md }}>
           <Input keyboardType="numeric" value={form.amount} onChangeText={(value) => { setFormError(null); setForm((current) => ({ ...current, amount: value })) }} placeholder="Precio" />
           {inlineAmountError ? <Text style={{ color: palette.danger, fontSize: 13 }}>{inlineAmountError}</Text> : <Text style={{ color: palette.textMuted, fontSize: 12 }}>Disponible para planificar: {formatMoney(availableToPlan)}</Text>}
-          <Input value={form.itemName} onChangeText={(value) => { setFormError(null); setForm((current) => ({ ...current, itemName: value })) }} placeholder="Producto" />
+          <Input value={form.itemName} onChangeText={(value) => { const rule = findCategorizationRule(value, userRules); setFormError(null); setForm((current) => ({ ...current, itemName: value, category: !categoryWasChanged.current && rule?.transactionType === 'expense' ? rule.category : current.category })) }} placeholder="Producto" />
           <View style={{ gap: spacing.sm }}>
             <Text style={{ color: palette.textMuted, fontSize: 13 }}>Fecha</Text>
             <Pressable
@@ -382,7 +399,7 @@ export default function ExpensesScreen() {
           </View>
           <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm }}>
             {expenseCategories.map((key) => (
-              <Button key={key} variant={form.category === key ? 'default' : 'outline'} className="self-start" onPress={() => setForm((current) => ({ ...current, category: key as ExpenseCategory }))}>
+              <Button key={key} variant={form.category === key ? 'default' : 'outline'} className="self-start" onPress={() => { categoryWasChanged.current = true; setForm((current) => ({ ...current, category: key as ExpenseCategory })) }}>
                 <Text>{getCategoryMeta(key).label}</Text>
               </Button>
             ))}

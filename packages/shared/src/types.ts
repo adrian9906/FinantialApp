@@ -21,6 +21,8 @@ export interface DebtPayment {
 
 export interface Debt {
   id: string
+  direction?: 'payable' | 'receivable'
+  counterparty?: string
   amount: number
   history: string
   startDate: string

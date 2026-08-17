@@ -50,7 +50,8 @@ function buildMonthMatrix(visibleMonth: Date) {
 }
 
 export default function DebtsScreen() {
-  const debts = useFinanceStore((state) => state.debts)
+  const allDebts = useFinanceStore((state) => state.debts)
+  const debts = useMemo(() => allDebts.filter((debt) => debt.direction !== 'receivable'), [allDebts])
   const addDebt = useFinanceStore((state) => state.addDebt)
   const updateDebt = useFinanceStore((state) => state.updateDebt)
   const removeDebt = useFinanceStore((state) => state.removeDebt)

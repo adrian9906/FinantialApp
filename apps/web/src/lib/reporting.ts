@@ -162,6 +162,7 @@ function toDisplayCategory(category: string) {
   const categoryMap: Record<string, string> = {
     food: 'Comida',
     home: 'Hogar',
+    services: 'Servicios',
     gym: 'Gym',
     health: 'Salud',
     essentials: 'Esenciales',

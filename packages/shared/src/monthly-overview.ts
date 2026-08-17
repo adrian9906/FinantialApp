@@ -72,7 +72,7 @@ export function getMonthlyOverview(
         ? sum
         : sum + transaction.amount
     }, 0)
-  const totalDebtPaid = debts.reduce(
+  const totalDebtPaid = debts.filter((debt) => debt.direction !== 'receivable').reduce(
     (sum, debt) => sum + (debt.payments ?? [])
         .filter((payment) => isInFinancialPeriod(payment, periodStart))
         .reduce((paymentSum, payment) => paymentSum + payment.amount, 0),

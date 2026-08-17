@@ -39,8 +39,40 @@ export function getActiveCurrency() {
   return currencies.find((currency) => currency.code === activeCurrencyCode) ?? USD_CURRENCY
 }
 
+export function getCurrencyByCode(code?: string) {
+  const normalizedCode = code?.trim().toUpperCase()
+  if (!normalizedCode) return USD_CURRENCY
+  const { currencies } = usePreferencesStore.getState()
+  return currencies.find((currency) => currency.code === normalizedCode)
+    ?? CURRENCY_CATALOG.find((currency) => currency.code === normalizedCode)
+    ?? USD_CURRENCY
+}
+
 export function convertFromUsd(value: number, currency = getActiveCurrency()) {
   return value * currency.exchangeRate
+}
+
+export function convertToUsd(value: number, currency = getActiveCurrency()) {
+  const rate = Number.isFinite(currency.exchangeRate) && currency.exchangeRate > 0
+    ? currency.exchangeRate
+    : 1
+  return value / rate
+}
+
+export function parseMoneyInputToUsd(value: string | number, currency = getActiveCurrency()) {
+  const numericValue = typeof value === 'number'
+    ? value
+    : Number(value.trim().replace(',', '.'))
+  return convertToUsd(numericValue, currency)
+}
+
+export function convertUsdToInput(value: number, currency = getActiveCurrency()) {
+  const converted = convertFromUsd(Number.isFinite(value) ? value : 0, currency)
+  return String(Number(converted.toFixed(2)))
+}
+
+export function formatMoneyInput(value: number, currency = getActiveCurrency()) {
+  return getFormatter(currency).format(Number.isFinite(value) ? value : 0)
 }
 
 export function formatMoney(value: number, currency = getActiveCurrency()) {
@@ -78,4 +110,17 @@ export function useMoneyWithCode() {
   const currency = currencies.find((entry) => entry.code === activeCurrencyCode) ?? USD_CURRENCY
 
   return useMemo(() => (value: number) => formatMoneyWithCode(value, currency), [currency])
+}
+
+export function useCurrencyInput() {
+  const currencies = usePreferencesStore((state) => state.currencies)
+  const activeCurrencyCode = usePreferencesStore((state) => state.activeCurrencyCode)
+  const currency = currencies.find((entry) => entry.code === activeCurrencyCode) ?? USD_CURRENCY
+
+  return useMemo(() => ({
+    currency,
+    toUsd: (value: string | number) => parseMoneyInputToUsd(value, currency),
+    fromUsd: (value: number) => convertUsdToInput(value, currency),
+    formatInput: (value: number) => formatMoneyInput(value, currency),
+  }), [currency])
 }

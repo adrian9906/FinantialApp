@@ -1,10 +1,11 @@
-import { useEffect, useMemo, useState } from 'react'
-import { buildWantTransferSavingDescription } from '@plata/shared'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { useShallow } from 'zustand/react/shallow'
+import { buildWantTransferSavingDescription, createLearnedCategorizationRule, findCategorizationRule } from '@plata/shared'
 import { Clapperboard, Gamepad2, Heart, LockKeyhole, Pencil, Plus, ShoppingBag, Sparkles, Ticket, Trash2, type LucideIcon } from 'lucide-react'
 import { useFinanceStore } from '@/store/financeStore'
 import { buildWantDescription, createCustomWantCategory, getPlannedWantTotal, getWantCategoryLabel, parseWantDescription, type WantBuiltInCategory, type WantCategory } from '@/lib/want-utils'
 import { useMonthlyOverview } from '@/lib/useMonthlyOverview'
-import { formatMoney } from '@/lib/currency'
+import { formatMoney, useCurrencyInput } from '@/lib/currency'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
@@ -30,6 +31,7 @@ import { PlanningListHistory } from '@/components/planning/PlanningListHistory'
 import { buildPlanningHistorySuggestions, buildReusablePlanningListDrafts } from '@/lib/productivity'
 import { toast } from 'sonner'
 import { getTodayDateKey } from '@/lib/date'
+import { useAuthStore } from '@/store/authStore'
 
 interface WantFormState {
   amount: string
@@ -185,7 +187,11 @@ export default function Wants() {
   const removeTransaction = useFinanceStore((state) => state.removeTransaction)
   const monthlyPlanningHistory = useFinanceStore((state) => state.monthlyPlanningHistory)
   const overview = useMonthlyOverview()
+  const moneyInput = useCurrencyInput()
   const formula = usePreferencesStore((state) => state.formula)
+  const profileId = useAuthStore((state) => state.user?.id) ?? 'guest'
+  const userRules = usePreferencesStore(useShallow((state) => state.categoryRulesByProfile[profileId] ?? []))
+  const saveCategoryRule = usePreferencesStore((state) => state.saveCategoryRule)
   const isWantsDisabled = formula.wants === 0
   const [open, setOpen] = useState(false)
   const [editId, setEditId] = useState<string | null>(null)
@@ -199,6 +205,7 @@ export default function Wants() {
   const [transferError, setTransferError] = useState<string | null>(null)
   const [restoringListId, setRestoringListId] = useState<string | null>(null)
   const [customCategoryName, setCustomCategoryName] = useState('')
+  const categoryWasChanged = useRef(false)
   const [form, setForm] = useState<WantFormState>({
     amount: '',
     itemName: '',
@@ -217,6 +224,7 @@ export default function Wants() {
   }, [isWantsDisabled])
 
   function resetForm() {
+    categoryWasChanged.current = false
     setForm({
       amount: '',
       itemName: '',
@@ -230,12 +238,13 @@ export default function Wants() {
   function handleOpen(entry?: (typeof transactions)[number]) {
     if (isWantsDisabled) return
     setCustomCategoryName('')
+    categoryWasChanged.current = false
 
     if (entry) {
       const parsed = parseWantDescription(entry.description)
       setEditId(entry.id)
       setForm({
-        amount: String(entry.amount),
+        amount: moneyInput.fromUsd(entry.amount),
         itemName: parsed.itemName,
         category: parsed.category,
         date: entry.date,
@@ -303,7 +312,7 @@ export default function Wants() {
   const availableToPlan = Math.max(0, overview.budgetWants - plannedTotal)
   const pct = overview.budgetWants > 0 ? Math.min(100, Math.round((overview.totalWants / overview.budgetWants) * 100)) : 0
   const remaining = overview.budgetWants - overview.totalWants
-  const typedAmount = Number(form.amount)
+  const typedAmount = moneyInput.toUsd(form.amount)
   const liveBudgetError = !form.amount
     ? null
     : !Number.isFinite(typedAmount) || typedAmount <= 0
@@ -323,6 +332,7 @@ export default function Wants() {
 
     setFormError(null)
     setForm((current) => ({ ...current, category }))
+    categoryWasChanged.current = true
     setCustomCategoryName('')
   }
 
@@ -333,7 +343,7 @@ export default function Wants() {
       return
     }
 
-    const nextAmount = Number(form.amount)
+    const nextAmount = moneyInput.toUsd(form.amount)
     if (!Number.isFinite(nextAmount) || nextAmount <= 0) {
       setFormError('El precio debe ser mayor que cero.')
       return
@@ -367,6 +377,14 @@ export default function Wants() {
         await updateTransaction(editId, data)
       } else {
         await addTransaction(data)
+      }
+
+      if (categoryWasChanged.current) {
+        const suggested = findCategorizationRule(form.itemName, userRules)
+        if (!suggested || suggested.transactionType !== 'want' || suggested.category !== form.category) {
+          const learned = createLearnedCategorizationRule(form.itemName, { transactionType: 'want', category: form.category })
+          if (learned) saveCategoryRule(profileId, learned)
+        }
       }
 
       resetForm()
@@ -426,7 +444,7 @@ export default function Wants() {
     if (isTransferring) return
     if (isWantsDisabled) return
 
-    const nextAmount = Number(transferAmount)
+    const nextAmount = moneyInput.toUsd(transferAmount)
     if (!Number.isFinite(nextAmount) || nextAmount <= 0) {
       setTransferError('El monto debe ser mayor que cero.')
       return
@@ -699,7 +717,7 @@ export default function Wants() {
             <div className="grid gap-4 lg:grid-cols-2">
               <div className="space-y-2">
                 <Label className="text-medium-gray">Categoria</Label>
-                <Select value={form.category} onValueChange={(value) => { setFormError(null); setForm((current) => ({ ...current, category: value as WantCategory })) }}>
+                <Select value={form.category} onValueChange={(value) => { setFormError(null); categoryWasChanged.current = true; setForm((current) => ({ ...current, category: value as WantCategory })) }}>
                   <SelectTrigger className="bg-abyss border-graphite text-on-surface">
                     <SelectValue>{getCategoryMeta(form.category).label}</SelectValue>
                   </SelectTrigger>
@@ -733,7 +751,7 @@ export default function Wants() {
                 <p className="text-xs text-muted-gray">Crea una categoría propia y quedará disponible con tus gustos guardados.</p>
               </div>
               <div className="space-y-2">
-                <Label className="text-medium-gray">Precio</Label>
+                <Label className="text-medium-gray">Precio ({moneyInput.currency.code})</Label>
                 <Input
                   type="number"
                   placeholder="35"
@@ -750,7 +768,7 @@ export default function Wants() {
               <Input
                 placeholder="Cena sushi, skin care, entrada al cine..."
                 value={form.itemName}
-                onChange={(e) => { setFormError(null); setForm((current) => ({ ...current, itemName: e.target.value })) }}
+                onChange={(e) => { const itemName = e.target.value; const rule = findCategorizationRule(itemName, userRules); setFormError(null); setForm((current) => ({ ...current, itemName, category: !categoryWasChanged.current && rule?.transactionType === 'want' ? rule.category : current.category })) }}
                 className="bg-abyss border-graphite text-on-surface"
               />
             </div>
@@ -763,7 +781,7 @@ export default function Wants() {
                 onReuse={(suggestion) => {
                   setFormError(null)
                   setForm({
-                    amount: String(suggestion.amount),
+                    amount: moneyInput.fromUsd(suggestion.amount),
                     itemName: suggestion.itemName,
                     category: suggestion.category as WantCategory,
                     date: getTodayDateKey(),
@@ -789,7 +807,7 @@ export default function Wants() {
                   {getCategoryMeta(form.category).label}
                 </Badge>
                 <span className="text-sm text-muted-gray">
-                  {form.amount ? formatMoney(Number(form.amount)) : 'Sin precio'}
+                  {form.amount ? moneyInput.formatInput(Number(form.amount)) : 'Sin precio'}
                 </span>
                 <span className="text-sm text-muted-gray">
                   {form.date || 'Sin fecha'}
@@ -828,7 +846,7 @@ export default function Wants() {
           </DialogHeader>
           <div className="space-y-4">
             <div className="space-y-2">
-              <Label className="text-medium-gray">Monto a mover</Label>
+              <Label className="text-medium-gray">Monto a mover ({moneyInput.currency.code})</Label>
               <Input
                 type="number"
                 min="0"

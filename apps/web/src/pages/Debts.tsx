@@ -15,8 +15,9 @@ import { useMonthlyOverview } from '@/lib/useMonthlyOverview'
 import { buildDebtPlanSummary, type DebtStrategy } from '@/lib/debtPlanner'
 import { useFinanceStore } from '@/store/financeStore'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { formatMoney } from '@/lib/currency'
+import { formatMoney, useCurrencyInput } from '@/lib/currency'
 import { getTodayDateKey } from '@/lib/date'
+import { ReceivablesSection } from '@/components/debts/ReceivablesSection'
 
 interface DebtFormState {
   amount: string
@@ -27,7 +28,8 @@ interface DebtFormState {
 }
 
 export default function Debts() {
-  const debts = useFinanceStore((state) => state.debts)
+  const allDebts = useFinanceStore((state) => state.debts)
+  const debts = useMemo(() => allDebts.filter((debt) => debt.direction !== 'receivable'), [allDebts])
   const addDebt = useFinanceStore((state) => state.addDebt)
   const updateDebt = useFinanceStore((state) => state.updateDebt)
   const payDebt = useFinanceStore((state) => state.payDebt)
@@ -36,6 +38,7 @@ export default function Debts() {
   const addTransaction = useFinanceStore((state) => state.addTransaction)
   const removeTransaction = useFinanceStore((state) => state.removeTransaction)
   const overview = useMonthlyOverview()
+  const moneyInput = useCurrencyInput()
 
   const [open, setOpen] = useState(false)
   const [paymentOpen, setPaymentOpen] = useState(false)
@@ -100,7 +103,7 @@ export default function Debts() {
     if (entry) {
       setEditId(entry.id)
       setForm({
-        amount: String(entry.amount),
+        amount: moneyInput.fromUsd(entry.amount),
         history: entry.history,
         startDate: entry.startDate,
         endDate: entry.endDate,
@@ -129,7 +132,7 @@ export default function Debts() {
   async function handleSave() {
     if (!form.amount || !form.history || !form.startDate || !form.endDate || isSaving) return
 
-    const amount = Number(form.amount)
+    const amount = moneyInput.toUsd(form.amount)
     if (!Number.isFinite(amount) || amount <= 0) {
       setFormError('El monto total de la deuda debe ser mayor que cero.')
       return
@@ -162,7 +165,7 @@ export default function Debts() {
   async function handlePayDebt() {
     if (!paymentDebt || isPaying) return
 
-    const nextPayment = Number(paymentAmount)
+    const nextPayment = moneyInput.toUsd(paymentAmount)
     if (!Number.isFinite(nextPayment) || nextPayment <= 0) {
       setPaymentError('El abono debe ser mayor que cero.')
       return
@@ -252,7 +255,7 @@ export default function Debts() {
   const averageInterest = debtsWithInterest.length > 0
     ? debtsWithInterest.reduce((sum, debt) => sum + (debt.interest ?? 0), 0) / debtsWithInterest.length
     : 0
-  const extraPaymentValue = Math.max(0, Number(extraMonthlyPayment || 0))
+  const extraPaymentValue = Math.max(0, moneyInput.toUsd(extraMonthlyPayment || 0))
   const planSummary = useMemo(
     () => buildDebtPlanSummary(debts, strategy, extraPaymentValue),
     [debts, strategy, extraPaymentValue],
@@ -355,7 +358,7 @@ export default function Debts() {
               </div>
 
               <div className="space-y-2">
-                <Label className="text-medium-gray">Pago extra mensual</Label>
+                <Label className="text-medium-gray">Pago extra mensual ({moneyInput.currency.code})</Label>
                 <Input
                   type="number"
                   placeholder="50"
@@ -532,6 +535,8 @@ export default function Debts() {
         </div>
       )}
 
+      <ReceivablesSection />
+
       <Dialog open={open} onOpenChange={(nextOpen) => { if (!isSaving) setOpen(nextOpen) }}>
         <DialogContent className="border-graphite bg-surface sm:max-w-4xl">
           <DialogHeader>
@@ -543,7 +548,7 @@ export default function Debts() {
           <div className="space-y-4">
             <div className="grid gap-4 lg:grid-cols-2">
               <div className="space-y-2">
-                <Label className="text-medium-gray">Monto total</Label>
+                <Label className="text-medium-gray">Monto total ({moneyInput.currency.code})</Label>
                 <Input
                   type="number"
                   value={form.amount}
@@ -670,10 +675,10 @@ export default function Debts() {
             ) : null}
 
             <div className="space-y-2">
-              <Label className="text-medium-gray">Monto a abonar ahora</Label>
+              <Label className="text-medium-gray">Monto a abonar ahora ({moneyInput.currency.code})</Label>
               <Input
                 type="number"
-                max={paymentDebt ? Math.min(paymentDebt.remainingAmount, overview.freeSavings) : undefined}
+                max={paymentDebt ? Number(moneyInput.fromUsd(Math.min(paymentDebt.remainingAmount, overview.freeSavings))) : undefined}
                 value={paymentAmount}
                 onChange={(e) => { setPaymentError(null); setPaymentAmount(e.target.value) }}
                 className="bg-abyss border-graphite text-on-surface"

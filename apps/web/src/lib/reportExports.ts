@@ -23,9 +23,10 @@ import {
   getPreviousMonthKey,
 } from '@/lib/reporting'
 import { parseWantDescription } from '@/lib/want-utils'
+import { convertFromUsd } from '@/lib/currency'
 
 function toCurrency(value: number) {
-  return Math.round(value * 100) / 100
+  return Math.round(convertFromUsd(value) * 100) / 100
 }
 
 export async function exportExpensesReport(transactions: Transaction[]) {

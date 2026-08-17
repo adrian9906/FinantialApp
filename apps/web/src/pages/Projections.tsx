@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useFinanceStore } from '@/store/financeStore'
-import { formatMoney } from '@/lib/currency'
+import { formatMoney, useCurrencyInput } from '@/lib/currency'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -15,6 +15,7 @@ export default function Projections() {
   const addProjection = useFinanceStore((state) => state.addProjection)
   const updateProjection = useFinanceStore((state) => state.updateProjection)
   const removeProjection = useFinanceStore((state) => state.removeProjection)
+  const moneyInput = useCurrencyInput()
   const [open, setOpen] = useState(false)
   const [editId, setEditId] = useState<string | null>(null)
   const [targetSalary, setTargetSalary] = useState('')
@@ -23,6 +24,7 @@ export default function Projections() {
   const latestSalary = salaries.length > 0
     ? salaries.reduce((max, salary) => new Date(salary.month) > new Date(max.month) ? salary : max)
     : null
+  const targetSalaryInUsd = targetSalary ? moneyInput.toUsd(targetSalary) : 0
 
   function resetForm() {
     setTargetSalary('')
@@ -32,7 +34,7 @@ export default function Projections() {
   function handleOpen(entry?: typeof projections[number]) {
     if (entry) {
       setEditId(entry.id)
-      setTargetSalary(String(entry.targetSalary))
+      setTargetSalary(moneyInput.fromUsd(entry.targetSalary))
     } else {
       resetForm()
     }
@@ -41,7 +43,7 @@ export default function Projections() {
 
   async function handleSave() {
     if (!targetSalary || isSaving) return
-    const payload = { targetSalary: Number(targetSalary) }
+    const payload = { targetSalary: moneyInput.toUsd(targetSalary) }
     setIsSaving(true)
     try {
       if (editId) {
@@ -150,19 +152,19 @@ export default function Projections() {
           </DialogHeader>
           <div className="space-y-4">
             <div className="space-y-2">
-              <Label className="text-medium-gray">Salario meta</Label>
+              <Label className="text-medium-gray">Salario meta ({moneyInput.currency.code})</Label>
               <Input type="number" value={targetSalary} onChange={(e) => setTargetSalary(e.target.value)} className="bg-abyss border-graphite text-on-surface" />
             </div>
             <Card className="border-graphite bg-abyss p-4 shadow-vault-sm">
               <p className="text-xs uppercase tracking-[0.22em] text-medium-gray">Vista previa</p>
               <p className="mt-2 text-lg font-semibold text-on-surface">
-                {targetSalary ? formatMoney(Number(targetSalary)) : 'Define una meta'}
+                {targetSalary ? formatMoney(targetSalaryInUsd) : 'Define una meta'}
               </p>
               <p className="mt-1 text-sm text-muted-gray">
                 {targetSalary && latestSalary
-                  ? Number(targetSalary) - latestSalary.amount > 0
-                    ? `Te faltan ${formatMoney(Number(targetSalary) - latestSalary.amount)} para alcanzarla.`
-                    : `Ya superaste esta meta por ${formatMoney(Math.abs(Number(targetSalary) - latestSalary.amount))}.`
+                  ? targetSalaryInUsd - latestSalary.amount > 0
+                    ? `Te faltan ${formatMoney(targetSalaryInUsd - latestSalary.amount)} para alcanzarla.`
+                    : `Ya superaste esta meta por ${formatMoney(Math.abs(targetSalaryInUsd - latestSalary.amount))}.`
                   : 'Usa esta tarjeta para validar el impacto antes de guardar.'}
               </p>
             </Card>

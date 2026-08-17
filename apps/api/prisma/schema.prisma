@@ -83,6 +83,8 @@ model Gusto {
 
 model Deuda {
   id               String      @id @default(uuid())
+  tipo             String      @default("payable")
+  contraparte      String?
   cantidad         Float
   historial        String
   fechaInicio      DateTime

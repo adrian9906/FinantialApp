@@ -1,6 +1,6 @@
 import type { Transaction } from './types'
 
-export type ExpenseBuiltInCategory = 'food' | 'home' | 'gym' | 'health' | 'essentials'
+export type ExpenseBuiltInCategory = 'food' | 'home' | 'services' | 'gym' | 'health' | 'essentials'
 export type ExpenseCategory = ExpenseBuiltInCategory | `custom:${string}`
 export type ExpenseStatus = 'pending' | 'checked'
 
@@ -85,7 +85,7 @@ export function getPlannedExpenseTotal(transactions: Transaction[]) {
 }
 
 function isExpenseCategory(value: string): value is ExpenseCategory {
-  return value === 'food' || value === 'home' || value === 'gym' || value === 'health' || value === 'essentials' || value.startsWith('custom:')
+  return value === 'food' || value === 'home' || value === 'services' || value === 'gym' || value === 'health' || value === 'essentials' || value.startsWith('custom:')
 }
 
 function isExpenseStatus(value: string): value is ExpenseStatus {

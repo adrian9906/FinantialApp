@@ -12,8 +12,9 @@ import { useMonthlyOverview } from '@/lib/useMonthlyOverview'
 import { buildRecurringPlanningSuggestions, buildRepeatPlanDrafts } from '@/lib/productivity'
 import { formatFormulaLabel, usePreferencesStore } from '@/store/preferencesStore'
 import { Bar, BarChart, CartesianGrid, Pie, PieChart, XAxis, YAxis } from 'recharts'
-import { getFinancialPeriodStart, getPlannedExpenseTotal, getPlannedWantTotal } from '@plata/shared'
+import { buildReceivableReminder, defaultDashboardWidgets, getFinancialPeriodStart, getPlannedExpenseTotal, getPlannedWantTotal, isReceivable } from '@plata/shared'
 import { QuickExpenseEntry } from '@/components/dashboard/QuickExpenseEntry'
+import { DashboardWidgetPanel } from '@/components/dashboard/DashboardWidgetPanel'
 import { buildMonthlyForecast, type BudgetForecast } from '@/lib/monthlyForecast'
 import { convertFromUsd, formatMoney } from '@/lib/currency'
 import { downloadMonthlyPdfReport } from '@/lib/monthlyPdfReport'
@@ -56,19 +57,28 @@ export default function Dashboard() {
   const events = useFinanceStore((state) => state.events)
   const debts = useFinanceStore((state) => state.debts)
   const wishlist = useFinanceStore((state) => state.wishlist)
+  const savingsGoals = useFinanceStore((state) => state.savingsGoals)
   const monthlyPlanningHistory = useFinanceStore((state) => state.monthlyPlanningHistory)
   const addTransaction = useFinanceStore((state) => state.addTransaction)
   const restoreMonthlyPlan = useFinanceStore((state) => state.restoreMonthlyPlan)
   const formula = usePreferencesStore((state) => state.formula)
+  const profileId = user?.id ?? 'guest'
+  const dashboardWidgets = usePreferencesStore((state) => state.dashboardWidgetsByProfile[profileId] ?? defaultDashboardWidgets)
   const [isRepeatingRecurring, setIsRepeatingRecurring] = useState(false)
   const [restoringScope, setRestoringScope] = useState<'expenses' | 'wants' | 'all' | null>(null)
   const [isDownloadingPdf, setIsDownloadingPdf] = useState(false)
 
-  const pendingReminders = reminders.filter((r) => !r.completed)
+  const payableDebts = useMemo(() => debts.filter((debt) => !isReceivable(debt)), [debts])
+  const receivableReminders = useMemo(
+    () => debts.flatMap((debt) => isReceivable(debt) && !debt.isSettled ? [buildReceivableReminder(debt, formatMoney)] : []),
+    [debts],
+  )
+  const effectiveReminders = useMemo(() => [...reminders, ...receivableReminders], [receivableReminders, reminders])
+  const pendingReminders = effectiveReminders.filter((r) => !r.completed)
   const upcomingEvents = events
     .filter((event) => new Date(event.date).getTime() >= new Date().setHours(0, 0, 0, 0))
     .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
-  const activeDebts = debts.filter((debt) => !debt.isSettled)
+  const activeDebts = payableDebts.filter((debt) => !debt.isSettled)
   const totalDebt = activeDebts.reduce((sum, debt) => sum + debt.remainingAmount, 0)
   const allocationData = [
     { bucket: 'Salario', value: convertFromUsd(overview.totalSalary) },
@@ -97,12 +107,12 @@ export default function Dashboard() {
     [monthlyPlanningHistory],
   )
   const financialScore = useMemo(
-    () => buildFinancialScore({ overview, debts, reminders }),
-    [debts, overview, reminders],
+    () => buildFinancialScore({ overview, debts: payableDebts, reminders: effectiveReminders }),
+    [effectiveReminders, overview, payableDebts],
   )
   const smartAlerts = useMemo(
-    () => buildSmartAlerts({ overview, debts, reminders, wishlist }),
-    [debts, overview, reminders, wishlist],
+    () => buildSmartAlerts({ overview, debts: payableDebts, reminders: effectiveReminders, wishlist }),
+    [effectiveReminders, overview, payableDebts, wishlist],
   )
   const recurringPreview = smartPlanning.recurringItems.slice(0, 6)
   const latestHistory = smartPlanning.latestHistory
@@ -132,8 +142,8 @@ export default function Dashboard() {
         overview,
         transactions,
         wishlist,
-        debts,
-        reminders,
+        debts: payableDebts,
+        reminders: effectiveReminders,
         periodStart: getFinancialPeriodStart(monthlyPlanningHistory),
         userName: authMode === 'guest' ? 'Invitado local' : user?.name ?? 'Usuario',
         mode: 'current',
@@ -254,6 +264,21 @@ export default function Dashboard() {
           </div>
         </div>
       </header>
+
+      <DashboardWidgetPanel
+        widgets={dashboardWidgets}
+        overview={overview}
+        forecast={forecast}
+        financialScore={financialScore}
+        transactions={transactions}
+        debts={debts}
+        reminders={effectiveReminders}
+        wishlist={wishlist}
+        savingsGoals={savingsGoals}
+        decisionTitle={decisionTitle}
+        decisionDescription={decisionDescription}
+        onNavigate={navigate}
+      />
 
       <section className="grid gap-4 xl:grid-cols-[minmax(0,1.25fr)_minmax(320px,0.75fr)]">
         <Card className="relative overflow-hidden border-primary/15 bg-surface shadow-vault">

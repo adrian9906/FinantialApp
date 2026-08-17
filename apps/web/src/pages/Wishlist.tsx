@@ -34,7 +34,7 @@ import { searchPriceScout, PRICESCOUT_STORE_OPTIONS, groupPriceScoutResultsBySto
 import { exportWishlistReport } from '@/lib/reportExports'
 import { useMonthlyOverview } from '@/lib/useMonthlyOverview'
 import { useFinanceStore } from '@/store/financeStore'
-import { formatMoney } from '@/lib/currency'
+import { convertToUsd, formatMoney, getCurrencyByCode, useCurrencyInput } from '@/lib/currency'
 
 interface FormState {
   name: string
@@ -91,6 +91,7 @@ export default function Wishlist() {
   const updateWishlistItem = useFinanceStore((state) => state.updateWishlistItem)
   const removeWishlistItem = useFinanceStore((state) => state.removeWishlistItem)
   const overview = useMonthlyOverview()
+  const moneyInput = useCurrencyInput()
   const [open, setOpen] = useState(false)
   const [editId, setEditId] = useState<string | null>(null)
   const [viewMode, setViewMode] = useState<ViewMode>('cards')
@@ -158,6 +159,8 @@ export default function Wishlist() {
     },
   ] as const
   const editItem = useMemo(() => wishlist.find((item) => item.id === editId) ?? null, [editId, wishlist])
+  const formPriceInUsd = moneyInput.toUsd(parseMoneyInput(form.price))
+  const formExternalContributionInUsd = moneyInput.toUsd(parseMoneyInput(form.externalContribution))
   const reachedItems = wishlist.filter((item) => getWishlistAvailableAmount(item, currentFreeSavedAmount) >= item.price && item.price > 0).length
   const groupedSearchResults = useMemo(() => groupPriceScoutResultsByStore(searchResults), [searchResults])
 
@@ -188,8 +191,8 @@ export default function Wishlist() {
       setEditId(entry.id)
       setForm({
         name: entry.name,
-        price: String(entry.price),
-        externalContribution: String(getWishlistExternalContribution(entry) || ''),
+        price: moneyInput.fromUsd(entry.price),
+        externalContribution: getWishlistExternalContribution(entry) ? moneyInput.fromUsd(getWishlistExternalContribution(entry)) : '',
         priority: entry.priority,
         image: entry.image,
         sourceStore: entry.sourceStore,
@@ -218,10 +221,11 @@ export default function Wishlist() {
   }
 
   function applySearchResult(result: PriceScoutResult) {
+    const priceInUsd = convertToUsd(result.price, getCurrencyByCode(result.currency))
     setForm((current) => ({
       ...current,
       name: result.title,
-      price: String(result.price),
+      price: moneyInput.fromUsd(priceInUsd),
       image: result.image || current.image,
       sourceStore: normalizePriceScoutStore(result.store),
       sourceUrl: result.url,
@@ -259,8 +263,8 @@ export default function Wishlist() {
   async function handleSave() {
     if (!form.name || !form.price || isSaving) return
 
-    const nextPrice = parseMoneyInput(form.price)
-    const nextExternalContribution = parseMoneyInput(form.externalContribution)
+    const nextPrice = formPriceInUsd
+    const nextExternalContribution = formExternalContributionInUsd
     const wasPurchased = editItem?.isPurchased ?? false
 
     const data = {
@@ -875,7 +879,7 @@ export default function Wishlist() {
 
               <div className="grid gap-4 md:grid-cols-2">
                 <div className="space-y-2">
-                  <Label className="text-medium-gray">Precio</Label>
+                  <Label className="text-medium-gray">Precio ({moneyInput.currency.code})</Label>
                   <Input
                     type="number"
                     min="0"
@@ -886,7 +890,7 @@ export default function Wishlist() {
                 </div>
 
                 <div className="space-y-2">
-                  <Label className="text-medium-gray">Dinero externo</Label>
+                  <Label className="text-medium-gray">Dinero externo ({moneyInput.currency.code})</Label>
                   <Input
                     type="number"
                     min="0"
@@ -941,19 +945,19 @@ export default function Wishlist() {
                 <p className="text-xs uppercase tracking-[0.22em] text-medium-gray">Resumen del deseo</p>
                 <p className="mt-2 text-lg font-semibold text-on-surface">{form.name || 'Articulo sin nombre'}</p>
                 <p className="mt-1 text-sm text-muted-gray">
-                  {form.price ? `Meta: ${formatCurrency(parseMoneyInput(form.price))}` : 'Agrega el precio para activar la proyeccion de compra.'}
+                  {form.price ? `Meta: ${formatCurrency(formPriceInUsd)}` : 'Agrega el precio para activar la proyeccion de compra.'}
                 </p>
                 <p className="mt-1 text-sm text-muted-gray">Ahorro libre ahora mismo: {formatCurrency(currentFreeSavedAmount)}</p>
                 <p className="mt-1 text-sm text-muted-gray">Apartado en bolsillos: {formatCurrency(overview.assignedSavingsGoals)}</p>
                 <p className="mt-1 text-sm text-muted-gray">
-                  Aporte externo para este deseo: {formatCurrency(parseMoneyInput(form.externalContribution))}
+                  Aporte externo para este deseo: {formatCurrency(formExternalContributionInUsd)}
                 </p>
                 {form.sourceCurrency ? <p className="mt-1 text-sm text-muted-gray">Moneda de referencia: {form.sourceCurrency}</p> : null}
                 <p className="mt-1 text-sm text-muted-gray">
                   {form.price
                     ? buildPurchaseProjection(
-                      parseMoneyInput(form.price),
-                      currentFreeSavedAmount + parseMoneyInput(form.externalContribution),
+                      formPriceInUsd,
+                      currentFreeSavedAmount + formExternalContributionInUsd,
                       averageMonthlySavings,
                       (date) => dateFormatter.format(date),
                     ).purchaseDateLabel

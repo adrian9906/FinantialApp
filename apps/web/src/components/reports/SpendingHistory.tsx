@@ -1,9 +1,12 @@
-import { useMemo, useState } from 'react'
+import { useDeferredValue, useEffect, useMemo, useState } from 'react'
 import {
+  ChevronLeft,
+  ChevronRight,
   CalendarDays,
   Landmark,
   PiggyBank,
   ReceiptText,
+  Search,
   ShoppingBag,
   TrendingDown,
   TrendingUp,
@@ -21,12 +24,15 @@ import {
 } from '@plata/shared'
 
 import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { ChartContainer, ChartTooltip, ChartTooltipContent, type ChartConfig } from '@/components/ui/chart'
+import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { formatMoney } from '@/lib/currency'
 
 type HistoryKind = 'expense' | 'want' | 'saving'
+type DateFilterPreset = 'today' | 'month' | 'custom'
 
 type HistoryRow = {
   id: string
@@ -40,6 +46,7 @@ type HistoryRow = {
 const expenseCategoryLabels: Record<string, string> = {
   food: 'Alimentación',
   home: 'Hogar',
+  services: 'Servicios',
   gym: 'Gimnasio',
   health: 'Salud',
   essentials: 'Esenciales',
@@ -85,12 +92,98 @@ const historyMeta = {
 
 const monthFormatter = new Intl.DateTimeFormat('es-ES', { month: 'short', year: '2-digit' })
 const longDateFormatter = new Intl.DateTimeFormat('es-ES', { day: '2-digit', month: 'short', year: 'numeric' })
+const amountFormatter = new Intl.NumberFormat('es-ES', { minimumFractionDigits: 0, maximumFractionDigits: 2 })
 
 const formatCurrency = formatMoney
 
 function formatDate(date: string) {
   if (!date) return 'Fecha no registrada'
   return longDateFormatter.format(new Date(`${date.slice(0, 10)}T12:00:00`))
+}
+
+function normalizeDateKey(value: string) {
+  return value.slice(0, 10)
+}
+
+function formatDateInputValue(date: Date) {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
+}
+
+function getPreviousMonthKey(monthKey: string) {
+  const [year, month] = monthKey.split('-').map(Number)
+  const date = new Date(year, month - 2, 1)
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`
+}
+
+function matchesDateFilter(
+  rowDate: string,
+  preset: DateFilterPreset,
+  todayKey: string,
+  currentMonthKey: string,
+  customFrom: string,
+  customTo: string,
+) {
+  const normalizedDate = normalizeDateKey(rowDate)
+  if (!normalizedDate) return false
+
+  if (preset === 'today') return normalizedDate === todayKey
+  if (preset === 'month') return normalizedDate.startsWith(currentMonthKey)
+
+  if (customFrom && normalizedDate < customFrom) return false
+  if (customTo && normalizedDate > customTo) return false
+  return true
+}
+
+function buildSearchIndex(row: HistoryRow) {
+  return [
+    row.name,
+    row.category,
+    formatDate(row.date),
+    row.date,
+    amountFormatter.format(row.amount),
+    String(row.amount),
+    row.borrowedAmount ? amountFormatter.format(row.borrowedAmount) : '',
+  ].join(' ').toLowerCase()
+}
+
+function buildMonthComparison(rows: HistoryRow[], currentMonthKey: string) {
+  const previousMonthKey = getPreviousMonthKey(currentMonthKey)
+  let currentMonthTotal = 0
+  let previousMonthTotal = 0
+  let currentMonthCount = 0
+  let previousMonthCount = 0
+
+  rows.forEach((row) => {
+    const monthKey = row.date.slice(0, 7)
+    if (monthKey === currentMonthKey) {
+      currentMonthTotal += row.amount
+      currentMonthCount += 1
+      return
+    }
+
+    if (monthKey === previousMonthKey) {
+      previousMonthTotal += row.amount
+      previousMonthCount += 1
+    }
+  })
+
+  const difference = currentMonthTotal - previousMonthTotal
+  const percentChange = previousMonthTotal > 0
+    ? (difference / previousMonthTotal) * 100
+    : currentMonthTotal > 0
+      ? 100
+      : 0
+
+  return {
+    currentMonthKey,
+    previousMonthKey,
+    currentMonthTotal,
+    previousMonthTotal,
+    currentMonthCount,
+    previousMonthCount,
+    difference,
+    percentChange,
+  }
 }
 
 function getExpenseLabel(category: ReturnType<typeof parseExpenseDescription>['category']) {
@@ -193,6 +286,17 @@ interface SpendingHistoryProps {
 
 export function SpendingHistory({ transactions, monthlyPlanningHistory, wishlist }: SpendingHistoryProps) {
   const [kind, setKind] = useState<HistoryKind>('expense')
+  const [dateFilter, setDateFilter] = useState<DateFilterPreset>('month')
+  const [searchText, setSearchText] = useState('')
+  const [customFrom, setCustomFrom] = useState('')
+  const [customTo, setCustomTo] = useState('')
+  const [page, setPage] = useState(1)
+  const [perPage, setPerPage] = useState('10')
+  const deferredSearchText = useDeferredValue(searchText)
+
+  const today = useMemo(() => new Date(), [])
+  const todayKey = formatDateInputValue(today)
+  const currentMonthKey = todayKey.slice(0, 7)
 
   const histories = useMemo(() => ({
     expense: [
@@ -210,9 +314,18 @@ export function SpendingHistory({ transactions, monthlyPlanningHistory, wishlist
     () => [...histories[kind]].sort((left, right) => right.date.localeCompare(left.date)),
     [histories, kind],
   )
-  const monthlySeries = useMemo(() => buildMonthlySeries(rows), [rows])
-  const total = rows.reduce((sum, row) => sum + row.amount, 0)
-  const totalBorrowedUsed = rows.reduce((sum, row) => sum + (row.borrowedAmount ?? 0), 0)
+  const searchQuery = deferredSearchText.trim().toLowerCase()
+  const filteredRows = useMemo(
+    () => rows.filter((row) => {
+      if (!matchesDateFilter(row.date, dateFilter, todayKey, currentMonthKey, customFrom, customTo)) return false
+      if (!searchQuery) return true
+      return buildSearchIndex(row).includes(searchQuery)
+    }),
+    [currentMonthKey, customFrom, customTo, dateFilter, rows, searchQuery, todayKey],
+  )
+  const monthlySeries = useMemo(() => buildMonthlySeries(filteredRows), [filteredRows])
+  const total = filteredRows.reduce((sum, row) => sum + row.amount, 0)
+  const totalBorrowedUsed = filteredRows.reduce((sum, row) => sum + (row.borrowedAmount ?? 0), 0)
   const meta = historyMeta[kind]
   const highestMonth = monthlySeries.reduce<(typeof monthlySeries)[number] | null>(
     (highest, month) => !highest || month.total > highest.total ? month : highest,
@@ -222,9 +335,26 @@ export function SpendingHistory({ transactions, monthlyPlanningHistory, wishlist
     (lowest, month) => !lowest || month.total < lowest.total ? month : lowest,
     null,
   )
+  const monthComparison = useMemo(
+    () => buildMonthComparison(rows, currentMonthKey),
+    [currentMonthKey, rows],
+  )
+  const perPageNumber = Number(perPage)
+  const totalPages = Math.max(1, Math.ceil(filteredRows.length / perPageNumber))
+  const paginatedRows = filteredRows.slice((page - 1) * perPageNumber, page * perPageNumber)
   const chartConfig = {
     total: { label: meta.totalLabel, color: meta.color },
   } satisfies ChartConfig
+
+  useEffect(() => {
+    setPage(1)
+  }, [kind, dateFilter, customFrom, customTo, searchQuery, perPage])
+
+  useEffect(() => {
+    if (page > totalPages) {
+      setPage(totalPages)
+    }
+  }, [page, totalPages])
 
   return (
     <section className="space-y-4" aria-labelledby="money-trail-title">
@@ -257,6 +387,101 @@ export function SpendingHistory({ transactions, monthlyPlanningHistory, wishlist
         </CardHeader>
 
         <CardContent className="p-0">
+          <div className="border-b border-graphite/80 bg-abyss/35 px-5 py-4 sm:px-6">
+            <div className="flex flex-col gap-4">
+              <div className="flex flex-wrap items-center gap-2">
+                {([
+                  { id: 'today', label: 'Hoy' },
+                  { id: 'month', label: 'Este mes' },
+                  { id: 'custom', label: 'Fecha personalizada' },
+                ] as const).map((option) => (
+                  <Button
+                    key={option.id}
+                    type="button"
+                    variant={dateFilter === option.id ? 'secondary' : 'outline'}
+                    size="sm"
+                    className={dateFilter === option.id
+                      ? 'border-secondary/30 bg-secondary/15 text-secondary'
+                      : 'border-graphite bg-surface text-muted-gray hover:bg-surface-container-low hover:text-on-surface'}
+                    onClick={() => setDateFilter(option.id)}
+                  >
+                    {option.label}
+                  </Button>
+                ))}
+              </div>
+
+              <div className="grid gap-3 xl:grid-cols-[minmax(0,1.35fr)_auto_auto_auto]">
+                <div className="relative">
+                  <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-medium-gray" />
+                  <Input
+                    value={searchText}
+                    onChange={(event) => setSearchText(event.target.value)}
+                    placeholder="Buscar por concepto, categoría, fecha o importe"
+                    className="h-10 border-graphite bg-surface-container-low pl-9 text-on-surface placeholder:text-medium-gray"
+                  />
+                </div>
+
+                {dateFilter === 'custom' ? (
+                  <>
+                    <Input
+                      type="date"
+                      value={customFrom}
+                      onChange={(event) => setCustomFrom(event.target.value)}
+                      className="h-10 border-graphite bg-surface-container-low text-on-surface"
+                      aria-label="Fecha inicial personalizada"
+                    />
+                    <Input
+                      type="date"
+                      value={customTo}
+                      onChange={(event) => setCustomTo(event.target.value)}
+                      className="h-10 border-graphite bg-surface-container-low text-on-surface"
+                      aria-label="Fecha final personalizada"
+                    />
+                  </>
+                ) : null}
+
+                <div className="min-w-[132px]">
+                  <Select value={perPage} onValueChange={(value) => setPerPage(value ?? '10')}>
+                    <SelectTrigger className="h-10 w-full border-graphite bg-surface-container-low text-on-surface focus:ring-primary/40">
+                      <SelectValue placeholder="Filas por página" />
+                    </SelectTrigger>
+                    <SelectContent className="border-graphite bg-surface text-on-surface">
+                      <SelectItem value="10">10 por página</SelectItem>
+                      <SelectItem value="25">25 por página</SelectItem>
+                      <SelectItem value="50">50 por página</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+
+              <div className="grid gap-3 lg:grid-cols-3">
+                <div className="rounded-2xl border border-graphite/80 bg-surface px-4 py-3">
+                  <p className="text-[10px] uppercase tracking-[0.16em] text-medium-gray">Este mes</p>
+                  <p className="mt-1 text-lg font-semibold tabular-nums text-on-surface">{formatCurrency(monthComparison.currentMonthTotal)}</p>
+                  <p className="mt-1 text-xs text-muted-gray">{monthComparison.currentMonthCount} movimientos en {monthComparison.currentMonthKey}</p>
+                </div>
+                <div className="rounded-2xl border border-graphite/80 bg-surface px-4 py-3">
+                  <p className="text-[10px] uppercase tracking-[0.16em] text-medium-gray">Mes anterior</p>
+                  <p className="mt-1 text-lg font-semibold tabular-nums text-on-surface">{formatCurrency(monthComparison.previousMonthTotal)}</p>
+                  <p className="mt-1 text-xs text-muted-gray">{monthComparison.previousMonthCount} movimientos en {monthComparison.previousMonthKey}</p>
+                </div>
+                <div className="rounded-2xl border border-graphite/80 bg-surface px-4 py-3">
+                  <p className="text-[10px] uppercase tracking-[0.16em] text-medium-gray">Comparación mensual</p>
+                  <p className={`mt-1 text-lg font-semibold tabular-nums ${monthComparison.difference <= 0 ? 'text-emerald-200' : 'text-rose-200'}`}>
+                    {monthComparison.difference > 0 ? '+' : ''}{formatCurrency(monthComparison.difference)}
+                  </p>
+                  <p className="mt-1 text-xs text-muted-gray">
+                    {monthComparison.previousMonthTotal > 0
+                      ? `${monthComparison.percentChange > 0 ? '+' : ''}${monthComparison.percentChange.toFixed(1)}% frente al mes anterior`
+                      : monthComparison.currentMonthTotal > 0
+                        ? 'Sin base previa: este es el primer mes con movimientos'
+                        : 'Aún no hay movimientos en ninguno de los dos meses'}
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+
           <div className="grid border-b border-graphite/80 md:grid-cols-[minmax(0,1fr)_auto]">
             <div className="px-5 py-5 sm:px-6">
               <div className="flex items-center gap-3">
@@ -277,56 +502,90 @@ export function SpendingHistory({ transactions, monthlyPlanningHistory, wishlist
                 </div>
               ) : null}
               <Badge variant="secondary" className={meta.badgeClass}>
-                {rows.length} {rows.length === 1 ? meta.singular : 'movimientos'}
+                {filteredRows.length} {filteredRows.length === 1 ? meta.singular : 'movimientos'}
               </Badge>
             </div>
           </div>
 
-          {rows.length === 0 ? (
+          {filteredRows.length === 0 ? (
             <div className="px-6 py-12 text-center">
               <CalendarDays className="mx-auto size-7 text-medium-gray" />
-              <p className="mt-4 text-sm font-medium text-on-surface">Aún no hay historial de {meta.label.toLowerCase()}</p>
+              <p className="mt-4 text-sm font-medium text-on-surface">No encontramos movimientos para ese filtro</p>
               <p className="mt-1 text-sm text-muted-gray">
-                {kind === 'saving'
-                  ? 'Aquí aparecerán deseos comprados, retiros de ahorro y pagos de deuda.'
-                  : 'Los movimientos completados aparecerán aquí, incluso después de cerrar el mes.'}
+                Ajusta la fecha, la búsqueda o el tipo de histórico para ver más resultados.
               </p>
             </div>
           ) : (
-            <div className="overflow-x-auto">
-              <table className="min-w-full text-sm">
-                <thead className="bg-abyss/55">
-                  <tr className="text-left text-[11px] uppercase tracking-[0.18em] text-medium-gray">
-                    <th className="px-5 py-3.5 font-medium sm:px-6">Producto o concepto</th>
-                    <th className="px-5 py-3.5 font-medium">Categoría</th>
-                    <th className="px-5 py-3.5 font-medium">Fecha</th>
-                    {kind === 'saving' ? <th className="px-5 py-3.5 text-right font-medium">Deuda usada</th> : null}
-                    <th className="px-5 py-3.5 text-right font-medium sm:px-6">Importe</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {rows.map((row) => (
-                    <tr key={row.id} className="border-t border-graphite/70 transition-colors hover:bg-surface-container-low">
-                      <td className="px-5 py-4 font-medium text-on-surface sm:px-6">{row.name}</td>
-                      <td className="px-5 py-4 text-muted-gray">{row.category}</td>
-                      <td className="whitespace-nowrap px-5 py-4 text-muted-gray">{formatDate(row.date)}</td>
-                      {kind === 'saving' ? (
-                        <td className="whitespace-nowrap px-5 py-4 text-right tabular-nums">
-                          {(row.borrowedAmount ?? 0) > 0 ? (
-                            <span className="font-semibold text-amber-200">{formatCurrency(row.borrowedAmount ?? 0)}</span>
-                          ) : (
-                            <span className="text-medium-gray">Ahorro propio</span>
-                          )}
-                        </td>
-                      ) : null}
-                      <td className="whitespace-nowrap px-5 py-4 text-right font-semibold tabular-nums text-on-surface sm:px-6">
-                        {formatCurrency(row.amount)}
-                      </td>
+            <>
+              <div className="overflow-x-auto">
+                <table className="min-w-full text-sm">
+                  <thead className="bg-abyss/55">
+                    <tr className="text-left text-[11px] uppercase tracking-[0.18em] text-medium-gray">
+                      <th className="px-5 py-3.5 font-medium sm:px-6">Producto o concepto</th>
+                      <th className="px-5 py-3.5 font-medium">Categoría</th>
+                      <th className="px-5 py-3.5 font-medium">Fecha</th>
+                      {kind === 'saving' ? <th className="px-5 py-3.5 text-right font-medium">Deuda usada</th> : null}
+                      <th className="px-5 py-3.5 text-right font-medium sm:px-6">Importe</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+                  </thead>
+                  <tbody>
+                    {paginatedRows.map((row) => (
+                      <tr key={row.id} className="border-t border-graphite/70 transition-colors hover:bg-surface-container-low">
+                        <td className="px-5 py-4 font-medium text-on-surface sm:px-6">{row.name}</td>
+                        <td className="px-5 py-4 text-muted-gray">{row.category}</td>
+                        <td className="whitespace-nowrap px-5 py-4 text-muted-gray">{formatDate(row.date)}</td>
+                        {kind === 'saving' ? (
+                          <td className="whitespace-nowrap px-5 py-4 text-right tabular-nums">
+                            {(row.borrowedAmount ?? 0) > 0 ? (
+                              <span className="font-semibold text-amber-200">{formatCurrency(row.borrowedAmount ?? 0)}</span>
+                            ) : (
+                              <span className="text-medium-gray">Ahorro propio</span>
+                            )}
+                          </td>
+                        ) : null}
+                        <td className="whitespace-nowrap px-5 py-4 text-right font-semibold tabular-nums text-on-surface sm:px-6">
+                          {formatCurrency(row.amount)}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+
+              <div className="flex flex-col gap-3 border-t border-graphite/80 px-5 py-4 text-sm sm:flex-row sm:items-center sm:justify-between sm:px-6">
+                <p className="text-muted-gray">
+                  Mostrando {Math.min(filteredRows.length, (page - 1) * perPageNumber + 1)}-
+                  {Math.min(filteredRows.length, page * perPageNumber)} de {filteredRows.length} movimientos
+                </p>
+                <div className="flex items-center gap-2 self-end sm:self-auto">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="border-graphite bg-surface text-on-surface hover:bg-surface-container-low"
+                    onClick={() => setPage((current) => Math.max(1, current - 1))}
+                    disabled={page === 1}
+                  >
+                    <ChevronLeft className="size-4" />
+                    Anterior
+                  </Button>
+                  <div className="min-w-[88px] text-center text-xs uppercase tracking-[0.16em] text-medium-gray">
+                    Página {page} / {totalPages}
+                  </div>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="border-graphite bg-surface text-on-surface hover:bg-surface-container-low"
+                    onClick={() => setPage((current) => Math.min(totalPages, current + 1))}
+                    disabled={page === totalPages}
+                  >
+                    Siguiente
+                    <ChevronRight className="size-4" />
+                  </Button>
+                </div>
+              </div>
+            </>
           )}
         </CardContent>
       </Card>

@@ -164,6 +164,8 @@ function serializeWishlist(entry: {
 
 function serializeDebt(entry: {
   id: string
+  tipo: string
+  contraparte: string | null
   cantidad: number
   historial: string
   fechaInicio: Date
@@ -175,6 +177,8 @@ function serializeDebt(entry: {
   const remainingAmount = Math.max(0, entry.cantidad - paidAmount)
   return {
     id: entry.id,
+    direction: entry.tipo === 'receivable' ? 'receivable' : 'payable',
+    counterparty: entry.contraparte ?? undefined,
     amount: entry.cantidad,
     history: entry.historial,
     startDate: toDateString(entry.fechaInicio),
@@ -525,6 +529,8 @@ async function syncBootstrap(userId: string, body: JsonRecord) {
       await tx.deuda.create({
         data: {
           id: entry.id,
+          tipo: entry.direction === 'receivable' ? 'receivable' : 'payable',
+          contraparte: entry.counterparty?.trim() || null,
           cantidad: Number(entry.amount ?? 0),
           historial: String(entry.history ?? ''),
           fechaInicio: entry.startDate ? new Date(entry.startDate) : new Date(),
@@ -760,16 +766,23 @@ async function saveDebt(userId: string, body: JsonRecord, id?: string) {
   const startDate = body.startDate ? new Date(String(body.startDate)) : new Date()
   const endDate = body.endDate ? new Date(String(body.endDate)) : new Date()
   const interest = body.interest === undefined || body.interest === null || body.interest === '' ? null : Number(body.interest)
+  const direction = body.direction === 'receivable' ? 'receivable' : 'payable'
+  const counterparty = body.counterparty === undefined ? null : String(body.counterparty).trim() || null
   const initialPayment = Math.max(0, Number(body.initialPayment ?? 0))
 
   if (!id) {
     if (!history) {
       throw new Error('El historial de la deuda es obligatorio.')
     }
+    if (direction === 'receivable' && !counterparty) {
+      throw new Error('La persona que debe el dinero es obligatoria.')
+    }
 
     const paidAmount = Math.min(amount, initialPayment)
     const created = await prisma.deuda.create({
       data: {
+        tipo: direction,
+        contraparte: counterparty,
         cantidad: amount,
         historial: history,
         fechaInicio: startDate,
@@ -813,12 +826,19 @@ async function saveDebt(userId: string, body: JsonRecord, id?: string) {
       if (!nextHistory.trim()) {
         throw new Error('El historial de la deuda es obligatorio.')
       }
+      const nextDirection = body.direction === undefined ? existing.tipo : direction
+      const nextCounterparty = body.counterparty === undefined ? existing.contraparte : counterparty
+      if (nextDirection === 'receivable' && !nextCounterparty) {
+        throw new Error('La persona que debe el dinero es obligatoria.')
+      }
 
       if (nextAmount < paidAmount) {
         throw new Error(`No puedes dejar la deuda en $${nextAmount.toLocaleString()} porque ya tiene $${paidAmount.toLocaleString()} abonados.`)
       }
 
       return {
+        tipo: nextDirection,
+        contraparte: nextCounterparty,
         cantidad: nextAmount,
         historial: nextHistory,
         fechaInicio: body.startDate === undefined ? existing.fechaInicio : startDate,

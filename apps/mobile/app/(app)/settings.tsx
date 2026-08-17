@@ -2,6 +2,7 @@ import { View } from 'react-native'
 import { appearanceOptions, backgroundOptions, formulaPresets, themeOptions } from '@plata/shared'
 
 import { AppFrame } from '../../src/components/app-frame'
+import { AutomationSettings } from '../../src/components/settings/automation-settings'
 import { Button } from '../../src/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../../src/components/ui/card'
 import { Switch } from '../../src/components/ui/switch'
@@ -57,6 +58,8 @@ export default function SettingsScreen() {
       title="Ajustes"
       subtitle="Formula, tema, apariencia y fondo con la misma logica visual de Plata App."
     >
+      <AutomationSettings />
+
       {renderOptionGroup(
         'Apariencia',
         'Alterna entre claro y oscuro manteniendo la identidad de la app.',

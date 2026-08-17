@@ -1,7 +1,7 @@
-import { useMemo, useState } from 'react'
+import { useMemo, useRef, useState } from 'react'
 import { Calendar, ChevronLeft, ChevronRight, Clapperboard, Gamepad2, Heart, Pencil, Plus, ShoppingBag, Sparkles, Ticket, Trash2 } from 'lucide-react-native'
 import { Pressable, View } from 'react-native'
-import { buildWantDescription, createCustomWantCategory, getFinancialPeriodStart, getPlannedWantTotal, getWantCategoryLabel, parseWantDescription, type WantBuiltInCategory, type WantCategory } from '@plata/shared'
+import { buildWantDescription, createCustomWantCategory, createLearnedCategorizationRule, findCategorizationRule, getFinancialPeriodStart, getPlannedWantTotal, getWantCategoryLabel, parseWantDescription, type WantBuiltInCategory, type WantCategory } from '@plata/shared'
 
 import { AppFrame } from '../../src/components/app-frame'
 import { Button } from '../../src/components/ui/button'
@@ -10,6 +10,7 @@ import { Dialog } from '../../src/components/ui/dialog'
 import { Input } from '../../src/components/ui/input'
 import { Text } from '../../src/components/ui/text'
 import { useFinanceStore } from '../../src/store/finance-store'
+import { useAuthStore } from '../../src/store/auth-store'
 import { usePreferencesStore } from '../../src/store/preferences-store'
 import { resolvePalette } from '../../src/theme/palette'
 import { radius, spacing } from '../../src/theme/tokens'
@@ -86,6 +87,9 @@ export default function WantsScreen() {
   const updateTransaction = useFinanceStore((state) => state.updateTransaction)
   const removeTransaction = useFinanceStore((state) => state.removeTransaction)
   const formula = usePreferencesStore((state) => state.formula)
+  const profileId = useAuthStore((state) => state.user?.id) ?? 'guest'
+  const userRules = usePreferencesStore((state) => state.categoryRulesByProfile[profileId] ?? [])
+  const saveCategoryRule = usePreferencesStore((state) => state.saveCategoryRule)
   const isWantsDisabled = formula.wants === 0
   const appearance = usePreferencesStore((state) => state.appearance)
   const theme = usePreferencesStore((state) => state.theme)
@@ -95,6 +99,7 @@ export default function WantsScreen() {
   const [form, setForm] = useState({ amount: '', itemName: '', category: 'outings' as WantCategory, date: '' })
   const [formError, setFormError] = useState<string | null>(null)
   const [customCategoryName, setCustomCategoryName] = useState('')
+  const categoryWasChanged = useRef(false)
   const [calendarMonth, setCalendarMonth] = useState(() => new Date(new Date().getFullYear(), new Date().getMonth(), 1))
 
   const overview = getMonthlyOverview(salaries, transactions, debts, formula, { periodStart: getFinancialPeriodStart(monthlyPlanningHistory) })
@@ -136,6 +141,7 @@ export default function WantsScreen() {
   }, [availableToPlan, form.amount, overview.budgetWants, parsedAmount, plannedTotal])
 
   function resetForm() {
+    categoryWasChanged.current = false
     setForm({ amount: '', itemName: '', category: 'outings', date: '' })
     setEditId(null)
     setFormError(null)
@@ -147,6 +153,7 @@ export default function WantsScreen() {
   function handleOpen(entry?: WantViewItem) {
     if (isWantsDisabled) return
     setCustomCategoryName('')
+    categoryWasChanged.current = false
 
     if (entry) {
       setEditId(entry.id)
@@ -187,6 +194,13 @@ export default function WantsScreen() {
 
     if (editId) await updateTransaction(editId, payload)
     else await addTransaction(payload)
+    if (categoryWasChanged.current) {
+      const suggested = findCategorizationRule(form.itemName, userRules)
+      if (!suggested || suggested.transactionType !== 'want' || suggested.category !== form.category) {
+        const learned = createLearnedCategorizationRule(form.itemName, { transactionType: 'want', category: form.category })
+        if (learned) saveCategoryRule(profileId, learned)
+      }
+    }
     resetForm()
   }
 
@@ -198,6 +212,7 @@ export default function WantsScreen() {
     }
     setFormError(null)
     setForm((current) => ({ ...current, category }))
+    categoryWasChanged.current = true
     setCustomCategoryName('')
   }
 
@@ -316,7 +331,7 @@ export default function WantsScreen() {
         <View style={{ gap: spacing.md }}>
           <Input keyboardType="numeric" value={form.amount} onChangeText={(value) => { setFormError(null); setForm((current) => ({ ...current, amount: value })) }} placeholder="Precio" />
           {inlineAmountError ? <Text style={{ color: palette.danger, fontSize: 13 }}>{inlineAmountError}</Text> : <Text style={{ color: palette.textMuted, fontSize: 12 }}>Disponible para planificar: {formatMoney(availableToPlan)}</Text>}
-          <Input value={form.itemName} onChangeText={(value) => { setFormError(null); setForm((current) => ({ ...current, itemName: value })) }} placeholder="Producto o experiencia" />
+          <Input value={form.itemName} onChangeText={(value) => { const rule = findCategorizationRule(value, userRules); setFormError(null); setForm((current) => ({ ...current, itemName: value, category: !categoryWasChanged.current && rule?.transactionType === 'want' ? rule.category : current.category })) }} placeholder="Producto o experiencia" />
           <View style={{ gap: spacing.sm }}>
             <Text style={{ color: palette.textMuted, fontSize: 13 }}>Fecha</Text>
             <Pressable
@@ -402,7 +417,7 @@ export default function WantsScreen() {
           </View>
           <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm }}>
             {wantCategories.map((key) => (
-              <Button key={key} variant={form.category === key ? 'default' : 'outline'} className="self-start" onPress={() => setForm((current) => ({ ...current, category: key as WantCategory }))}>
+              <Button key={key} variant={form.category === key ? 'default' : 'outline'} className="self-start" onPress={() => { categoryWasChanged.current = true; setForm((current) => ({ ...current, category: key as WantCategory })) }}>
                 <Text>{getCategoryMeta(key).label}</Text>
               </Button>
             ))}

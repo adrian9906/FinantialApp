@@ -16,7 +16,7 @@ import { Label } from '@/components/ui/label'
 import { ChevronLeft, ChevronRight, Plus, Pencil, Trash2, Wallet, Receipt } from 'lucide-react'
 import { exportSalariesReport } from '@/lib/reportExports'
 import { useMonthlyOverview } from '@/lib/useMonthlyOverview'
-import { formatMoney, useMoneyWithCode } from '@/lib/currency'
+import { formatMoney, useCurrencyInput, useMoneyWithCode } from '@/lib/currency'
 import { formatFormulaLabel, usePreferencesStore } from '@/store/preferencesStore'
 import { getMonthKey, getSalaryForMonth, normalizeSalaryHistory } from '@plata/shared'
 
@@ -43,6 +43,7 @@ export default function Salary() {
   const removeSalary = useFinanceStore((state) => state.removeSalary)
   const overview = useMonthlyOverview()
   const formatSalary = useMoneyWithCode()
+  const moneyInput = useCurrencyInput()
   const formula = usePreferencesStore((state) => state.formula)
   const [open, setOpen] = useState(false)
   const [editId, setEditId] = useState<string | null>(null)
@@ -72,7 +73,7 @@ export default function Salary() {
   function handleOpen(entry?: typeof salaries[number]) {
     if (entry) {
       setEditId(entry.id)
-      setAmount(String(entry.amount))
+      setAmount(moneyInput.fromUsd(entry.amount))
       setMonth(entry.month)
       setCalendarYear(monthValueToDate(entry.month).getFullYear())
     } else {
@@ -89,7 +90,7 @@ export default function Salary() {
     }
 
     resetForm()
-    setAmount(activeSalary ? String(activeSalary.amount) : '')
+    setAmount(activeSalary ? moneyInput.fromUsd(activeSalary.amount) : '')
     setMonth(currentMonth)
     setOpen(true)
   }
@@ -98,7 +99,7 @@ export default function Salary() {
     if (!amount || !month || isSaving) return
 
     const payload = {
-      amount: Number(amount),
+      amount: moneyInput.toUsd(amount),
       month,
     }
 
@@ -254,7 +255,7 @@ export default function Salary() {
           <div className="grid gap-4 lg:grid-cols-[minmax(0,0.92fr)_minmax(0,1.08fr)]">
             <div className="space-y-4">
               <div className="space-y-2">
-                <Label htmlFor="amount" className="text-medium-gray">Monto</Label>
+                <Label htmlFor="amount" className="text-medium-gray">Monto ({moneyInput.currency.code})</Label>
                 <Input
                   id="amount"
                   type="number"

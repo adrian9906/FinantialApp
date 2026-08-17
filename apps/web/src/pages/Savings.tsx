@@ -10,7 +10,7 @@ import { DatePickerField } from '@/components/ui/date-picker-field'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog'
 import { Plus, Trash2, PiggyBank, Pencil, ArrowUpRight } from 'lucide-react'
 import { useMonthlyOverview } from '@/lib/useMonthlyOverview'
-import { formatMoney } from '@/lib/currency'
+import { formatMoney, useCurrencyInput } from '@/lib/currency'
 import { Badge } from '@/components/ui/badge'
 import { exportSavingsReport } from '@/lib/reportExports'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
@@ -35,6 +35,7 @@ export default function Savings() {
   const updateSavingsGoal = useFinanceStore((state) => state.updateSavingsGoal)
   const removeSavingsGoal = useFinanceStore((state) => state.removeSavingsGoal)
   const overview = useMonthlyOverview()
+  const moneyInput = useCurrencyInput()
   const wantsEnabled = usePreferencesStore((state) => state.formula.wants > 0)
   const [open, setOpen] = useState(false)
   const [editId, setEditId] = useState<string | null>(null)
@@ -73,7 +74,7 @@ export default function Savings() {
 
   function resetWithdrawForm() {
     setWithdrawForm({
-      amount: String(Math.max(0, overview.accumulatedSavings)),
+      amount: moneyInput.fromUsd(Math.max(0, overview.accumulatedSavings)),
       target: 'purpose',
       itemName: '',
       date: getTodayDateKey(),
@@ -98,10 +99,10 @@ export default function Savings() {
   function handleOpen(entry?: (typeof transactions)[number]) {
     if (entry) {
       setEditId(entry.id)
-      setForm({ amount: String(entry.amount), date: entry.date })
+      setForm({ amount: moneyInput.fromUsd(entry.amount), date: entry.date })
     } else {
       setEditId(null)
-      setForm({ amount: String(Math.max(0, remaining)), date: getTodayDateKey() })
+      setForm({ amount: moneyInput.fromUsd(Math.max(0, remaining)), date: getTodayDateKey() })
     }
     setFormError(null)
     setOpen(true)
@@ -113,9 +114,9 @@ export default function Savings() {
       setGoalForm({
         name: entry.name,
         category: entry.category,
-        targetAmount: String(entry.targetAmount),
-        currentAmount: String(entry.currentAmount),
-        monthlyContribution: String(entry.monthlyContribution),
+        targetAmount: moneyInput.fromUsd(entry.targetAmount),
+        currentAmount: moneyInput.fromUsd(entry.currentAmount),
+        monthlyContribution: moneyInput.fromUsd(entry.monthlyContribution),
       })
     } else {
       resetGoalForm()
@@ -126,7 +127,7 @@ export default function Savings() {
 
   function handleOpenWithdraw(goal?: typeof savingsGoals[number]) {
     setWithdrawForm({
-      amount: String(Math.max(0, goal?.currentAmount ?? overview.accumulatedSavings)),
+      amount: moneyInput.fromUsd(Math.max(0, goal?.currentAmount ?? overview.accumulatedSavings)),
       target: 'purpose',
       itemName: '',
       date: getTodayDateKey(),
@@ -139,7 +140,7 @@ export default function Savings() {
 
   async function handleSave() {
     if (!form.amount || isSaving) return
-    const amount = Number(form.amount)
+    const amount = moneyInput.toUsd(form.amount)
 
     if (editId) {
       const currentAmount = transactions.find((t) => t.id === editId)?.amount ?? 0
@@ -191,9 +192,9 @@ export default function Savings() {
   async function handleSaveGoal() {
     if (isGoalSaving) return
 
-    const targetAmount = Number(goalForm.targetAmount)
-    const currentAmount = Number(goalForm.currentAmount || 0)
-    const monthlyContribution = Number(goalForm.monthlyContribution || 0)
+    const targetAmount = moneyInput.toUsd(goalForm.targetAmount)
+    const currentAmount = moneyInput.toUsd(goalForm.currentAmount || 0)
+    const monthlyContribution = moneyInput.toUsd(goalForm.monthlyContribution || 0)
 
     if (!goalForm.name.trim()) {
       setGoalError('El nombre de la meta es obligatorio.')
@@ -253,7 +254,7 @@ export default function Savings() {
       return
     }
 
-    const amount = Number(withdrawForm.amount)
+    const amount = moneyInput.toUsd(withdrawForm.amount)
     if (!Number.isFinite(amount) || amount <= 0) {
       setWithdrawError('El monto debe ser mayor que cero.')
       return
@@ -571,7 +572,7 @@ export default function Savings() {
           </DialogHeader>
           <div className="space-y-4">
             <div className="space-y-2">
-              <Label className="text-medium-gray">Monto</Label>
+              <Label className="text-medium-gray">Monto ({moneyInput.currency.code})</Label>
               <Input type="number" placeholder="500" value={form.amount} onChange={(e) => { setFormError(null); setForm({ ...form, amount: e.target.value }) }} className="bg-abyss border-graphite text-on-surface" />
               {!editId && remaining > 0 && (
                 <p className="text-xs text-muted-gray">Disponible para ahorrar: {formatMoney(Math.max(0, remaining))}</p>
@@ -605,7 +606,7 @@ export default function Savings() {
           <div className="space-y-4">
             <div className={selectedSourceGoal ? 'grid gap-4' : 'grid gap-4 lg:grid-cols-2'}>
               <div className="space-y-2">
-                <Label className="text-medium-gray">Monto</Label>
+                <Label className="text-medium-gray">Monto ({moneyInput.currency.code})</Label>
                 <Input
                   type="number"
                   placeholder="80"
@@ -760,7 +761,7 @@ export default function Savings() {
 
             <div className="grid gap-4 lg:grid-cols-3">
               <div className="space-y-2">
-                <Label className="text-medium-gray">Monto objetivo</Label>
+                <Label className="text-medium-gray">Monto objetivo ({moneyInput.currency.code})</Label>
                 <Input
                   type="number"
                   value={goalForm.targetAmount}
@@ -772,7 +773,7 @@ export default function Savings() {
                 />
               </div>
               <div className="space-y-2">
-                <Label className="text-medium-gray">Monto actual</Label>
+                <Label className="text-medium-gray">Monto actual ({moneyInput.currency.code})</Label>
                 <Input
                   type="number"
                   value={goalForm.currentAmount}
@@ -784,7 +785,7 @@ export default function Savings() {
                 />
               </div>
               <div className="space-y-2">
-                <Label className="text-medium-gray">Aporte mensual</Label>
+                <Label className="text-medium-gray">Aporte mensual ({moneyInput.currency.code})</Label>
                 <Input
                   type="number"
                   value={goalForm.monthlyContribution}

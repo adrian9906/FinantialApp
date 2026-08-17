@@ -13,7 +13,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { exportEventsReport } from '@/lib/reportExports'
 import { useMonthlyOverview } from '@/lib/useMonthlyOverview'
-import { formatMoney } from '@/lib/currency'
+import { formatMoney, useCurrencyInput } from '@/lib/currency'
 import { useFinanceStore } from '@/store/financeStore'
 import { getTodayDateKey } from '@/lib/date'
 
@@ -61,6 +61,7 @@ export default function Events() {
   const updateEvent = useFinanceStore((state) => state.updateEvent)
   const removeEvent = useFinanceStore((state) => state.removeEvent)
   const overview = useMonthlyOverview()
+  const moneyInput = useCurrencyInput()
   const [open, setOpen] = useState(false)
   const [editId, setEditId] = useState<string | null>(null)
   const [formError, setFormError] = useState<string | null>(null)
@@ -82,7 +83,7 @@ export default function Events() {
   const availableForNewEvents = Math.max(0, eventsBudget - totalReserved)
   const editingEventAmount = editId ? sortedEvents.find((event) => event.id === editId)?.amount ?? 0 : 0
   const availableForCurrentForm = editId ? availableForNewEvents + editingEventAmount : availableForNewEvents
-  const typedAmount = parseMoneyInput(form.amount)
+  const typedAmount = moneyInput.toUsd(parseMoneyInput(form.amount))
   const exceedsBudget = typedAmount > availableForCurrentForm
 
   const eventMap = useMemo(() => {
@@ -118,7 +119,7 @@ export default function Events() {
       setForm({
         name: entry.name,
         date: entry.date,
-        amount: String(entry.amount),
+        amount: moneyInput.fromUsd(entry.amount),
         isNotification: entry.isNotification,
       })
     } else {
@@ -432,7 +433,7 @@ export default function Events() {
                 </div>
 
                 <div className="space-y-2">
-                  <Label className="text-medium-gray">Monto</Label>
+                  <Label className="text-medium-gray">Monto ({moneyInput.currency.code})</Label>
                   <Input
                     type="number"
                     min="0"

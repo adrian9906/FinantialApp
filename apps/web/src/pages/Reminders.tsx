@@ -1,4 +1,5 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
+import { buildReceivableReminder, isReceivable } from '@plata/shared'
 import { useFinanceStore } from '@/store/financeStore'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -9,6 +10,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, Di
 import { DatePickerField } from '@/components/ui/date-picker-field'
 import { Plus, Trash2, Bell, BellOff, Calendar, Pencil } from 'lucide-react'
 import { getTodayDateKey } from '@/lib/date'
+import { formatMoney } from '@/lib/currency'
 
 interface FormState { title: string; description: string; date: string }
 
@@ -22,6 +24,7 @@ function getStartOfTodayMs() {
 
 export default function Reminders() {
   const reminders = useFinanceStore((state) => state.reminders)
+  const debts = useFinanceStore((state) => state.debts)
   const addReminder = useFinanceStore((state) => state.addReminder)
   const updateReminder = useFinanceStore((state) => state.updateReminder)
   const toggleReminder = useFinanceStore((state) => state.toggleReminder)
@@ -30,6 +33,10 @@ export default function Reminders() {
   const [editId, setEditId] = useState<string | null>(null)
   const [form, setForm] = useState<FormState>({ title: '', description: '', date: getTodayDateKey() })
   const [isSaving, setIsSaving] = useState(false)
+  const receivableReminders = useMemo(
+    () => debts.flatMap((debt) => isReceivable(debt) && !debt.isSettled ? [buildReceivableReminder(debt, formatMoney)] : []),
+    [debts],
+  )
 
   function resetForm() {
     setForm({ title: '', description: '', date: getTodayDateKey() })
@@ -99,7 +106,37 @@ export default function Reminders() {
         </Button>
       </header>
 
-      {reminders.length === 0 ? (
+      {receivableReminders.length > 0 ? (
+        <section>
+          <h2 className="mb-3 flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-muted-gray">
+            <span className="inline-block size-1.5 rounded-full bg-warning" />
+            Cobros automáticos ({receivableReminders.length})
+          </h2>
+          <div className="space-y-2">
+            {receivableReminders.map((reminder) => {
+              const diff = getReminderDiff(reminder.date)
+              const isDue = diff === 0
+              const isOverdue = diff < 0
+              return (
+                <div key={reminder.id} className={`rounded-xl border-l-2 bg-surface p-4 shadow-vault ${isOverdue ? 'border-l-error' : isDue ? 'border-l-warning' : 'border-l-primary'}`}>
+                  <div className="flex items-start gap-3">
+                    <Bell className={`mt-0.5 size-4 ${isOverdue ? 'text-error' : isDue ? 'text-warning' : 'text-primary'}`} />
+                    <div>
+                      <h3 className="text-sm font-medium text-on-surface">{reminder.title}</h3>
+                      <p className="mt-1 text-xs text-muted-gray">{reminder.description}</p>
+                      <p className={`mt-2 text-xs ${isOverdue ? 'text-error' : isDue ? 'text-warning' : 'text-muted-gray'}`}>
+                        Fecha de cobro: {reminder.date}{isDue ? ' · vence hoy' : isOverdue ? ' · vencido' : ''}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        </section>
+      ) : null}
+
+      {reminders.length === 0 && receivableReminders.length === 0 ? (
         <Card className="bg-surface border-0 shadow-vault">
           <div className="flex flex-col items-center gap-3 py-16 text-muted-gray text-sm">
             <Bell className="size-8" />

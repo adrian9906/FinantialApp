@@ -83,6 +83,8 @@ function normalizeDebt(entry: Partial<Debt>): Debt {
 
   return {
     id: String(entry.id ?? makeId('debt')),
+    direction: entry.direction === 'receivable' ? 'receivable' : 'payable',
+    counterparty: entry.counterparty ? String(entry.counterparty) : undefined,
     amount,
     history: String(entry.history ?? ''),
     startDate: String(entry.startDate ?? ''),
@@ -617,6 +619,8 @@ export const useFinanceStore = create<FinanceStore>()((set, get) => ({
       updateLocalState(set, (state) => ({
         debts: [{
           id: makeId('debt'),
+          direction: debt.direction === 'receivable' ? 'receivable' : 'payable',
+          counterparty: debt.counterparty,
           amount: debt.amount,
           history: debt.history,
           startDate: debt.startDate,

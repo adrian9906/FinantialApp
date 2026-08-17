@@ -1,6 +1,19 @@
 import { useMemo, useState, type FormEvent } from 'react'
+import { useShallow } from 'zustand/react/shallow'
 import { ArrowRight, Check, ReceiptText, Sparkles } from 'lucide-react'
-import { buildExpenseDescription, parseExpenseDescription, type ExpenseCategory } from '@plata/shared'
+import {
+  buildExpenseDescription,
+  buildWantDescription,
+  createLearnedCategorizationRule,
+  findCategorizationRule,
+  parseExpenseDescription,
+  parseWantDescription,
+  type CategorizationRule,
+  type CategorizationTarget,
+  type ExpenseCategory,
+  type Transaction,
+  type WantCategory,
+} from '@plata/shared'
 import { toast } from 'sonner'
 import { useNavigate } from 'react-router-dom'
 
@@ -9,22 +22,21 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { useFinanceStore } from '@/store/financeStore'
-import { formatMoney } from '@/lib/currency'
+import { formatMoney, useCurrencyInput } from '@/lib/currency'
 import { getTodayDateKey } from '@/lib/date'
+import { useAuthStore } from '@/store/authStore'
+import { usePreferencesStore } from '@/store/preferencesStore'
 
-const categories = [
-  { value: 'food', label: 'Alimentacion' },
-  { value: 'home', label: 'Hogar' },
-  { value: 'gym', label: 'Deporte' },
-  { value: 'health', label: 'Salud' },
-  { value: 'essentials', label: 'Esenciales' },
-] satisfies Array<{ value: ExpenseCategory; label: string }>
-
-const categoryKeywords: Array<{ category: ExpenseCategory; words: string[] }> = [
-  { category: 'food', words: ['mercado', 'supermercado', 'comida', 'cafe', 'almuerzo', 'cena', 'pan', 'pollo'] },
-  { category: 'home', words: ['alquiler', 'renta', 'casa', 'luz', 'agua', 'internet', 'detergente', 'limpieza'] },
-  { category: 'health', words: ['farmacia', 'medicina', 'doctor', 'consulta', 'salud'] },
-  { category: 'gym', words: ['gym', 'gimnasio', 'deporte', 'entrenamiento'] },
+const targets: Array<{ value: string; label: string; target: CategorizationTarget }> = [
+  { value: 'expense:food', label: 'Alimentación · Gasto', target: { transactionType: 'expense', category: 'food' } },
+  { value: 'expense:services', label: 'Servicios · Gasto', target: { transactionType: 'expense', category: 'services' } },
+  { value: 'expense:home', label: 'Hogar · Gasto', target: { transactionType: 'expense', category: 'home' } },
+  { value: 'expense:gym', label: 'Deporte · Gasto', target: { transactionType: 'expense', category: 'gym' } },
+  { value: 'expense:health', label: 'Salud · Gasto', target: { transactionType: 'expense', category: 'health' } },
+  { value: 'expense:essentials', label: 'Esenciales · Gasto', target: { transactionType: 'expense', category: 'essentials' } },
+  { value: 'want:subscriptions', label: 'Suscripciones · Gusto', target: { transactionType: 'want', category: 'subscriptions' } },
+  { value: 'want:outings', label: 'Salidas · Gusto', target: { transactionType: 'want', category: 'outings' } },
+  { value: 'want:shopping', label: 'Compras · Gusto', target: { transactionType: 'want', category: 'shopping' } },
 ]
 
 function parseQuickEntry(value: string) {
@@ -35,40 +47,57 @@ function parseQuickEntry(value: string) {
   return { amount: Number.isFinite(amount) ? amount : 0, itemName }
 }
 
-function suggestCategory(itemName: string, recentDescriptions: Array<string | undefined>): ExpenseCategory {
-  const normalized = itemName.toLocaleLowerCase('es')
-  const keywordMatch = categoryKeywords.find(({ words }) => words.some((word) => normalized.includes(word)))
-  if (keywordMatch) return keywordMatch.category
+function targetKey(target: CategorizationTarget) {
+  return `${target.transactionType}:${target.category}`
+}
 
-  const recentMatch = recentDescriptions.find((description) => {
-    const parsed = parseExpenseDescription(description)
+function suggestCategory(itemName: string, recentTransactions: Transaction[], userRules: CategorizationRule[]) {
+  const rule = findCategorizationRule(itemName, userRules)
+  if (rule) return { target: { transactionType: rule.transactionType, category: rule.category } as CategorizationTarget, rule }
+
+  const normalized = itemName.toLocaleLowerCase('es')
+  const recentMatch = recentTransactions.find((transaction) => {
+    const parsed = transaction.type === 'want'
+      ? parseWantDescription(transaction.description)
+      : parseExpenseDescription(transaction.description)
     return parsed.itemName.toLocaleLowerCase('es') === normalized
   })
-  return recentMatch ? parseExpenseDescription(recentMatch).category : 'essentials'
+  if (recentMatch?.type === 'want') {
+    return { target: { transactionType: 'want', category: parseWantDescription(recentMatch.description).category } as CategorizationTarget, rule: null }
+  }
+  if (recentMatch?.type === 'expense') {
+    return { target: { transactionType: 'expense', category: parseExpenseDescription(recentMatch.description).category } as CategorizationTarget, rule: null }
+  }
+  return { target: { transactionType: 'expense', category: 'essentials' } as CategorizationTarget, rule: null }
 }
 
 export function QuickExpenseEntry() {
   const navigate = useNavigate()
   const addTransaction = useFinanceStore((state) => state.addTransaction)
   const transactions = useFinanceStore((state) => state.transactions)
-  const recentDescriptions = useMemo(
+  const userId = useAuthStore((state) => state.user?.id)
+  const profileId = userId ?? 'guest'
+  const userRules = usePreferencesStore(useShallow((state) => state.categoryRulesByProfile[profileId] ?? []))
+  const saveCategoryRule = usePreferencesStore((state) => state.saveCategoryRule)
+  const moneyInput = useCurrencyInput()
+  const recentTransactions = useMemo(
     () => transactions
-      .filter((transaction) => transaction.type === 'expense')
-      .slice(0, 40)
-      .map((transaction) => transaction.description),
+      .filter((transaction) => transaction.type === 'expense' || transaction.type === 'want')
+      .slice(0, 40),
     [transactions],
   )
   const [entry, setEntry] = useState('')
-  const [category, setCategory] = useState<ExpenseCategory>('essentials')
-  const [categoryWasChanged, setCategoryWasChanged] = useState(false)
+  const [selectedTargetKey, setSelectedTargetKey] = useState('expense:essentials')
+  const [targetWasChanged, setTargetWasChanged] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
   const parsed = useMemo(() => parseQuickEntry(entry), [entry])
-  const suggestedCategory = useMemo(
-    () => suggestCategory(parsed.itemName, recentDescriptions),
-    [parsed.itemName, recentDescriptions],
+  const suggestion = useMemo(
+    () => suggestCategory(parsed.itemName, recentTransactions, userRules),
+    [parsed.itemName, recentTransactions, userRules],
   )
-  const activeCategory = categoryWasChanged ? category : suggestedCategory
-  const activeCategoryLabel = categories.find((item) => item.value === activeCategory)?.label ?? 'Esenciales'
+  const activeTargetKey = targetWasChanged ? selectedTargetKey : targetKey(suggestion.target)
+  const activeTarget = targets.find((item) => item.value === activeTargetKey)?.target ?? suggestion.target
+  const activeCategoryLabel = targets.find((item) => item.value === activeTargetKey)?.label ?? 'Esenciales · Gasto'
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
@@ -79,16 +108,23 @@ export function QuickExpenseEntry() {
 
     setIsSaving(true)
     try {
+      const amountInUsd = moneyInput.toUsd(parsed.amount)
       await addTransaction({
-        amount: parsed.amount,
-        type: 'expense',
-        description: buildExpenseDescription(activeCategory, parsed.itemName, 'checked'),
+        amount: amountInUsd,
+        type: activeTarget.transactionType,
+        description: activeTarget.transactionType === 'want'
+          ? buildWantDescription(activeTarget.category as WantCategory, parsed.itemName, 'checked')
+          : buildExpenseDescription(activeTarget.category as ExpenseCategory, parsed.itemName, 'checked'),
         date: getTodayDateKey(),
       })
-      toast.success(`${parsed.itemName} registrado por ${formatMoney(parsed.amount)}.`)
+      if (targetWasChanged && activeTargetKey !== targetKey(suggestion.target)) {
+        const learnedRule = createLearnedCategorizationRule(parsed.itemName, activeTarget)
+        if (learnedRule) saveCategoryRule(profileId, learnedRule)
+      }
+      toast.success(`${parsed.itemName} registrado por ${formatMoney(amountInUsd)}.`)
       setEntry('')
-      setCategory('essentials')
-      setCategoryWasChanged(false)
+      setSelectedTargetKey('expense:essentials')
+      setTargetWasChanged(false)
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'No se pudo registrar el gasto.')
     } finally {
@@ -115,7 +151,7 @@ export function QuickExpenseEntry() {
                   event.currentTarget.form?.requestSubmit()
                 }
               }}
-              placeholder="Ej. Supermercado 42.50"
+              placeholder={`Ej. Supermercado 42.50 ${moneyInput.currency.code}`}
               autoComplete="off"
               inputMode="text"
               className="h-11 border-0 bg-transparent px-0 text-base text-on-surface shadow-none placeholder:text-muted-gray focus-visible:ring-0"
@@ -125,17 +161,17 @@ export function QuickExpenseEntry() {
 
         <div className="flex items-center gap-2">
           <Select
-            value={activeCategory}
+            value={activeTargetKey}
             onValueChange={(value) => {
-              setCategory(value as ExpenseCategory)
-              setCategoryWasChanged(true)
+              setSelectedTargetKey(value ?? 'expense:essentials')
+              setTargetWasChanged(true)
             }}
           >
             <SelectTrigger aria-label="Categoria del gasto" className="h-10 min-w-36 border-graphite bg-surface-container-low text-on-surface">
               <SelectValue>{activeCategoryLabel}</SelectValue>
             </SelectTrigger>
             <SelectContent className="border-graphite bg-surface">
-              {categories.map((item) => (
+              {targets.map((item) => (
                 <SelectItem key={item.value} value={item.value}>{item.label}</SelectItem>
               ))}
             </SelectContent>
@@ -159,6 +195,11 @@ export function QuickExpenseEntry() {
           {parsed.amount > 0 ? (
             <Badge variant="secondary" className="bg-primary/10 text-primary">
               {formatMoney(parsed.amount)} · {activeCategoryLabel}
+            </Badge>
+          ) : null}
+          {parsed.itemName && suggestion.rule ? (
+            <Badge variant="secondary" className="bg-success/10 text-success">
+              Regla: contiene “{suggestion.rule.pattern}”
             </Badge>
           ) : null}
         </div>

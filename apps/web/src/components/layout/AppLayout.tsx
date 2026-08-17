@@ -41,6 +41,7 @@ import { formatFormulaLabel, usePreferencesStore } from '@/store/preferencesStor
 import { AppTour } from '@/components/onboarding/AppTour'
 import { InstallAppPrompt } from '@/components/onboarding/InstallAppPrompt'
 import { CurrencySwitcher } from '@/components/layout/CurrencySwitcher'
+import { ReceivableDueNotifier } from '@/components/debts/ReceivableDueNotifier'
 
 const navItems = [
   { to: '/', icon: LayoutDashboard, label: 'Dashboard' },
@@ -224,6 +225,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
       className="relative flex min-h-dvh overflow-hidden"
       style={{ background: 'var(--app-shell-background)', backgroundSize: 'var(--app-shell-background-size, auto)' }}
     >
+      <ReceivableDueNotifier />
       {background === 'grid' ? (
         <div className="absolute inset-0 z-0">
           <HexagonBackground
