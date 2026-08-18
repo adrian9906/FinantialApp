@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { BellRing, CalendarClock, CheckCheck, HandCoins, Pencil, Plus, Trash2, UserRound } from 'lucide-react'
 import { getReceivableTotal, type Debt } from '@plata/shared'
 
