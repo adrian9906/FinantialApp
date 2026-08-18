@@ -1,7 +1,8 @@
-import { useEffect, useState } from 'react'
-import { Bell, BellOff, Calendar, Pencil, Plus, Trash2 } from 'lucide-react-native'
+import { useEffect, useMemo, useState } from 'react'
+import { Bell, BellOff, Calendar, HandCoins, Pencil, Plus, Trash2 } from 'lucide-react-native'
 import { Pressable, View } from 'react-native'
 
+import { buildReceivableReminder, isReceivable } from '@plata/shared'
 import { AppFrame } from '../../src/components/app-frame'
 import { Button } from '../../src/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../../src/components/ui/card'
@@ -19,7 +20,12 @@ const CalendarIcon = Calendar as any
 const PencilIcon = Pencil as any
 const PlusIcon = Plus as any
 const Trash2Icon = Trash2 as any
+const HandCoinsIcon = HandCoins as any
 const DAY_IN_MS = 1000 * 60 * 60 * 24
+
+function formatMoney(value: number) {
+  return new Intl.NumberFormat('es-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(value)
+}
 
 function getStartOfTodayMs() {
   const current = new Date()
@@ -29,6 +35,14 @@ function getStartOfTodayMs() {
 
 export default function RemindersScreen() {
   const reminders = useFinanceStore((state) => state.reminders)
+  const debts = useFinanceStore((state) => state.debts)
+  const receivableReminders = useMemo(
+    () => debts
+      .filter((debt) => isReceivable(debt) && !debt.isSettled)
+      .map((debt) => buildReceivableReminder(debt, formatMoney))
+      .sort((a, b) => a.date.localeCompare(b.date)),
+    [debts],
+  )
   const addReminder = useFinanceStore((state) => state.addReminder)
   const updateReminder = useFinanceStore((state) => state.updateReminder)
   const toggleReminder = useFinanceStore((state) => state.toggleReminder)
@@ -101,6 +115,34 @@ export default function RemindersScreen() {
         </Button>
       }
     >
+      {receivableReminders.length > 0 ? (
+        <Card>
+          <CardHeader>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm }}>
+              <HandCoinsIcon size={18} color={palette.primary} />
+              <CardTitle>Dinero que me deben</CardTitle>
+            </View>
+            <CardDescription>Recordatorios de cobro generados desde tus prestamos. Cuando cobres, marca la prestamo como cobrada.</CardDescription>
+          </CardHeader>
+          <CardContent className="gap-3">
+            {receivableReminders.map((reminder) => {
+              const diff = getReminderDiff(reminder.date) ?? 0
+              const isOverdue = diff < 0
+              const isClose = diff >= 0 && diff <= 3
+              return (
+                <View key={reminder.id} style={{ borderRadius: radius.md, borderLeftWidth: 3, borderColor: borderColorForDate(reminder.date), backgroundColor: palette.backgroundAlt, padding: spacing.md, gap: 8 }}>
+                  <Text style={{ color: isOverdue ? palette.danger : palette.text, fontSize: 15, fontWeight: '700' }}>{reminder.title}</Text>
+                  {reminder.description ? <Text style={{ color: palette.textMuted, fontSize: 12 }}>{reminder.description}</Text> : null}
+                  <Text style={{ color: isOverdue ? palette.danger : isClose ? palette.warning : palette.textMuted, fontSize: 12 }}>
+                    {reminder.date} {isOverdue ? '(Vencido)' : isClose ? '(Por cobrar)' : '(Agendado)'}
+                  </Text>
+                </View>
+              )
+            })}
+          </CardContent>
+        </Card>
+      ) : null}
+
       <Card>
         <CardHeader>
           <CardTitle>Activos ({activeReminders.length})</CardTitle>

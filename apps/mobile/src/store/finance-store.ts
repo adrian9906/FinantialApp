@@ -43,8 +43,9 @@ interface FinanceStore extends BootstrapPayload {
   addWishlistItem: (payload: Omit<WishlistItem, 'id'>) => Promise<void>
   updateWishlistItem: (id: string, payload: Partial<Omit<WishlistItem, 'id'>>) => Promise<void>
   removeWishlistItem: (id: string) => Promise<void>
-  addDebt: (payload: DebtInput) => Promise<void>
+addDebt: (payload: DebtInput) => Promise<void>
   updateDebt: (id: string, payload: Partial<Omit<Debt, 'id'>>) => Promise<void>
+  payDebt: (id: string, amount: number) => Promise<void>
   removeDebt: (id: string) => Promise<void>
   addEvent: (payload: Omit<AppEvent, 'id'>) => Promise<void>
   updateEvent: (id: string, payload: Partial<Omit<AppEvent, 'id'>>) => Promise<void>
@@ -612,6 +613,43 @@ export const useFinanceStore = create<FinanceStore>()((set, get) => ({
     const token = getTokenOrThrow('Necesitas iniciar sesion para eliminar deudas en la nube.')
     await requestJson<void>(`/debts/${id}`, { method: 'DELETE', token })
     const snapshot = { ...state, debts: state.debts.filter((entry) => entry.id !== id) }
+    await persistFinanceSnapshotForActiveKey(activeKey, snapshot)
+    set(snapshot)
+  },
+  payDebt: async (id, amount) => {
+    if (!(amount > 0)) return
+    const activeKey = getActiveKey()
+    const state = get()
+
+    if (activeKey === 'guest') {
+      const snapshot = {
+        ...state,
+        debts: state.debts.map((entry) => {
+          if (entry.id !== id) return entry
+          const nextPaidAmount = Math.min(entry.amount, entry.paidAmount + amount)
+          const nextRemainingAmount = Math.max(0, entry.amount - nextPaidAmount)
+          return {
+            ...entry,
+            paidAmount: nextPaidAmount,
+            remainingAmount: nextRemainingAmount,
+            progress: entry.amount > 0 ? Math.min(100, Math.round((nextPaidAmount / entry.amount) * 100)) : 100,
+            isSettled: nextRemainingAmount === 0,
+            payments: [...(entry.payments ?? []), { amount, date: new Date().toISOString().slice(0, 10), createdAt: new Date().toISOString() }],
+          }
+        }),
+      }
+      await persistFinanceSnapshotForActiveKey(activeKey, snapshot)
+      set(snapshot)
+      return
+    }
+
+    const token = getTokenOrThrow('Necesitas iniciar sesion para registrar cobros en la nube.')
+    const updated = await requestJson<Debt>(`/debts/${id}/pay`, {
+      method: 'PATCH',
+      token,
+      body: JSON.stringify({ amount }),
+    })
+    const snapshot = { ...state, debts: state.debts.map((entry) => (entry.id === id ? updated : entry)) }
     await persistFinanceSnapshotForActiveKey(activeKey, snapshot)
     set(snapshot)
   },
