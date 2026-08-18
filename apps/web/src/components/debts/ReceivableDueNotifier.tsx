@@ -1,17 +1,20 @@
 import { useEffect, useMemo } from 'react'
-import { buildReceivableReminder, isReceivable } from '@plata/shared'
+import { buildReceivableReminder } from '@plata/shared'
 import { toast } from 'sonner'
 
 import { formatMoney } from '@/lib/currency'
 import { getTodayDateKey } from '@/lib/date'
-import { useFinanceStore } from '@/store/financeStore'
+import { useReceivablesStore } from '@/store/receivablesStore'
 
 export function ReceivableDueNotifier() {
-  const debts = useFinanceStore((state) => state.debts)
+  const hydrate = useReceivablesStore((state) => state.hydrate)
+  const receivables = useReceivablesStore((state) => state.receivables)
   const dueToday = useMemo(() => {
     const today = getTodayDateKey()
-    return debts.filter((debt) => isReceivable(debt) && !debt.isSettled && debt.endDate === today)
-  }, [debts])
+    return receivables.filter((debt) => !debt.isSettled && debt.endDate === today)
+  }, [receivables])
+
+  useEffect(() => { hydrate() }, [hydrate])
 
   useEffect(() => {
     for (const debt of dueToday) {

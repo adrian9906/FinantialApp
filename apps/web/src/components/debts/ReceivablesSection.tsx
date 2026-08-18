@@ -1,6 +1,6 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { BellRing, CalendarClock, CheckCheck, HandCoins, Pencil, Plus, Trash2, UserRound } from 'lucide-react'
-import { getReceivableTotal, isReceivable, type Debt } from '@plata/shared'
+import { getReceivableTotal, type Debt } from '@plata/shared'
 
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -11,7 +11,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { formatMoney, useCurrencyInput } from '@/lib/currency'
 import { getTodayDateKey } from '@/lib/date'
-import { useFinanceStore } from '@/store/financeStore'
+import { useReceivablesStore } from '@/store/receivablesStore'
 
 interface ReceivableFormState {
   counterparty: string
@@ -42,13 +42,15 @@ function getDueStatus(debt: Debt) {
 }
 
 export function ReceivablesSection() {
-  const debts = useFinanceStore((state) => state.debts)
-  const addDebt = useFinanceStore((state) => state.addDebt)
-  const updateDebt = useFinanceStore((state) => state.updateDebt)
-  const payDebt = useFinanceStore((state) => state.payDebt)
-  const removeDebt = useFinanceStore((state) => state.removeDebt)
+  const hydrate = useReceivablesStore((state) => state.hydrate)
+  const receivables = useReceivablesStore((state) => state.receivables)
+  const addReceivable = useReceivablesStore((state) => state.addReceivable)
+  const updateReceivable = useReceivablesStore((state) => state.updateReceivable)
+  const markCollected = useReceivablesStore((state) => state.markCollected)
+  const removeReceivable = useReceivablesStore((state) => state.removeReceivable)
   const moneyInput = useCurrencyInput()
-  const receivables = useMemo(() => debts.filter(isReceivable), [debts])
+
+  useEffect(() => { hydrate() }, [hydrate])
   const [open, setOpen] = useState(false)
   const [editId, setEditId] = useState<string | null>(null)
   const [form, setForm] = useState<ReceivableFormState>(createEmptyForm)
@@ -96,7 +98,6 @@ export function ReceivablesSection() {
     }
 
     const payload = {
-      direction: 'receivable' as const,
       counterparty: form.counterparty.trim(),
       history: form.history.trim(),
       amount,
@@ -107,8 +108,8 @@ export function ReceivablesSection() {
 
     setIsSaving(true)
     try {
-      if (editId) await updateDebt(editId, payload)
-      else await addDebt(payload)
+      if (editId) updateReceivable(editId, payload)
+      else addReceivable(payload)
       setOpen(false)
       setEditId(null)
       setForm(createEmptyForm())
@@ -119,11 +120,11 @@ export function ReceivablesSection() {
     }
   }
 
-  async function markCollected(debt: Debt) {
+  function handleMarkCollected(debt: Debt) {
     if (collectingId) return
     setCollectingId(debt.id)
     try {
-      await payDebt(debt.id, debt.remainingAmount)
+      markCollected(debt.id)
     } finally {
       setCollectingId(null)
     }
@@ -192,12 +193,12 @@ export function ReceivablesSection() {
                   </div>
                   <div className="flex flex-wrap gap-2">
                     {!debt.isSettled ? (
-                      <Button loading={collectingId === debt.id} variant="secondary" onClick={() => void markCollected(debt)} className="bg-success/10 text-success hover:bg-success/15">
+                      <Button loading={collectingId === debt.id} variant="secondary" onClick={() => handleMarkCollected(debt)} className="bg-success/10 text-success hover:bg-success/15">
                         <CheckCheck className="size-4" /> Marcar cobrada
                       </Button>
                     ) : null}
                     <Button variant="ghost" size="icon" aria-label={`Editar préstamo de ${debt.counterparty}`} onClick={() => openForm(debt)}><Pencil /></Button>
-                    <Button variant="ghost" size="icon" aria-label={`Eliminar préstamo de ${debt.counterparty}`} className="text-muted-gray hover:text-error" onClick={() => void removeDebt(debt.id)}><Trash2 /></Button>
+                    <Button variant="ghost" size="icon" aria-label={`Eliminar préstamo de ${debt.counterparty}`} className="text-muted-gray hover:text-error" onClick={() => removeReceivable(debt.id)}><Trash2 /></Button>
                   </div>
                 </div>
               </article>
