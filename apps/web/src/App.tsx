@@ -102,7 +102,7 @@ function ProtectedApp() {
   useEffect(() => {
     if (authMode !== 'authenticated' || !user) return
 
-    persistCachedBootstrap(user.id, {
+    void persistCachedBootstrap(user.id, {
       salaries,
       transactions,
       debts,

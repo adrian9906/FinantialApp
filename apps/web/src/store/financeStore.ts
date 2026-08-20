@@ -258,7 +258,7 @@ function persistLocalSnapshot(snapshot: BootstrapPayload, dirty = false) {
   const userId = getAuthenticatedUserId()
   if (!userId) return
 
-  persistCachedBootstrap(userId, snapshot)
+  void persistCachedBootstrap(userId, snapshot)
   markPendingSync(userId, dirty)
 }
 
@@ -310,7 +310,7 @@ export const useFinanceStore = create<FinanceStore>()((set, get) => ({
     const userId = getAuthenticatedUserId()
     if (!userId) return
 
-    const cachedSnapshot = normalizeBootstrapSnapshot(readCachedBootstrap(userId))
+    const cachedSnapshot = normalizeBootstrapSnapshot(await readCachedBootstrap(userId))
 
     if (!isOnline()) {
       const salaries = carrySalaryForwardToMonth(
@@ -319,7 +319,7 @@ export const useFinanceStore = create<FinanceStore>()((set, get) => ({
         () => makeId('salary'),
       )
       const nextSnapshot = { ...cachedSnapshot, salaries }
-      persistCachedBootstrap(userId, nextSnapshot)
+      await persistCachedBootstrap(userId, nextSnapshot)
       markPendingSync(userId, salaries.length !== cachedSnapshot.salaries.length || hasPendingSync(userId))
       set({
         ...nextSnapshot,
@@ -331,7 +331,7 @@ export const useFinanceStore = create<FinanceStore>()((set, get) => ({
 
     try {
       const payload = await requestJson<BootstrapPayload>('/bootstrap')
-      persistCachedBootstrap(userId, payload)
+      await persistCachedBootstrap(userId, payload)
       markPendingSync(userId, false)
       set({
         ...normalizeBootstrapSnapshot(payload),
@@ -368,7 +368,7 @@ export const useFinanceStore = create<FinanceStore>()((set, get) => ({
       body: JSON.stringify(snapshot),
     })
 
-    persistCachedBootstrap(userId, synced)
+    await persistCachedBootstrap(userId, synced)
     markPendingSync(userId, false)
     set({
       ...normalizeBootstrapSnapshot(synced),

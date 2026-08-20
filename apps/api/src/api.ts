@@ -19,6 +19,23 @@ import { getPrisma } from './prisma.js'
 
 type JsonRecord = Record<string, unknown>
 
+function normalizeOrigin(value: string) {
+  return value.trim().replace(/\/+$/, '')
+}
+
+function getAllowedOrigins() {
+  const rawOrigins = [
+    process.env.APP_URL,
+    process.env.CORS_ALLOWED_ORIGINS,
+  ]
+    .filter((value): value is string => Boolean(value?.trim()))
+    .flatMap((value) => value.split(','))
+    .map(normalizeOrigin)
+    .filter(Boolean)
+
+  return new Set(rawOrigins)
+}
+
 function sendJson(res: ServerResponse, status: number, payload: unknown) {
   res.statusCode = status
   res.setHeader('Content-Type', 'application/json; charset=utf-8')
@@ -27,12 +44,23 @@ function sendJson(res: ServerResponse, status: number, payload: unknown) {
 
 function applyCorsHeaders(req: IncomingMessage, res: ServerResponse) {
   const requestOrigin = req.headers.origin
-  const configuredOrigin = process.env.APP_URL?.trim()
-  const allowOrigin = configuredOrigin || requestOrigin || '*'
+  const normalizedRequestOrigin = requestOrigin ? normalizeOrigin(requestOrigin) : null
+  const allowedOrigins = getAllowedOrigins()
+  const isAllowedOrigin = normalizedRequestOrigin
+    ? allowedOrigins.size === 0 || allowedOrigins.has(normalizedRequestOrigin)
+    : false
 
-  res.setHeader('Access-Control-Allow-Origin', allowOrigin)
+  if (requestOrigin && isAllowedOrigin) {
+    res.setHeader('Access-Control-Allow-Origin', requestOrigin)
+  } else if (!requestOrigin && allowedOrigins.size === 1) {
+    res.setHeader('Access-Control-Allow-Origin', Array.from(allowedOrigins)[0])
+  }
+
   res.setHeader('Access-Control-Allow-Credentials', 'true')
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization')
+  res.setHeader(
+    'Access-Control-Allow-Headers',
+    req.headers['access-control-request-headers']?.toString() || 'Content-Type, Authorization',
+  )
   res.setHeader('Access-Control-Allow-Methods', 'GET,POST,PUT,PATCH,DELETE,OPTIONS')
   res.setHeader('Vary', 'Origin')
 }

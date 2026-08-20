@@ -151,7 +151,7 @@ export const useAuthStore = create<AuthStore>()((set) => ({
     persistGuestMode(false)
     clearCachedAuthUser()
     if (user) {
-      clearCachedBootstrap(user.id)
+      void clearCachedBootstrap(user.id)
     }
     set({
       authMode: 'anonymous',
