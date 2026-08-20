@@ -18,6 +18,7 @@ import { DashboardWidgetPanel } from '@/components/dashboard/DashboardWidgetPane
 import { buildMonthlyForecast, type BudgetForecast } from '@/lib/monthlyForecast'
 import { convertFromUsd, formatMoney } from '@/lib/currency'
 import { downloadMonthlyPdfReport } from '@/lib/monthlyPdfReport'
+import { buildUnnecessarySpendingAlerts, buildUnnecessarySpendingInsights } from '@/lib/unnecessary-spending'
 import { useAuthStore } from '@/store/authStore'
 
 function getScoreToneClasses(status: ReturnType<typeof buildFinancialScore>['status']) {
@@ -27,7 +28,7 @@ function getScoreToneClasses(status: ReturnType<typeof buildFinancialScore>['sta
   return 'border-rose-500/30 bg-rose-500/10 text-rose-200'
 }
 
-function getAlertToneClasses(level: ReturnType<typeof buildSmartAlerts>[number]['level']) {
+function getAlertToneClasses(level: 'critical' | 'warning' | 'info' | 'success') {
   if (level === 'success') return 'border-emerald-500/25 bg-emerald-500/10'
   if (level === 'warning') return 'border-amber-500/25 bg-amber-500/10'
   if (level === 'critical') return 'border-rose-500/25 bg-rose-500/10'
@@ -114,6 +115,26 @@ export default function Dashboard() {
     () => buildSmartAlerts({ overview, debts: payableDebts, reminders: effectiveReminders, wishlist }),
     [effectiveReminders, overview, payableDebts, wishlist],
   )
+  const currentMonthKey = new Date().toISOString().slice(0, 7)
+  const unnecessaryInsights = useMemo(
+    () => buildUnnecessarySpendingInsights(transactions, currentMonthKey),
+    [currentMonthKey, transactions],
+  )
+  const unnecessaryAlerts = useMemo(
+    () => buildUnnecessarySpendingAlerts(unnecessaryInsights).map((alert) => ({
+      id: alert.id,
+      level: alert.tone === 'critical' ? 'critical' : alert.tone === 'warning' ? 'warning' : alert.tone === 'success' ? 'success' : 'info',
+      title: alert.title,
+      description: alert.description,
+      actionLabel: 'Ver detalle',
+      href: '/reports',
+    })),
+    [unnecessaryInsights],
+  )
+  const dashboardAlerts = useMemo(
+    () => [...unnecessaryAlerts, ...smartAlerts].slice(0, 5),
+    [smartAlerts, unnecessaryAlerts],
+  )
   const recurringPreview = smartPlanning.recurringItems.slice(0, 6)
   const latestHistory = smartPlanning.latestHistory
   const forecast = useMemo(() => {
@@ -155,7 +176,7 @@ export default function Dashboard() {
       setIsDownloadingPdf(false)
     }
   }
-  const primaryAlert = smartAlerts[0]
+  const primaryAlert = dashboardAlerts[0]
   const decisionTitle = overview.totalSalary <= 0
     ? 'Registra tu salario para calcular el mes'
     : forecast.projectedBalance < 0
@@ -325,6 +346,35 @@ export default function Dashboard() {
             </div>
 
             <QuickExpenseEntry />
+
+            <div className="grid gap-3 lg:grid-cols-[0.95fr_1.05fr]">
+              <div className="rounded-2xl border border-amber-500/20 bg-amber-500/8 p-4">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <p className="text-[11px] uppercase tracking-[0.2em] text-amber-200">Gasto innecesario</p>
+                    <p className="mt-2 text-2xl font-semibold tabular-nums text-on-surface">{formatMoney(unnecessaryInsights.unnecessaryTotal)}</p>
+                  </div>
+                  <Badge variant="secondary" className="bg-black/15 text-amber-100">
+                    {unnecessaryInsights.unnecessaryCount} marca(s)
+                  </Badge>
+                </div>
+                <p className="mt-2 text-xs leading-6 text-muted-gray">
+                  Si no hubieras hecho esos gastos este mes, tendrías {formatMoney(unnecessaryInsights.unnecessaryTotal)} extra para dejar libre o mandar a ahorro.
+                </p>
+              </div>
+              <div className="rounded-2xl border border-graphite bg-surface-container-low p-4">
+                <p className="text-[11px] uppercase tracking-[0.2em] text-medium-gray">Alerta útil</p>
+                <p className="mt-2 text-sm font-semibold text-on-surface">
+                  {unnecessaryAlerts[0]?.title ?? 'Todavía no detectamos fugas evitables este mes.'}
+                </p>
+                <p className="mt-2 text-xs leading-6 text-muted-gray">
+                  {unnecessaryAlerts[0]?.description ?? 'Marca como innecesario cualquier gasto que sientas que pudiste evitar para ver cuánto podrías rescatar.'}
+                </p>
+                <Button variant="ghost" size="sm" onClick={() => navigate('/reports')} className="mt-2 h-7 px-0 text-primary hover:bg-transparent">
+                  Analizar en informes <ArrowRight className="size-3.5" />
+                </Button>
+              </div>
+            </div>
           </CardContent>
         </Card>
 
@@ -488,7 +538,7 @@ export default function Dashboard() {
             </div>
           </CardHeader>
           <CardContent className="space-y-3">
-            {smartAlerts.length === 0 ? (
+            {dashboardAlerts.length === 0 ? (
               <div className="rounded-2xl border border-dashed border-graphite bg-surface-container-low p-6 text-center">
                 <div className="mx-auto flex size-12 items-center justify-center rounded-2xl bg-emerald-500/10 text-emerald-300">
                   <CheckCircle2 className="size-5" />
@@ -499,10 +549,10 @@ export default function Dashboard() {
                 </p>
               </div>
             ) : (
-              smartAlerts.map((alert) => (
+              dashboardAlerts.map((alert) => (
                 <div
                   key={alert.id}
-                  className={`rounded-2xl border p-4 transition-all ${getAlertToneClasses(alert.level)}`}
+                  className={`rounded-2xl border p-4 transition-all ${getAlertToneClasses(alert.level as 'critical' | 'warning' | 'info' | 'success')}`}
                 >
                   <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                     <div className="min-w-0">

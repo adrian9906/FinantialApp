@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import { buildExpenseTransferSavingDescription, createLearnedCategorizationRule, findCategorizationRule, type ReceiptOCRLineItem, type ReceiptOCRParsedDraft } from '@plata/shared'
-import { ArrowUpRight, Dumbbell, HeartPulse, House, Package, Pencil, Plus, ShoppingBasket, Trash2, Wifi, type LucideIcon } from 'lucide-react'
+import { ArrowUpRight, Check, Dumbbell, HeartPulse, House, Package, Pencil, Plus, ShoppingBasket, Trash2, Wifi, type LucideIcon } from 'lucide-react'
 import { useFinanceStore } from '@/store/financeStore'
 import { buildExpenseDescription, createCustomExpenseCategory, getExpenseCategoryLabel, getPlannedExpenseTotal, parseExpenseDescription, type ExpenseBuiltInCategory, type ExpenseCategory } from '@/lib/expense-utils'
 import { useMonthlyOverview } from '@/lib/useMonthlyOverview'
@@ -48,6 +48,7 @@ interface ExpenseViewItem {
   itemName: string
   category: ExpenseCategory
   status: 'pending' | 'checked'
+  unnecessary: boolean
 }
 
 type ExpenseCategoryMeta = { label: string; hint: string; icon: LucideIcon; accent: string; badge: string; stroke: string }
@@ -318,11 +319,14 @@ export default function Expenses() {
     const currentStatus = editId
       ? expenseItems.find((item) => item.id === editId)?.status ?? 'pending'
       : 'pending'
+    const currentUnnecessary = editId
+      ? expenseItems.find((item) => item.id === editId)?.unnecessary ?? false
+      : false
 
     const data = {
       amount: nextAmount,
       type: 'expense' as const,
-      description: buildExpenseDescription(form.category, form.itemName, currentStatus),
+      description: buildExpenseDescription(form.category, form.itemName, currentStatus, currentUnnecessary),
       date: form.date || new Date().toISOString().slice(0, 10),
     }
 
@@ -361,6 +365,7 @@ export default function Expenses() {
         itemName: parsed.itemName,
         category: parsed.category,
         status: parsed.status,
+        unnecessary: parsed.unnecessary,
       }
     })
   const historySuggestions = useMemo(
@@ -469,7 +474,16 @@ export default function Expenses() {
       amount: item.amount,
       type: 'expense',
       date: item.date,
-      description: buildExpenseDescription(item.category, item.itemName, nextStatus),
+      description: buildExpenseDescription(item.category, item.itemName, nextStatus, item.unnecessary),
+    })
+  }
+
+  async function toggleUnnecessary(item: ExpenseViewItem) {
+    await updateTransaction(item.id, {
+      amount: item.amount,
+      type: 'expense',
+      date: item.date,
+      description: buildExpenseDescription(item.category, item.itemName, item.status, !item.unnecessary),
     })
   }
 
@@ -663,6 +677,21 @@ export default function Expenses() {
                               </div>
 
                               <div className="min-w-0 flex-1">
+                                <div className="mb-3 flex justify-end">
+                                  <button
+                                    type="button"
+                                    onClick={() => void toggleUnnecessary(item)}
+                                    className={`inline-flex items-center gap-2 rounded-full border px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.16em] transition-all ${
+                                      item.unnecessary
+                                        ? 'border-emerald-500/35 bg-emerald-500/12 text-emerald-200'
+                                        : 'border-amber-500/25 bg-amber-500/10 text-amber-200 hover:bg-amber-500/16'
+                                    }`}
+                                  >
+                                    {item.unnecessary ? <Check className="size-3.5" /> : <Plus className="size-3.5" />}
+                                    {item.unnecessary ? 'Marcado' : 'Innecesario'}
+                                  </button>
+                                </div>
+
                                 <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between sm:gap-3">
                                   <div>
                                     <p className={`text-sm font-medium ${isChecked ? 'text-muted-gray line-through' : 'text-on-surface'}`}>

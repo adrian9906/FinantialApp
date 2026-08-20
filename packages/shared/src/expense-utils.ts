@@ -8,12 +8,14 @@ export interface ParsedExpenseDescription {
   category: ExpenseCategory
   itemName: string
   status: ExpenseStatus
+  unnecessary: boolean
 }
 
 const DEFAULT_EXPENSE: ParsedExpenseDescription = {
   category: 'essentials',
   itemName: 'Gasto esencial',
   status: 'checked',
+  unnecessary: false,
 }
 
 export function parseExpenseDescription(description?: string): ParsedExpenseDescription {
@@ -24,9 +26,20 @@ export function parseExpenseDescription(description?: string): ParsedExpenseDesc
   if (segments.length >= 3) {
     const [maybeCategory, maybeStatus, ...rest] = segments
     if (isExpenseCategory(maybeCategory) && isExpenseStatus(maybeStatus)) {
+      if (rest.length >= 2 && isUnnecessaryFlag(rest[0])) {
+        const [unnecessaryFlag, ...nameParts] = rest
+        return {
+          category: maybeCategory,
+          status: maybeStatus,
+          unnecessary: unnecessaryFlag === '1',
+          itemName: nameParts.join('::').trim() || DEFAULT_EXPENSE.itemName,
+        }
+      }
+
       return {
         category: maybeCategory,
         status: maybeStatus,
+        unnecessary: false,
         itemName: rest.join('::').trim() || DEFAULT_EXPENSE.itemName,
       }
     }
@@ -38,6 +51,7 @@ export function parseExpenseDescription(description?: string): ParsedExpenseDesc
       return {
         category: maybeCategory,
         status: 'checked',
+        unnecessary: false,
         itemName: rest.join('::').trim() || DEFAULT_EXPENSE.itemName,
       }
     }
@@ -47,11 +61,17 @@ export function parseExpenseDescription(description?: string): ParsedExpenseDesc
     category: DEFAULT_EXPENSE.category,
     itemName: description,
     status: DEFAULT_EXPENSE.status,
+    unnecessary: false,
   }
 }
 
-export function buildExpenseDescription(category: ExpenseCategory, itemName: string, status: ExpenseStatus) {
-  return `${category}::${status}::${itemName.trim()}`
+export function buildExpenseDescription(
+  category: ExpenseCategory,
+  itemName: string,
+  status: ExpenseStatus,
+  unnecessary = false,
+) {
+  return `${category}::${status}::${unnecessary ? '1' : '0'}::${itemName.trim()}`
 }
 
 export function createCustomExpenseCategory(label: string): ExpenseCategory | null {
@@ -90,4 +110,8 @@ function isExpenseCategory(value: string): value is ExpenseCategory {
 
 function isExpenseStatus(value: string): value is ExpenseStatus {
   return value === 'pending' || value === 'checked'
+}
+
+function isUnnecessaryFlag(value: string) {
+  return value === '0' || value === '1'
 }

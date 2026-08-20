@@ -34,6 +34,7 @@ import {
   getPreviousMonthKey,
   getTrendDirection,
 } from '@/lib/reporting'
+import { buildUnnecessarySpendingInsights } from '@/lib/unnecessary-spending'
 import { useFinanceStore } from '@/store/financeStore'
 import { usePreferencesStore } from '@/store/preferencesStore'
 
@@ -119,6 +120,7 @@ export default function Reports() {
     const previousSnapshot = getLatestCloseSnapshot(monthlyPlanningHistory, previousMonthKey)
     const currentRankings = buildMonthlyRankings(transactions, currentMonthKey)
     const previousRankings = buildMonthlyRankings(transactions, previousMonthKey)
+    const unnecessaryInsights = buildUnnecessarySpendingInsights(transactions, currentMonthKey)
     const currentTimeline = buildFinancialTimeline({
       monthKey: currentMonthKey,
       salaries,
@@ -257,6 +259,14 @@ export default function Reports() {
       })
     }
 
+    if (unnecessaryInsights.unnecessaryTotal > 0) {
+      findings.push({
+        title: 'Ya detectaste dinero recuperable en gastos innecesarios',
+        body: `Marcaste ${unnecessaryInsights.unnecessaryCount} gasto(s) evitables por ${formatCurrency(unnecessaryInsights.unnecessaryTotal)}. Si ese dinero hubiera ido a ahorro, tu cierre del mes sería más fuerte.`,
+        tone: 'warn',
+      })
+    }
+
     const trendSeries = monthlySummaries
       .filter((entry) => entry.month === previousMonthKey || entry.month === currentMonthKey)
       .sort((left, right) => left.month.localeCompare(right.month))
@@ -297,6 +307,7 @@ export default function Reports() {
       previousSnapshot,
       currentRankings,
       previousRankings,
+      unnecessaryInsights,
       currentTimeline,
       trendSeries,
       trendSignals,
@@ -413,6 +424,94 @@ export default function Reports() {
             </Card>
           )
         })}
+      </section>
+
+      <section className="grid gap-4 xl:grid-cols-[0.95fr_1.05fr]">
+        <Card className="border-amber-500/20 bg-surface shadow-vault">
+          <CardHeader>
+            <CardTitle className="text-on-surface">Ahorro potencial rescatable</CardTitle>
+            <CardDescription className="text-muted-gray">
+              Simulación directa de cuánto dinero pudo quedarse contigo en vez de salir en compras evitables.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="grid gap-3 sm:grid-cols-3">
+              <div className="rounded-2xl border border-graphite bg-abyss/85 p-4">
+                <p className="text-[10px] uppercase tracking-[0.16em] text-medium-gray">Marcado innecesario</p>
+                <p className="mt-2 text-2xl font-semibold text-on-surface">{formatCurrency(report.unnecessaryInsights.unnecessaryTotal)}</p>
+              </div>
+              <div className="rounded-2xl border border-graphite bg-abyss/85 p-4">
+                <p className="text-[10px] uppercase tracking-[0.16em] text-medium-gray">Gastos marcados</p>
+                <p className="mt-2 text-2xl font-semibold text-on-surface">{report.unnecessaryInsights.unnecessaryCount}</p>
+              </div>
+              <div className="rounded-2xl border border-graphite bg-abyss/85 p-4">
+                <p className="text-[10px] uppercase tracking-[0.16em] text-medium-gray">Ahorro simulado</p>
+                <p className="mt-2 text-2xl font-semibold text-emerald-200">
+                  {formatCurrency((report.currentSummary?.savings ?? 0) + report.unnecessaryInsights.unnecessaryTotal)}
+                </p>
+              </div>
+            </div>
+
+            <div className="rounded-2xl border border-amber-500/20 bg-amber-500/8 p-4">
+              <p className="text-sm font-semibold text-on-surface">¿Qué significa esto?</p>
+              <p className="mt-2 text-sm leading-6 text-muted-gray">
+                Si los {formatCurrency(report.unnecessaryInsights.unnecessaryTotal)} que marcaste como innecesarios no hubieran salido de tu bolsillo y en cambio los hubieras pasado a ahorro, cerrarías el mes con un ahorro simulado de {formatCurrency((report.currentSummary?.savings ?? 0) + report.unnecessaryInsights.unnecessaryTotal)}.
+              </p>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="border-graphite bg-surface shadow-vault">
+          <CardHeader>
+            <CardTitle className="text-on-surface">Fugas detectadas</CardTitle>
+            <CardDescription className="text-muted-gray">
+              Ranking de las salidas de dinero evitables que más pesan en el mes actual.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="grid gap-4 md:grid-cols-2">
+            <div className="space-y-3">
+              <p className="text-xs uppercase tracking-[0.2em] text-medium-gray">Por categoría</p>
+              {report.unnecessaryInsights.topCategories.length > 0 ? report.unnecessaryInsights.topCategories.map((entry, index) => (
+                <div key={entry.label} className="rounded-2xl border border-graphite bg-abyss/85 p-4">
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <p className="text-sm font-semibold text-on-surface">{index + 1}. {entry.label}</p>
+                      <p className="mt-1 text-xs text-muted-gray">{entry.count} gasto(s) marcados</p>
+                    </div>
+                    <Badge variant="secondary" className="bg-amber-500/12 text-amber-200">
+                      {formatCurrency(entry.totalAmount)}
+                    </Badge>
+                  </div>
+                </div>
+              )) : (
+                <div className="rounded-2xl border border-dashed border-graphite bg-abyss/60 p-4 text-sm text-muted-gray">
+                  Aún no has marcado gastos innecesarios en este mes.
+                </div>
+              )}
+            </div>
+
+            <div className="space-y-3">
+              <p className="text-xs uppercase tracking-[0.2em] text-medium-gray">Por producto</p>
+              {report.unnecessaryInsights.topProducts.length > 0 ? report.unnecessaryInsights.topProducts.map((entry, index) => (
+                <div key={entry.label} className="rounded-2xl border border-graphite bg-abyss/85 p-4">
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <p className="text-sm font-semibold text-on-surface">{index + 1}. {entry.label}</p>
+                      <p className="mt-1 text-xs text-muted-gray">{entry.count} repetición(es)</p>
+                    </div>
+                    <Badge variant="secondary" className="bg-rose-500/12 text-rose-200">
+                      {formatCurrency(entry.totalAmount)}
+                    </Badge>
+                  </div>
+                </div>
+              )) : (
+                <div className="rounded-2xl border border-dashed border-graphite bg-abyss/60 p-4 text-sm text-muted-gray">
+                  Cuando marques fugas evitables, aquí verás cuáles son las que más dinero se están tragando.
+                </div>
+              )}
+            </div>
+          </CardContent>
+        </Card>
       </section>
 
       <SpendingHistory
