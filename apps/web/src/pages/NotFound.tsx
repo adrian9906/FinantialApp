@@ -3,8 +3,9 @@ import { Link, useLocation } from 'react-router-dom'
 
 import { AppIcon } from '@/components/icons/AppIcon'
 import { Badge } from '@/components/ui/badge'
-import { Button } from '@/components/ui/button'
+import { buttonVariants } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
+import { cn } from '@/lib/utils'
 
 const suggestedLinks = [
   { to: '/', label: 'Volver al dashboard', icon: 'dashboard' as const },
@@ -25,7 +26,7 @@ export default function NotFound() {
         <div className="relative z-10 grid gap-6 px-6 py-8 md:px-10 md:py-10 xl:grid-cols-[1.2fr_0.8fr]">
           <div className="space-y-6">
             <Badge variant="secondary" className="w-fit border-primary/20 bg-primary/10 text-primary">
-              <AppIcon name="alert-circle" className="size-3.5" />
+              <AppIcon name="close" className="size-3.5" />
               Error 404
             </Badge>
 
@@ -47,18 +48,27 @@ export default function NotFound() {
             </div>
 
             <div className="flex flex-wrap gap-3">
-              <Button asChild className="bg-primary-container text-white shadow-vault hover:brightness-110">
-                <Link to="/">
-                  <AppIcon name="dashboard" className="size-4" />
-                  Ir al dashboard
-                </Link>
-              </Button>
-              <Button asChild variant="outline" className="border-graphite bg-surface-container-low text-on-surface hover:bg-surface-container">
-                <Link to="/reports">
-                  <AppIcon name="reports" className="size-4" />
-                  Ver informes
-                </Link>
-              </Button>
+              <Link
+                to="/"
+                className={cn(
+                  buttonVariants({ className: 'bg-primary-container text-white shadow-vault hover:brightness-110' }),
+                )}
+              >
+                <AppIcon name="dashboard" className="size-4" />
+                Ir al dashboard
+              </Link>
+              <Link
+                to="/reports"
+                className={cn(
+                  buttonVariants({
+                    variant: 'outline',
+                    className: 'border-graphite bg-surface-container-low text-on-surface hover:bg-surface-container',
+                  }),
+                )}
+              >
+                <AppIcon name="reports" className="size-4" />
+                Ver informes
+              </Link>
             </div>
           </div>
 

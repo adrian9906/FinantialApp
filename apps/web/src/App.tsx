@@ -151,18 +151,18 @@ function ProtectedApp() {
   return (
     <AppLayout>
       <Routes>
-        <Route path="/" element={<Dashboard />} />
-        <Route path="/salary" element={<Salary />} />
-        <Route path="/expenses" element={<Expenses />} />
-        <Route path="/wants" element={<Wants />} />
-        <Route path="/savings" element={<Savings />} />
-        <Route path="/debts" element={<Debts />} />
-        <Route path="/wishlist" element={<Wishlist />} />
-        <Route path="/events" element={<Events />} />
-        <Route path="/projections" element={<Projections />} />
-        <Route path="/reminders" element={<Reminders />} />
-        <Route path="/reports" element={<Reports />} />
-        <Route path="/settings" element={<Settings />} />
+        <Route index element={<Dashboard />} />
+        <Route path="salary" element={<Salary />} />
+        <Route path="expenses" element={<Expenses />} />
+        <Route path="wants" element={<Wants />} />
+        <Route path="savings" element={<Savings />} />
+        <Route path="debts" element={<Debts />} />
+        <Route path="wishlist" element={<Wishlist />} />
+        <Route path="events" element={<Events />} />
+        <Route path="projections" element={<Projections />} />
+        <Route path="reminders" element={<Reminders />} />
+        <Route path="reports" element={<Reports />} />
+        <Route path="settings" element={<Settings />} />
         <Route path="*" element={<NotFound />} />
       </Routes>
     </AppLayout>
