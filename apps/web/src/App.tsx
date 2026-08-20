@@ -14,6 +14,7 @@ import Projections from '@/pages/Projections'
 import Reminders from '@/pages/Reminders'
 import Settings from '@/pages/Settings'
 import Reports from '@/pages/Reports'
+import NotFound from '@/pages/NotFound'
 import { useEffect } from 'react'
 import { useFinanceStore } from '@/store/financeStore'
 import { useAuthStore } from '@/store/authStore'
@@ -162,6 +163,7 @@ function ProtectedApp() {
         <Route path="/reminders" element={<Reminders />} />
         <Route path="/reports" element={<Reports />} />
         <Route path="/settings" element={<Settings />} />
+        <Route path="*" element={<NotFound />} />
       </Routes>
     </AppLayout>
   )
