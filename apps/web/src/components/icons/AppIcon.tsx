@@ -290,5 +290,5 @@ export function AppIcon({
   }
 
   const IconComponent = lucideIcons[name]
-  return <IconComponent className={className} size={size} strokeWidth={strokeWidth} title={title} />
+  return <IconComponent className={className} size={size} strokeWidth={strokeWidth} aria-hidden={title ? undefined : true} />
 }

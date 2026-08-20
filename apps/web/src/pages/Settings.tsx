@@ -40,7 +40,6 @@ import {
   type AppBackground,
   type AppIconPack,
   type AppTheme,
-  type AppTypographyPreset,
   type CurrencyPreference,
   usePreferencesStore,
 } from '@/store/preferencesStore'
