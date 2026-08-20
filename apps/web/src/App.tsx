@@ -20,6 +20,19 @@ import { useAuthStore } from '@/store/authStore'
 import { usePreferencesStore } from '@/store/preferencesStore'
 import { persistCachedBootstrap } from '@/lib/offline'
 import Login from '@/pages/Login'
+import { getTypographyFamily } from '@/lib/typography'
+
+const CUSTOM_FONTS_STYLE_ID = 'plata-custom-fonts'
+
+function ensureCustomFontsStyleTag() {
+  let styleTag = document.getElementById(CUSTOM_FONTS_STYLE_ID) as HTMLStyleElement | null
+  if (!styleTag) {
+    styleTag = document.createElement('style')
+    styleTag.id = CUSTOM_FONTS_STYLE_ID
+    document.head.append(styleTag)
+  }
+  return styleTag
+}
 
 const queryClient = new QueryClient()
 
@@ -27,6 +40,9 @@ function AppPreferencesEffects() {
   const appearance = usePreferencesStore((state) => state.appearance)
   const theme = usePreferencesStore((state) => state.theme)
   const background = usePreferencesStore((state) => state.background)
+  const typography = usePreferencesStore((state) => state.typography)
+  const customFonts = usePreferencesStore((state) => state.customFonts)
+  const iconPack = usePreferencesStore((state) => state.iconPack)
 
   useEffect(() => {
     const root = document.documentElement
@@ -34,7 +50,16 @@ function AppPreferencesEffects() {
     root.dataset.appAppearance = appearance
     root.dataset.appTheme = theme
     root.dataset.appBackground = background
-  }, [appearance, background, theme])
+    root.dataset.appIconPack = iconPack
+    root.style.setProperty('--app-font-sans', getTypographyFamily(typography, customFonts))
+
+    const styleTag = ensureCustomFontsStyleTag()
+    styleTag.textContent = customFonts
+      .map((font) => (
+        `@font-face{font-family:"${font.family}";src:url("${font.dataUrl}") format("${font.format}");font-display:swap;}`
+      ))
+      .join('\n')
+  }, [appearance, background, customFonts, iconPack, theme, typography])
 
   return null
 }

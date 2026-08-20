@@ -1,29 +1,9 @@
 import { NavLink } from 'react-router-dom'
-import {
-  LayoutDashboard,
-  Wallet,
-  ArrowUpRight,
-  Heart,
-  PiggyBank,
-  Landmark,
-  ShoppingCart,
-  Calendar,
-  TrendingUp,
-  Bell,
-  Settings2,
-  Activity,
-  Menu,
-  X,
-  ChevronUp,
-  LifeBuoy,
-  LogOut,
-  User,
-  UserPlus,
-} from 'lucide-react'
 import { useState } from 'react'
 import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
+import { AppIcon, type AppIconName } from '@/components/icons/AppIcon'
 import { GlobalSearchDialog } from '@/components/layout/GlobalSearchDialog'
 import {
   DropdownMenu,
@@ -44,19 +24,19 @@ import { CurrencySwitcher } from '@/components/layout/CurrencySwitcher'
 import { ReceivableDueNotifier } from '@/components/debts/ReceivableDueNotifier'
 
 const navItems = [
-  { to: '/', icon: LayoutDashboard, label: 'Dashboard' },
-  { to: '/salary', icon: Wallet, label: 'Salario' },
-  { to: '/expenses', icon: ArrowUpRight, label: 'Gastos' },
-  { to: '/wants', icon: Heart, label: 'Gustos' },
-  { to: '/savings', icon: PiggyBank, label: 'Ahorros' },
-  { to: '/debts', icon: Landmark, label: 'Deudas' },
-  { to: '/wishlist', icon: ShoppingCart, label: 'Deseos' },
-  { to: '/events', icon: Calendar, label: 'Eventos' },
-  { to: '/projections', icon: TrendingUp, label: 'Proyecciones' },
-  { to: '/reminders', icon: Bell, label: 'Recordatorios' },
-  { to: '/reports', icon: Activity, label: 'Informes' },
-  { to: '/settings', icon: Settings2, label: 'Ajustes' },
-]
+  { to: '/', icon: 'dashboard', label: 'Dashboard' },
+  { to: '/salary', icon: 'wallet', label: 'Salario' },
+  { to: '/expenses', icon: 'expenses', label: 'Gastos' },
+  { to: '/wants', icon: 'wants', label: 'Gustos' },
+  { to: '/savings', icon: 'savings', label: 'Ahorros' },
+  { to: '/debts', icon: 'debts', label: 'Deudas' },
+  { to: '/wishlist', icon: 'wishlist', label: 'Deseos' },
+  { to: '/events', icon: 'events', label: 'Eventos' },
+  { to: '/projections', icon: 'trending', label: 'Proyecciones' },
+  { to: '/reminders', icon: 'bell', label: 'Recordatorios' },
+  { to: '/reports', icon: 'reports', label: 'Informes' },
+  { to: '/settings', icon: 'settings', label: 'Ajustes' },
+] satisfies Array<{ to: string, icon: AppIconName, label: string }>
 
 function handleSupportClick() {
   toast.info('El acceso a soporte estara disponible pronto.')
@@ -93,7 +73,7 @@ export function Sidebar() {
               onClick={() => setOpen(true)}
               aria-label="Abrir menu"
             >
-              <Menu data-icon="inline-start" />
+              <AppIcon name="menu" className="size-5" />
             </Button>
 
             <div className="min-w-0">
@@ -125,7 +105,7 @@ export function Sidebar() {
             onClick={() => setOpen(false)}
             aria-label="Cerrar menu"
           >
-            <X data-icon="inline-start" />
+            <AppIcon name="close" className="size-5" />
           </Button>
         </div>
         <nav data-tour="navigation" className="flex flex-1 flex-col gap-1 px-3">
@@ -144,7 +124,7 @@ export function Sidebar() {
                 )
               }
             >
-              <item.icon className="size-[18px] shrink-0" />
+              <AppIcon name={item.icon} className="size-[18px] shrink-0" />
               {item.label}
             </NavLink>
           ))}
@@ -158,13 +138,13 @@ export function Sidebar() {
               aria-label="Abrir menu de usuario"
             >
               <div className="flex size-10 shrink-0 items-center justify-center rounded-full bg-surface-container-high text-on-surface">
-                {authMode === 'guest' ? <User className="size-4" /> : <span className="text-sm font-semibold">{profileInitial}</span>}
+                {authMode === 'guest' ? <AppIcon name="user" className="size-4" /> : <span className="text-sm font-semibold">{profileInitial}</span>}
               </div>
               <div className="min-w-0 flex-1">
                 <p className="truncate text-sm font-semibold text-on-surface">{profileName}</p>
                 <p className="truncate text-xs text-muted-gray">{profileEmail}</p>
               </div>
-              <ChevronUp className="size-4 shrink-0 text-muted-gray" />
+              <AppIcon name="chevron-up" className="size-4 shrink-0 text-muted-gray" />
             </DropdownMenuTrigger>
 
             <DropdownMenuContent
@@ -183,7 +163,7 @@ export function Sidebar() {
                 onClick={() => void handleLogout()}
                 className="rounded-lg px-3 py-2 text-sm text-muted-gray hover:text-on-surface focus:bg-surface-container-high focus:text-on-surface"
               >
-                <LogOut className="size-[18px]" />
+                <AppIcon name="logout" className="size-[18px]" />
                 {authMode === 'guest' ? 'Salir del modo invitado' : 'Cerrar sesion'}
               </DropdownMenuItem>
             </DropdownMenuContent>
@@ -194,7 +174,7 @@ export function Sidebar() {
             onClick={handleSupportClick}
             className="flex items-center gap-3 rounded-lg px-3 py-2 text-sm text-muted-gray transition-all hover:bg-surface-container-high hover:text-on-surface"
           >
-            <LifeBuoy className="size-[18px]" />
+            <AppIcon name="life-buoy" className="size-[18px]" />
             Soporte
           </button>
         </div>
@@ -271,7 +251,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                   to="/login?mode=register"
                   className="inline-flex h-10 items-center justify-center rounded-lg bg-amber-200 px-4 text-sm font-semibold text-amber-950 transition-colors hover:bg-amber-100"
                 >
-                  <UserPlus className="mr-2 size-4" />
+                  <AppIcon name="user-plus" className="mr-2 size-4" />
                   Crear cuenta
                 </NavLink>
               </div>

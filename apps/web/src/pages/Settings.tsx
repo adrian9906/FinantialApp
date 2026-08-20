@@ -1,20 +1,4 @@
-import { useMemo, useState, type Dispatch, type ReactNode, type SetStateAction } from 'react'
-import {
-  Archive,
-  Check,
-  History,
-  Coins,
-  Globe2,
-  FileDown,
-  MoonStar,
-  Palette,
-  RefreshCcw,
-  RotateCcw,
-  SlidersHorizontal,
-  Sparkles,
-  SunMedium,
-  Trash2,
-} from 'lucide-react'
+import { useMemo, useState, type ChangeEvent, type Dispatch, type ReactNode, type SetStateAction } from 'react'
 import { toast } from 'sonner'
 import { getFinancialPeriodStart } from '@plata/shared'
 
@@ -33,11 +17,13 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { Checkbox } from '@/components/ui/checkbox'
+import { AppIcon, getIconPackLabel, type AppIconName } from '@/components/icons/AppIcon'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { CURRENCY_CATALOG, formatMoney } from '@/lib/currency'
 import { downloadMonthlyPdfReport } from '@/lib/monthlyPdfReport'
+import { getTypographyFamily, inferFontFormat, isTypographyPreset, typographyPresets } from '@/lib/typography'
 import { useMonthlyOverview } from '@/lib/useMonthlyOverview'
 import { parseExpenseDescription } from '@/lib/expense-utils'
 import { parseWantDescription } from '@/lib/want-utils'
@@ -52,7 +38,9 @@ import {
   getFormulaTotal,
   type AppAppearance,
   type AppBackground,
+  type AppIconPack,
   type AppTheme,
+  type AppTypographyPreset,
   type CurrencyPreference,
   usePreferencesStore,
 } from '@/store/preferencesStore'
@@ -87,19 +75,19 @@ const appearanceOptions: Array<{
   id: AppAppearance
   label: string
   description: string
-  icon: typeof MoonStar
+  icon: AppIconName
 }> = [
     {
       id: 'dark',
       label: 'Oscuro',
       description: 'La app mantiene su presencia intensa y nocturna.',
-      icon: MoonStar,
+      icon: 'moon',
     },
     {
       id: 'light',
       label: 'Claro',
       description: 'Superficies luminosas con mejor contraste diurno.',
-      icon: SunMedium,
+      icon: 'sun',
     },
   ]
 
@@ -138,6 +126,24 @@ const backgroundOptions: Array<{
     },
   ]
 
+const iconPackOptions: Array<{
+  id: AppIconPack
+  description: string
+}> = [
+    {
+      id: 'lucide',
+      description: 'Trazos limpios y livianos. Es la librería actual de la app.',
+    },
+    {
+      id: 'tabler',
+      description: 'Más técnica y con un look de dashboard marcado.',
+    },
+    {
+      id: 'material-symbols',
+      description: 'El lenguaje de Google Icons, ideal si prefieres un estilo más familiar.',
+    },
+  ]
+
 function cloneFormula(formula: AllocationFormula): AllocationFormula {
   return {
     expenses: formula.expenses,
@@ -151,6 +157,10 @@ function parseDraftValue(value: string) {
   const parsed = Number(value)
   if (!Number.isFinite(parsed)) return 0
   return Math.min(100, Math.max(0, Math.round(parsed)))
+}
+
+function sanitizeFontName(value: string) {
+  return value.replace(/\.[^.]+$/, '').replace(/[_-]+/g, ' ').replace(/\s+/g, ' ').trim()
 }
 
 function SectionIntro({
@@ -262,7 +272,7 @@ function FormulaCard({
         description="Cambia como se reparte el salario mensual entre gastos esenciales, gustos y ahorro."
         icon={
           <div className="flex size-11 items-center justify-center rounded-2xl bg-primary/10 text-primary shadow-vault-sm">
-            <SlidersHorizontal className="size-5" />
+            <AppIcon name="sliders" className="size-5" />
           </div>
         }
       />
@@ -285,7 +295,7 @@ function FormulaCard({
             >
               <div className="flex items-center justify-between gap-3">
                 <p className="text-sm font-semibold text-on-surface">{preset.label}</p>
-                {selected ? <Check className="size-4 text-primary" /> : null}
+                {selected ? <AppIcon name="check" className="size-4 text-primary" /> : null}
               </div>
               <p className="mt-2 text-xs text-muted-gray">{preset.description}</p>
             </button>
@@ -370,7 +380,7 @@ function SummaryCard({
         description=""
         icon={
           <div className="flex size-11 items-center justify-center rounded-2xl bg-secondary/10 text-secondary shadow-vault-sm">
-            <Sparkles className="size-5" />
+            <AppIcon name="sparkles" className="size-5" />
           </div>
         }
       />
@@ -430,7 +440,7 @@ function AppearanceCard({
         description="Elige si quieres la app en oscuro o en claro antes de afinar la paleta."
         icon={
           <div className="flex size-11 items-center justify-center rounded-2xl bg-primary/10 text-primary shadow-vault-sm">
-            {appearance === 'dark' ? <MoonStar className="size-5" /> : <SunMedium className="size-5" />}
+            {appearance === 'dark' ? <AppIcon name="moon" className="size-5" /> : <AppIcon name="sun" className="size-5" />}
           </div>
         }
       />
@@ -438,7 +448,6 @@ function AppearanceCard({
       <div className="mt-6 grid gap-3 sm:grid-cols-2">
         {appearanceOptions.map((option) => {
           const selected = appearance === option.id
-          const Icon = option.icon
 
           return (
             <button
@@ -451,12 +460,12 @@ function AppearanceCard({
                 }`}
             >
               <div className="flex size-12 shrink-0 items-center justify-center rounded-2xl border border-graphite bg-surface-container-high">
-                <Icon className="size-5 text-on-surface" />
+                <AppIcon name={option.icon} className="size-5 text-on-surface" />
               </div>
               <div className="min-w-0 flex-1">
                 <div className="flex items-center justify-between gap-3">
                   <p className="text-sm font-semibold text-on-surface">{option.label}</p>
-                  {selected ? <Check className="size-4 text-primary" /> : null}
+                  {selected ? <AppIcon name="check" className="size-4 text-primary" /> : null}
                 </div>
                 <p className="mt-1 text-xs text-muted-gray">{option.description}</p>
               </div>
@@ -483,7 +492,7 @@ function ThemeCard({
         description="Cambia la identidad de los paneles, botones y contrastes generales."
         icon={
           <div className="flex size-11 items-center justify-center rounded-2xl bg-primary/10 text-primary shadow-vault-sm">
-            <Palette className="size-5" />
+            <AppIcon name="palette" className="size-5" />
           </div>
         }
       />
@@ -509,7 +518,7 @@ function ThemeCard({
               <div className="min-w-0 flex-1">
                 <div className="flex items-center justify-between gap-3">
                   <p className="text-sm font-semibold text-on-surface">{option.label}</p>
-                  {selected ? <Check className="size-4 text-primary" /> : null}
+                  {selected ? <AppIcon name="check" className="size-4 text-primary" /> : null}
                 </div>
                 <p className="mt-1 text-xs text-muted-gray">{option.description}</p>
               </div>
@@ -536,7 +545,7 @@ function BackgroundCard({
         description="Controla la presencia del fondo principal para hacerlo más sobrio o más expresivo."
         icon={
           <div className="flex size-11 items-center justify-center rounded-2xl bg-tertiary-container/10 text-tertiary-container shadow-vault-sm">
-            <Sparkles className="size-5" />
+            <AppIcon name="sparkles" className="size-5" />
           </div>
         }
       />
@@ -561,9 +570,222 @@ function BackgroundCard({
               />
               <div className="mt-3 flex items-center justify-between gap-3">
                 <p className="text-sm font-semibold text-on-surface">{option.label}</p>
-                {selected ? <Check className="size-4 text-primary" /> : null}
+                {selected ? <AppIcon name="check" className="size-4 text-primary" /> : null}
               </div>
               <p className="mt-1 text-xs text-muted-gray">{option.description}</p>
+            </button>
+          )
+        })}
+      </div>
+    </Card>
+  )
+}
+
+function TypographyCard() {
+  const typography = usePreferencesStore((state) => state.typography)
+  const customFonts = usePreferencesStore((state) => state.customFonts)
+  const setTypography = usePreferencesStore((state) => state.setTypography)
+  const saveCustomFont = usePreferencesStore((state) => state.saveCustomFont)
+  const removeCustomFont = usePreferencesStore((state) => state.removeCustomFont)
+  const [isUploading, setIsUploading] = useState(false)
+
+  async function handleCustomFontUpload(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0]
+    event.target.value = ''
+
+    if (!file) return
+    if (file.size > 2_500_000) {
+      toast.error('La fuente pesa demasiado. Usa un archivo menor de 2.5 MB.')
+      return
+    }
+
+    setIsUploading(true)
+    try {
+      const dataUrl = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader()
+        reader.onload = () => resolve(String(reader.result))
+        reader.onerror = () => reject(new Error('No se pudo leer el archivo de la fuente.'))
+        reader.readAsDataURL(file)
+      })
+
+      const cleanName = sanitizeFontName(file.name) || `Fuente ${customFonts.length + 1}`
+      const id = `custom-font-${Date.now()}`
+      saveCustomFont({
+        id,
+        label: cleanName,
+        family: `Plata Custom ${cleanName}`,
+        format: inferFontFormat(file.name, file.type),
+        dataUrl,
+      })
+      toast.success(`${cleanName} ya está disponible para usar en la app.`)
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'No se pudo cargar la fuente.')
+    } finally {
+      setIsUploading(false)
+    }
+  }
+
+  return (
+    <Card className="border-graphite bg-surface p-6 shadow-vault">
+      <SectionIntro
+        eyebrow="Tipografia"
+        title="Define la voz visual de la app"
+        description="Elige entre varias fuentes listas para usar o sube una tipografía local para personalizar toda la interfaz."
+        icon={
+          <div className="flex size-11 items-center justify-center rounded-2xl bg-primary/10 text-primary shadow-vault-sm">
+            <span className="text-lg font-semibold">Aa</span>
+          </div>
+        }
+      />
+
+      <div className="mt-6 grid gap-3">
+        {typographyPresets.map((option) => {
+          const selected = typography === option.id
+          return (
+            <button
+              key={option.id}
+              type="button"
+              onClick={() => setTypography(option.id)}
+              className={`rounded-2xl border p-4 text-left transition-all ${selected
+                ? 'border-primary/40 bg-primary/10 shadow-vault'
+                : 'border-graphite bg-surface-container-low hover:border-outline-variant hover:bg-surface-container'
+                }`}
+            >
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="text-sm font-semibold text-on-surface">{option.label}</p>
+                  <p className="mt-1 text-xs text-muted-gray">{option.description}</p>
+                </div>
+                {selected ? <AppIcon name="check" className="size-4 text-primary" /> : null}
+              </div>
+              <p
+                className="mt-4 text-xl text-on-surface"
+                style={{ fontFamily: option.family }}
+              >
+                {option.preview}
+              </p>
+            </button>
+          )
+        })}
+      </div>
+
+      <div className="mt-5 rounded-2xl border border-graphite bg-surface-container-low p-4">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <p className="text-sm font-semibold text-on-surface">Subir tipografía local</p>
+            <p className="mt-1 text-xs text-muted-gray">
+              Acepta archivos `woff`, `woff2`, `ttf` y `otf`. La fuente queda guardada en este navegador.
+            </p>
+          </div>
+          <label className="inline-flex cursor-pointer items-center gap-2 rounded-xl bg-primary-container px-4 py-2 text-sm font-medium text-primary-foreground transition hover:brightness-110">
+            <input
+              type="file"
+              accept=".woff,.woff2,.ttf,.otf,font/woff,font/woff2,font/ttf,font/otf"
+              onChange={(event) => void handleCustomFontUpload(event)}
+              className="hidden"
+              disabled={isUploading}
+            />
+            <span>{isUploading ? 'Cargando...' : 'Subir fuente'}</span>
+          </label>
+        </div>
+
+        {customFonts.length > 0 ? (
+          <div className="mt-4 space-y-3">
+            {customFonts.map((font) => {
+              const selected = typography === font.id
+              return (
+                <div
+                  key={font.id}
+                  className={`rounded-2xl border p-4 ${selected ? 'border-primary/35 bg-primary/8' : 'border-graphite bg-abyss/70'}`}
+                >
+                  <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                    <button
+                      type="button"
+                      onClick={() => setTypography(font.id)}
+                      className="min-w-0 flex-1 text-left"
+                    >
+                      <div className="flex items-center gap-2">
+                        <p className="text-sm font-semibold text-on-surface">{font.label}</p>
+                        {selected ? <Badge className="bg-primary/15 text-primary">Activa</Badge> : null}
+                        {!isTypographyPreset(typography) && selected ? <Badge variant="secondary">Local</Badge> : null}
+                      </div>
+                      <p className="mt-1 text-xs text-muted-gray">
+                        Formato {font.format.toUpperCase()}
+                      </p>
+                      <p
+                        className="mt-3 text-xl text-on-surface"
+                        style={{ fontFamily: getTypographyFamily(font.id, customFonts) }}
+                      >
+                        12345 Presupuesto mensual
+                      </p>
+                    </button>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      aria-label={`Eliminar ${font.label}`}
+                      onClick={() => removeCustomFont(font.id)}
+                      className="shrink-0 text-muted-gray hover:bg-error/10 hover:text-error"
+                    >
+                      <AppIcon name="trash" className="size-4" />
+                    </Button>
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        ) : null}
+      </div>
+    </Card>
+  )
+}
+
+function IconPackCard({
+  iconPack,
+  setIconPack,
+}: {
+  iconPack: AppIconPack
+  setIconPack: (iconPack: AppIconPack) => void
+}) {
+  return (
+    <Card className="border-graphite bg-surface p-6 shadow-vault">
+      <SectionIntro
+        eyebrow="Iconos"
+        title="Cambia la librería visual"
+        description="Puedes alternar entre Lucide, Tabler y Material Symbols para que la interfaz adopte el estilo que prefieras."
+        icon={
+          <div className="flex size-11 items-center justify-center rounded-2xl bg-primary/10 text-primary shadow-vault-sm">
+            <AppIcon name="sparkles" className="size-5" />
+          </div>
+        }
+      />
+
+      <div className="mt-6 grid gap-3">
+        {iconPackOptions.map((option) => {
+          const selected = iconPack === option.id
+          return (
+            <button
+              key={option.id}
+              type="button"
+              onClick={() => setIconPack(option.id)}
+              className={`rounded-2xl border p-4 text-left transition-all ${selected
+                ? 'border-primary/40 bg-primary/10 shadow-vault'
+                : 'border-graphite bg-surface-container-low hover:border-outline-variant hover:bg-surface-container'
+                }`}
+            >
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <p className="text-sm font-semibold text-on-surface">{getIconPackLabel(option.id)}</p>
+                  <p className="mt-1 text-xs text-muted-gray">{option.description}</p>
+                </div>
+                {selected ? <AppIcon name="check" className="size-4 text-primary" /> : null}
+              </div>
+
+              <div className="mt-4 flex items-center gap-4 rounded-2xl border border-graphite bg-abyss/70 px-4 py-3 text-on-surface">
+                <AppIcon pack={option.id} name="dashboard" className="size-5" />
+                <AppIcon pack={option.id} name="wallet" className="size-5" />
+                <AppIcon pack={option.id} name="settings" className="size-5" />
+                <AppIcon pack={option.id} name="bell" className="size-5" />
+              </div>
             </button>
           )
         })}
@@ -660,7 +882,7 @@ function MonthlyResetCard() {
           description="Marca este momento como el inicio del nuevo presupuesto y deja las listas listas para volver a planificar desde cero."
           icon={
             <div className="flex size-11 items-center justify-center rounded-2xl bg-warning/10 text-warning shadow-vault-sm">
-              <Archive className="size-5" />
+              <AppIcon name="archive" className="size-5" />
             </div>
           }
         />
@@ -695,7 +917,7 @@ function MonthlyResetCard() {
                   />
                 }
               >
-                <RefreshCcw className="size-4" />
+                <AppIcon name="refresh" className="size-4" />
                 Iniciar nuevo ciclo
               </AlertDialogTrigger>
               <AlertDialogContent>
@@ -712,7 +934,7 @@ function MonthlyResetCard() {
                     loading={isResetting}
                     onClick={() => void handleResetMonth()}
                   >
-                    <FileDown className="size-4" />
+                    <AppIcon name="download" className="size-4" />
                     Descargar y cerrar mes
                   </AlertDialogAction>
                 </AlertDialogFooter>
@@ -729,7 +951,7 @@ function MonthlyResetCard() {
           description="Cada cierre mensual guarda una version de tu lista para que puedas recuperarla luego completa o por categoria."
           icon={
             <div className="flex size-11 items-center justify-center rounded-2xl bg-primary/10 text-primary shadow-vault-sm">
-              <History className="size-5" />
+              <AppIcon name="history" className="size-5" />
             </div>
           }
         />
@@ -768,7 +990,7 @@ function MonthlyResetCard() {
                     onClick={() => void handleRestore(history.id, 'expenses')}
                     className="border-graphite bg-abyss text-on-surface hover:bg-surface-container"
                   >
-                    <RotateCcw className="size-4" />
+                    <AppIcon name="rotate" className="size-4" />
                     Restaurar gastos
                   </Button>
                   <Button
@@ -779,7 +1001,7 @@ function MonthlyResetCard() {
                     onClick={() => void handleRestore(history.id, 'wants')}
                     className="border-graphite bg-abyss text-on-surface hover:bg-surface-container"
                   >
-                    <RotateCcw className="size-4" />
+                    <AppIcon name="rotate" className="size-4" />
                     Restaurar gustos
                   </Button>
                   <Button
@@ -793,7 +1015,7 @@ function MonthlyResetCard() {
                     onClick={() => void handleRestore(history.id, 'all')}
                     className="bg-primary-container text-primary-foreground hover:brightness-110"
                   >
-                    <RotateCcw className="size-4" />
+                    <AppIcon name="rotate" className="size-4" />
                     Restaurar todo
                   </Button>
                 </div>
@@ -842,7 +1064,7 @@ function CurrencySettingsCard() {
         description="Plata App guarda la contabilidad en USD. Aquí defines cuántas unidades de otra moneda equivalen a 1 USD; al seleccionarla arriba, todos los importes se multiplican por esa tasa."
         icon={
           <div className="flex size-11 items-center justify-center rounded-2xl bg-primary/10 text-primary shadow-vault-sm">
-            <Globe2 className="size-5" />
+            <AppIcon name="globe" className="size-5" />
           </div>
         }
       />
@@ -908,7 +1130,7 @@ function CurrencySettingsCard() {
               </p>
             </div>
             <Button onClick={handleSaveCurrency} className="bg-primary-container text-primary-foreground hover:brightness-110">
-              <Coins className="size-4" />
+              <AppIcon name="coins" className="size-4" />
               Guardar moneda
             </Button>
           </div>
@@ -941,7 +1163,7 @@ function CurrencySettingsCard() {
                   onClick={() => removeCurrency(currency.code)}
                   className="shrink-0 text-muted-gray hover:bg-error/10 hover:text-error"
                 >
-                  <Trash2 className="size-4" />
+                  <AppIcon name="trash" className="size-4" />
                 </Button>
               ) : null}
             </div>
@@ -952,14 +1174,42 @@ function CurrencySettingsCard() {
   )
 }
 
+function SettingsSection({
+  eyebrow,
+  title,
+  description,
+  children,
+}: {
+  eyebrow: string
+  title: string
+  description: string
+  children: ReactNode
+}) {
+  return (
+    <section className="space-y-4">
+      <div className="rounded-3xl border border-graphite bg-surface-container-low/70 p-5 shadow-vault-sm">
+        <p className="text-xs uppercase tracking-[0.22em] text-medium-gray">{eyebrow}</p>
+        <div className="mt-2 space-y-2">
+          <h2 className="text-2xl font-semibold text-on-surface">{title}</h2>
+          <p className="max-w-3xl text-sm text-muted-gray">{description}</p>
+        </div>
+      </div>
+
+      {children}
+    </section>
+  )
+}
+
 export default function Settings() {
   const appearance = usePreferencesStore((state) => state.appearance)
   const theme = usePreferencesStore((state) => state.theme)
   const background = usePreferencesStore((state) => state.background)
+  const iconPack = usePreferencesStore((state) => state.iconPack)
   const formula = usePreferencesStore((state) => state.formula)
   const setAppearance = usePreferencesStore((state) => state.setAppearance)
   const setTheme = usePreferencesStore((state) => state.setTheme)
   const setBackground = usePreferencesStore((state) => state.setBackground)
+  const setIconPack = usePreferencesStore((state) => state.setIconPack)
   const setFormula = usePreferencesStore((state) => state.setFormula)
   const resetPreferences = usePreferencesStore((state) => state.resetPreferences)
 
@@ -1002,8 +1252,8 @@ export default function Settings() {
             Settings
           </h1>
           <p className="max-w-3xl text-sm text-muted-gray">
-            Ajusta la fórmula de presupuesto, la paleta general y el fondo para que Plata App
-            se adapte mejor a tu forma de planificar.
+            Ajusta la fórmula de presupuesto, la apariencia, la tipografía y el estilo de iconos
+            para que Plata App se adapte mejor a tu forma de planificar.
           </p>
         </div>
 
@@ -1012,40 +1262,60 @@ export default function Settings() {
           onClick={handleResetPreferences}
           className="border-graphite bg-primary-container text-primary-foreground hover:bg-primary-container/85"
         >
-          <RefreshCcw className="size-4" />
+          <AppIcon name="refresh" className="size-4" />
           Restaurar ajustes
         </Button>
       </header>
 
-      <section className="grid gap-4 xl:grid-cols-[minmax(0,1.15fr)_minmax(0,0.85fr)]">
-        <FormulaCard
-          draftFormula={draftFormula}
-          setDraftFormula={setDraftFormula}
-          onSaveFormula={handleSaveFormula}
-          isFormulaValid={isFormulaValid}
-          total={total}
-          formulaChanged={formulaChanged}
-        />
-
+      <SettingsSection
+        eyebrow="Vision general"
+        title="Resumen de configuracion"
+        description="Revisa de un vistazo la fórmula activa y el estilo visual que está usando la app en este momento."
+      >
         <SummaryCard
           formula={formula}
           appearance={appearance}
           theme={theme}
           background={background}
         />
-      </section>
+      </SettingsSection>
 
-      <CurrencySettingsCard />
+      <SettingsSection
+        eyebrow="Ajustes del sistema"
+        title="Controla el comportamiento de la app"
+        description="Aquí agrupamos la planificación financiera, monedas, automatizaciones y el ciclo mensual para que la parte operativa quede separada de lo visual."
+      >
+        <div className="grid gap-4">
+          <FormulaCard
+            draftFormula={draftFormula}
+            setDraftFormula={setDraftFormula}
+            onSaveFormula={handleSaveFormula}
+            isFormulaValid={isFormulaValid}
+            total={total}
+            formulaChanged={formulaChanged}
+          />
 
-      <AutomationSettings />
+          <CurrencySettingsCard />
 
-      <section className="grid gap-4 xl:grid-cols-2">
-        <AppearanceCard appearance={appearance} setAppearance={setAppearance} />
-        <ThemeCard theme={theme} setTheme={setTheme} />
-        <BackgroundCard background={background} setBackground={setBackground} />
-      </section>
+          <AutomationSettings />
 
-      <MonthlyResetCard />
+          <MonthlyResetCard />
+        </div>
+      </SettingsSection>
+
+      <SettingsSection
+        eyebrow="Ajustes esteticos"
+        title="Personaliza la apariencia"
+        description="Separa el modo, la paleta, el fondo, la tipografía y los iconos para que sea más fácil cambiar el look de la app sin mezclarlo con opciones del sistema."
+      >
+        <div className="grid gap-4 xl:grid-cols-2">
+          <AppearanceCard appearance={appearance} setAppearance={setAppearance} />
+          <ThemeCard theme={theme} setTheme={setTheme} />
+          <BackgroundCard background={background} setBackground={setBackground} />
+          <TypographyCard />
+          <IconPackCard iconPack={iconPack} setIconPack={setIconPack} />
+        </div>
+      </SettingsSection>
     </div>
   )
 }

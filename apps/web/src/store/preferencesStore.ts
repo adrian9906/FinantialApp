@@ -4,7 +4,9 @@ import {
   type AllocationFormula,
   type AppAppearance,
   type AppBackground,
+  type AppIconPack,
   type AppTheme,
+  type AppTypographyPreset,
   type CategorizationRule,
   type DashboardWidgetId,
   defaultFormula,
@@ -14,11 +16,15 @@ import {
   getFormulaTotal,
   normalizeFormula,
 } from '@plata/shared'
+import type { CustomTypographyOption } from '@/lib/typography'
 
 interface PreferencesStore {
   appearance: AppAppearance
   theme: AppTheme
   background: AppBackground
+  typography: AppTypographyPreset | string
+  iconPack: AppIconPack
+  customFonts: CustomTypographyOption[]
   formula: AllocationFormula
   currencies: CurrencyPreference[]
   activeCurrencyCode: string
@@ -27,6 +33,10 @@ interface PreferencesStore {
   setAppearance: (appearance: AppAppearance) => void
   setTheme: (theme: AppTheme) => void
   setBackground: (background: AppBackground) => void
+  setTypography: (typography: AppTypographyPreset | string) => void
+  setIconPack: (iconPack: AppIconPack) => void
+  saveCustomFont: (font: CustomTypographyOption) => void
+  removeCustomFont: (id: string) => void
   setFormula: (formula: AllocationFormula) => void
   setActiveCurrency: (code: string) => void
   saveCurrency: (currency: CurrencyPreference) => void
@@ -59,6 +69,9 @@ const defaultState = {
   appearance: 'dark' as AppAppearance,
   theme: 'obsidian' as AppTheme,
   background: 'grid' as AppBackground,
+  typography: 'inter' as AppTypographyPreset,
+  iconPack: 'lucide' as AppIconPack,
+  customFonts: [] as CustomTypographyOption[],
   formula: defaultFormula,
   currencies: [USD_CURRENCY],
   activeCurrencyCode: 'USD',
@@ -73,6 +86,26 @@ export const usePreferencesStore = create<PreferencesStore>()(
       setAppearance: (appearance) => set({ appearance }),
       setTheme: (theme) => set({ theme }),
       setBackground: (background) => set({ background }),
+      setTypography: (typography) => set({ typography }),
+      setIconPack: (iconPack) => set({ iconPack }),
+      saveCustomFont: (font) => set((state) => {
+        const exists = state.customFonts.some((entry) => entry.id === font.id)
+        const customFonts = exists
+          ? state.customFonts.map((entry) => entry.id === font.id ? font : entry)
+          : [font, ...state.customFonts]
+
+        return {
+          customFonts,
+          typography: font.id,
+        }
+      }),
+      removeCustomFont: (id) => set((state) => {
+        const customFonts = state.customFonts.filter((font) => font.id !== id)
+        return {
+          customFonts,
+          typography: state.typography === id ? 'inter' : state.typography,
+        }
+      }),
       setFormula: (formula) => set({ formula: normalizeFormula(formula) }),
       setActiveCurrency: (code) => set((state) => ({
         activeCurrencyCode: state.currencies.some((currency) => currency.code === code) ? code : 'USD',
@@ -139,6 +172,13 @@ export const usePreferencesStore = create<PreferencesStore>()(
           ...current,
           ...saved,
           currencies,
+          customFonts: saved.customFonts ?? current.customFonts,
+          typography: (() => {
+            const nextTypography = saved.typography ?? current.typography
+            const hasPreset = ['inter', 'space-grotesk', 'manrope', 'ibm-plex-sans', 'playfair-display'].includes(nextTypography)
+            const hasCustom = (saved.customFonts ?? current.customFonts).some((font) => font.id === nextTypography)
+            return hasPreset || hasCustom ? nextTypography : 'inter'
+          })(),
           activeCurrencyCode: currencies.some((currency) => currency.code === saved.activeCurrencyCode)
             ? saved.activeCurrencyCode ?? 'USD'
             : 'USD',
@@ -148,5 +188,5 @@ export const usePreferencesStore = create<PreferencesStore>()(
   )
 )
 
-export type { AllocationFormula, AppAppearance, AppBackground, AppTheme }
+export type { AllocationFormula, AppAppearance, AppBackground, AppIconPack, AppTheme, AppTypographyPreset }
 export { defaultFormula, formulaPresets, formatFormulaLabel, getFormulaTotal }

@@ -1,6 +1,8 @@
 export type AppTheme = 'obsidian' | 'midnight' | 'ember'
 export type AppBackground = 'grid' | 'nebula' | 'carbon' | 'aurora'
 export type AppAppearance = 'dark' | 'light'
+export type AppIconPack = 'lucide' | 'tabler' | 'material-symbols'
+export type AppTypographyPreset = 'inter' | 'space-grotesk' | 'manrope' | 'ibm-plex-sans' | 'playfair-display'
 
 export interface AllocationFormula {
   expenses: number

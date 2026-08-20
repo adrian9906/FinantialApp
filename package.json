@@ -24,5 +24,8 @@
     "db:migrate": "pnpm --dir apps/api db:migrate",
     "db:push": "pnpm --dir apps/api db:push",
     "db:studio": "pnpm --dir apps/api db:studio"
+  },
+  "devDependencies": {
+    "@rolldown/binding-win32-x64-msvc": "1.0.3"
   }
 }

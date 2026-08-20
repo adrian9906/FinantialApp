@@ -90,6 +90,9 @@ export default defineConfig(({ mode }) => {
       }),
     ],
     server: {
+      watch: {
+        ignored: ['**/android/**', '**/build/**', '**/dist/**'],
+      },
       proxy: {
         '/api': {
           target: env.VITE_API_BASE_URL?.trim() || defaultApiTarget,
@@ -98,10 +101,17 @@ export default defineConfig(({ mode }) => {
         },
       },
     },
+    optimizeDeps: {
+      entries: ['index.html'],
+      include: ['react', 'react-dom', 'react/jsx-runtime'],
+      exclude: ['@capacitor/android'],
+    },
     resolve: {
+      dedupe: ['react', 'react-dom'],
       alias: {
         '@': path.resolve(rootDir, './src'),
-        '@plata/shared': path.resolve(rootDir, '../../packages/shared/src/index.ts'),
+        react: path.resolve(rootDir, './node_modules/react'),
+        'react-dom': path.resolve(rootDir, './node_modules/react-dom'),
       },
     },
   }
