@@ -20,7 +20,11 @@ export function useMonthlyOverview() {
 
   return useMemo(() => {
     const periodStart = getFinancialPeriodStart(monthlyPlanningHistory)
-    const overview = getMonthlyOverview(salaries, transactions, debts, formula, { periodStart })
+    const hasManualReset = monthlyPlanningHistory.some((entry) => entry.createdAt === periodStart)
+    const overview = getMonthlyOverview(salaries, transactions, debts, formula, {
+      periodStart,
+      strictSameDayBoundary: hasManualReset,
+    })
     const reservedForPurchasedWishlist = wishlist.reduce(
       (sum, item) => sum + (isWishlistPurchased(item) ? getWishlistReservedAmount(item) : 0),
       0,

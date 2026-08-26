@@ -14,6 +14,7 @@ import { getMonthKey, getSalaryForMonth } from './salary-utils'
 export interface MonthlyOverviewOptions {
   periodStart?: string | null
   salaryMonth?: string
+  strictSameDayBoundary?: boolean
 }
 
 export function getFinancialPeriodStart(
@@ -34,14 +35,18 @@ export function getFinancialPeriodStart(
 function isInFinancialPeriod(
   entry: { date: string; createdAt?: string },
   periodStart: string,
+  strictSameDayBoundary = false,
 ) {
   const startDate = periodStart.slice(0, 10)
   if (entry.date < startDate) return false
-  if (entry.date > startDate || !entry.createdAt) return true
+  if (entry.date > startDate) return true
+  if (!entry.createdAt) return !strictSameDayBoundary
 
   const createdAt = Date.parse(entry.createdAt)
   const startTime = Date.parse(periodStart)
-  return !Number.isFinite(createdAt) || !Number.isFinite(startTime) || createdAt >= startTime
+  if (!Number.isFinite(createdAt) || !Number.isFinite(startTime)) return !strictSameDayBoundary
+
+  return createdAt >= startTime
 }
 
 export function getMonthlyOverview(
@@ -54,7 +59,9 @@ export function getMonthlyOverview(
   const periodStart = options.periodStart ?? `${getMonthKey()}-01T00:00:00.000Z`
   const salaryMonth = options.salaryMonth ?? getMonthKey()
   const grossSalary = getSalaryForMonth(salaries, salaryMonth)?.amount ?? 0
-  const monthlyTransactions = transactions.filter((transaction) => isInFinancialPeriod(transaction, periodStart))
+  const monthlyTransactions = transactions.filter((transaction) => (
+    isInFinancialPeriod(transaction, periodStart, options.strictSameDayBoundary)
+  ))
   const totalExpenses = getEffectiveExpenseTotal(monthlyTransactions)
   const totalWants = getEffectiveWantTotal(monthlyTransactions)
   const transferredFromExpenses = getExpenseTransferTotal(monthlyTransactions)
@@ -74,7 +81,7 @@ export function getMonthlyOverview(
     }, 0)
   const totalDebtPaid = debts.filter((debt) => debt.direction !== 'receivable').reduce(
     (sum, debt) => sum + (debt.payments ?? [])
-        .filter((payment) => isInFinancialPeriod(payment, periodStart))
+        .filter((payment) => isInFinancialPeriod(payment, periodStart, options.strictSameDayBoundary))
         .reduce((paymentSum, payment) => paymentSum + payment.amount, 0),
     0,
   )
