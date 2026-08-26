@@ -225,9 +225,13 @@ function serializeDebt(entry: {
 }
 
 function parseMonthlyPlanningItems(value: unknown): MonthlyPlanningItem[] {
-  if (!Array.isArray(value)) return []
+  const items = Array.isArray(value)
+    ? value
+    : value && typeof value === 'object' && Array.isArray((value as Record<string, unknown>).items)
+      ? (value as Record<string, unknown>).items as unknown[]
+      : []
 
-  return value.map((entry) => {
+  return items.map((entry) => {
     const item = entry as Record<string, unknown>
 
     return {
@@ -238,6 +242,13 @@ function parseMonthlyPlanningItems(value: unknown): MonthlyPlanningItem[] {
       date: String(item.date ?? toDateString(new Date())),
     }
   })
+}
+
+function parseSavingTransactionIds(value: unknown): string[] {
+  if (!value || typeof value !== 'object') return []
+
+  const ids = (value as Record<string, unknown>).savingTransactionIds
+  return Array.isArray(ids) ? ids.map((id) => String(id)) : []
 }
 
 function serializeMonthlyPlanningHistory(entry: {
@@ -255,6 +266,7 @@ function serializeMonthlyPlanningHistory(entry: {
     createdAt: entry.createdAt.toISOString(),
     expenses: parseMonthlyPlanningItems(entry.gastos),
     wants: parseMonthlyPlanningItems(entry.gustos),
+    savingTransactionIds: parseSavingTransactionIds(entry.gastos),
   }
 }
 
@@ -605,7 +617,10 @@ async function syncBootstrap(userId: string, body: JsonRecord) {
           id: entry.id,
           mesReferencia: String(entry.month ?? toMonthString(new Date())),
           etiqueta: String(entry.label ?? entry.month ?? ''),
-          gastos: (entry.expenses ?? []) as unknown as Prisma.InputJsonValue,
+          gastos: {
+            items: entry.expenses ?? [],
+            savingTransactionIds: entry.savingTransactionIds ?? [],
+          } as unknown as Prisma.InputJsonValue,
           gustos: (entry.wants ?? []) as unknown as Prisma.InputJsonValue,
           ...(entry.createdAt && Number.isFinite(Date.parse(entry.createdAt)) ? { createdAt: new Date(entry.createdAt) } : {}),
           usuarioId: userId,
@@ -678,13 +693,19 @@ async function createMonthlyReset(
   const wantIds = Array.isArray(body.wantIds) ? body.wantIds.map((entry) => String(entry)) : []
   const expenses = parseMonthlyPlanningItems(body.expenses)
   const wants = parseMonthlyPlanningItems(body.wants)
+  const savingTransactionIds = Array.isArray(body.savingTransactionIds)
+    ? body.savingTransactionIds.map((entry) => String(entry))
+    : []
 
   const created = await prisma.$transaction(async (tx) => {
     const history = await tx.historialMensual.create({
       data: {
         mesReferencia: month,
         etiqueta: label,
-        gastos: expenses as unknown as Prisma.InputJsonValue,
+        gastos: {
+          items: expenses,
+          savingTransactionIds,
+        } as unknown as Prisma.InputJsonValue,
         gustos: wants as unknown as Prisma.InputJsonValue,
         usuarioId: userId,
       },

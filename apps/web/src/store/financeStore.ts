@@ -151,6 +151,9 @@ function buildMonthlyPlanningHistory(transactions: Transaction[]): MonthlyPlanni
     createdAt: now.toISOString(),
     expenses,
     wants,
+    savingTransactionIds: transactions
+      .filter((transaction) => transaction.type === 'saving')
+      .map((transaction) => transaction.id),
   }
 }
 
@@ -686,6 +689,7 @@ export const useFinanceStore = create<FinanceStore>()((set, get) => ({
           wantIds: get().transactions.filter((transaction) => transaction.type === 'want').map((transaction) => transaction.id),
           expenses: snapshot.expenses,
           wants: snapshot.wants,
+          savingTransactionIds: snapshot.savingTransactionIds,
         }),
       })
 

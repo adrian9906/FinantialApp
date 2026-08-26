@@ -80,6 +80,7 @@ export interface MonthlyPlanningHistory {
   createdAt: string
   expenses: MonthlyPlanningItem[]
   wants: MonthlyPlanningItem[]
+  savingTransactionIds?: string[]
 }
 
 export interface AppEvent {

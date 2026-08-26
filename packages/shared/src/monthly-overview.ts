@@ -15,6 +15,7 @@ export interface MonthlyOverviewOptions {
   periodStart?: string | null
   salaryMonth?: string
   strictSameDayBoundary?: boolean
+  excludedTransactionIds?: string[]
 }
 
 export function getFinancialPeriodStart(
@@ -59,8 +60,10 @@ export function getMonthlyOverview(
   const periodStart = options.periodStart ?? `${getMonthKey()}-01T00:00:00.000Z`
   const salaryMonth = options.salaryMonth ?? getMonthKey()
   const grossSalary = getSalaryForMonth(salaries, salaryMonth)?.amount ?? 0
+  const excludedTransactionIds = new Set(options.excludedTransactionIds)
   const monthlyTransactions = transactions.filter((transaction) => (
-    isInFinancialPeriod(transaction, periodStart, options.strictSameDayBoundary)
+    !excludedTransactionIds.has(transaction.id)
+    && isInFinancialPeriod(transaction, periodStart, options.strictSameDayBoundary)
   ))
   const totalExpenses = getEffectiveExpenseTotal(monthlyTransactions)
   const totalWants = getEffectiveWantTotal(monthlyTransactions)
