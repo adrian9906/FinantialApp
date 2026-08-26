@@ -806,6 +806,7 @@ function MonthlyResetCard() {
   const wantsDisabled = usePreferencesStore((state) => state.formula.wants === 0)
   const overview = useMonthlyOverview()
   const [isResetting, setIsResetting] = useState(false)
+  const [isResetDialogOpen, setIsResetDialogOpen] = useState(false)
   const [restoringKey, setRestoringKey] = useState<string | null>(null)
 
   const plannedExpenses = useMemo(
@@ -845,6 +846,7 @@ function MonthlyResetCard() {
         mode: 'closing',
       })
       await resetMonthlyPlans()
+      setIsResetDialogOpen(false)
       toast.success('Informe PDF descargado y nuevo ciclo iniciado correctamente.')
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'No se pudo cerrar el mes.')
@@ -902,11 +904,16 @@ function MonthlyResetCard() {
         <div className="mt-5 rounded-2xl border border-graphite bg-surface-container-low p-4">
           <p className="text-sm font-medium text-on-surface">Qué hace este reset</p>
           <p className="mt-2 text-sm text-muted-gray">
-            Desde el momento del reset, ingresos, gastos, gustos, ahorros y pagos de deuda se calculan dentro del nuevo ciclo. Tus datos anteriores no se borran; solo se limpian las listas activas de gastos y gustos.
+            Desde el momento del reset, ingresos, gastos, gustos, ahorros y pagos de deuda se calculan dentro del nuevo ciclo. Tus datos anteriores no se borran; se limpian las listas activas de gastos y gustos, y el avance de las metas de ahorro vuelve a cero.
           </p>
 
           <div className="mt-4">
-            <AlertDialog>
+            <AlertDialog
+              open={isResetDialogOpen}
+              onOpenChange={(nextOpen) => {
+                if (!isResetting) setIsResetDialogOpen(nextOpen)
+              }}
+            >
               <AlertDialogTrigger
                 render={
                   <Button

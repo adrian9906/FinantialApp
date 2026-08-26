@@ -708,6 +708,11 @@ async function createMonthlyReset(
       })
     }
 
+    await tx.metaAhorro.updateMany({
+      where: { usuarioId: userId },
+      data: { montoActual: 0 },
+    })
+
     return history
   })
 
