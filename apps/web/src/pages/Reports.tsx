@@ -1,7 +1,6 @@
 import { useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
-  Activity,
   AlertTriangle,
   ArrowRight,
   CalendarDays,
@@ -267,11 +266,11 @@ export default function Reports() {
       })
     }
 
-    const trendSeries = monthlySummaries
-      .filter((entry) => entry.month === previousMonthKey || entry.month === currentMonthKey)
+    const spendingTrendSeries = monthlySummaries
       .sort((left, right) => left.month.localeCompare(right.month))
       .map((entry) => ({
         label: entry.shortLabel,
+        month: entry.label,
         salario: entry.salary,
         gastos: entry.expenses,
         gustos: entry.wants,
@@ -280,11 +279,9 @@ export default function Reports() {
         libre: entry.freeBalance,
       }))
 
-    const trendSignals = [
-      { label: 'Gastos', direction: getTrendDirection(trendSeries.map((entry) => entry.gastos)) },
-      { label: 'Gustos', direction: getTrendDirection(trendSeries.map((entry) => entry.gustos)) },
-      { label: 'Ahorros', direction: getTrendDirection(trendSeries.map((entry) => entry.ahorros)) },
-      { label: 'Deuda', direction: getTrendDirection(trendSeries.map((entry) => entry.deuda)) },
+    const spendingTrendSignals = [
+      { label: 'Gastos', direction: getTrendDirection(spendingTrendSeries.map((entry) => entry.gastos)) },
+      { label: 'Gustos', direction: getTrendDirection(spendingTrendSeries.map((entry) => entry.gustos)) },
     ]
 
     return {
@@ -309,8 +306,8 @@ export default function Reports() {
       previousRankings,
       unnecessaryInsights,
       currentTimeline,
-      trendSeries,
-      trendSignals,
+      spendingTrendSeries,
+      spendingTrendSignals,
     }
   }, [debts, events, formula, monthlyPlanningHistory, salaries, transactions, wishlist])
 
@@ -319,12 +316,9 @@ export default function Reports() {
     previous: { label: 'Mes anterior', color: 'var(--color-secondary)' },
   } satisfies ChartConfig
 
-  const trendConfig = {
+  const spendingTrendConfig = {
     gastos: { label: 'Gastos', color: 'var(--color-primary)' },
     gustos: { label: 'Gustos', color: 'var(--color-secondary)' },
-    ahorros: { label: 'Ahorros', color: 'var(--color-tertiary-container)' },
-    deuda: { label: 'Deuda', color: 'var(--color-warning)' },
-    libre: { label: 'Saldo libre', color: 'var(--color-on-surface)' },
   } satisfies ChartConfig
 
   async function handleExport() {
@@ -584,107 +578,191 @@ export default function Reports() {
         </Card>
       </section>
 
-      <section className="grid gap-4 xl:grid-cols-[1.2fr_0.8fr]">
+      <section className="grid gap-4">
         <Card className="border-graphite bg-surface shadow-vault">
           <CardHeader className="gap-4 sm:flex-row sm:items-start sm:justify-between">
             <div>
-              <CardTitle className="text-on-surface">Tendencia entre ambos meses</CardTitle>
+              <CardTitle className="text-on-surface">Línea temporal: Gastos vs Gustos</CardTitle>
               <CardDescription className="text-muted-gray">
-                Comparación directa entre el mes anterior y el mes actual para ver hacia donde se mueve cada bloque.
+                Evolución mes a mes de ambas categorías. Toca cada punto para ver el importe exacto y detectar tendencias de subida o bajada.
               </CardDescription>
             </div>
             <Badge variant="secondary" className="bg-surface-container-high text-on-surface">
-              {report.previousLabel} vs {report.currentLabel}
+              {report.spendingTrendSeries.length} mes(es) de historial
             </Badge>
           </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="flex flex-wrap gap-2">
-              {report.trendSignals.map((signal) => (
-                <Badge key={signal.label} variant="secondary" className={getDirectionTone(signal.direction)}>
-                  <Activity className="size-3.5" />
-                  {signal.label}: {getDirectionLabel(signal.direction)}
-                </Badge>
+          <CardContent className="space-y-6">
+            <div className="flex flex-wrap gap-3">
+              {report.spendingTrendSignals.map((signal) => (
+                <div key={signal.label} className="flex items-center gap-2 rounded-lg border border-graphite bg-abyss/40 px-3 py-2">
+                  <div className={`size-3 rounded-full ${signal.label === 'Gastos' ? 'bg-blue-500' : 'bg-violet-500'}`} />
+                  <div className="flex flex-col gap-0.5">
+                    <span className="text-xs font-medium text-muted-gray uppercase tracking-wider">{signal.label}</span>
+                    <span className={`text-sm font-semibold ${getDirectionTone(signal.direction).split(' ')[2]}`}>
+                      {getDirectionLabel(signal.direction)}
+                    </span>
+                  </div>
+                </div>
               ))}
             </div>
-            <ChartContainer config={trendConfig} className="h-[340px] w-full">
-              <LineChart data={report.trendSeries} margin={{ top: 8, right: 10, left: -18, bottom: 0 }}>
-                <CartesianGrid vertical={false} strokeDasharray="3 3" />
-                <XAxis dataKey="label" tickLine={false} axisLine={false} />
-                <YAxis tickLine={false} axisLine={false} />
-                <ChartTooltip content={<ChartTooltipContent />} />
-                <Line type="monotone" dataKey="gastos" stroke="var(--color-primary)" strokeWidth={2.5} dot={false} />
-                <Line type="monotone" dataKey="gustos" stroke="var(--color-secondary)" strokeWidth={2.5} dot={false} />
-                <Line type="monotone" dataKey="ahorros" stroke="var(--color-tertiary-container)" strokeWidth={2.5} dot={false} />
-                <Line type="monotone" dataKey="deuda" stroke="var(--color-warning)" strokeWidth={2.5} dot={false} />
-                <Line type="monotone" dataKey="libre" stroke="var(--color-on-surface)" strokeWidth={2} dot={false} strokeDasharray="5 5" />
+
+            <ChartContainer config={spendingTrendConfig} className="h-[400px] w-full">
+              <LineChart data={report.spendingTrendSeries} margin={{ top: 20, right: 16, left: -12, bottom: 8 }}>
+                <CartesianGrid
+                  vertical={false}
+                  stroke="var(--graphite)"
+                  strokeDasharray="2 4"
+                  strokeOpacity={0.3}
+                />
+                <XAxis
+                  dataKey="label"
+                  tickLine={false}
+                  axisLine={false}
+                  tick={{ fontSize: 12, fill: 'var(--muted-gray)', fontWeight: 500 }}
+                />
+                <YAxis
+                  tickLine={false}
+                  axisLine={false}
+                  tick={{ fontSize: 12, fill: 'var(--muted-gray)' }}
+                  tickFormatter={(value) => `$${(value / 1000).toFixed(0)}k`}
+                />
+                <ChartTooltip
+                  cursor={{ stroke: 'var(--primary)', strokeDasharray: '6 3', strokeOpacity: 0.5 }}
+                  contentStyle={{
+                    backgroundColor: 'var(--abyss)',
+                    border: '1px solid var(--graphite)',
+                    borderRadius: '12px',
+                    boxShadow: '0 8px 32px rgba(0, 0, 0, 0.4)',
+                  }}
+                  content={({ active, payload, label }) => {
+                    if (active && payload?.length) {
+                      return (
+                        <div className="space-y-2 p-4">
+                          <p className="text-sm font-semibold text-on-surface">{label}</p>
+                          {payload.map((entry, index) => (
+                            <div key={`tooltip-${index}`} className="flex items-center justify-between gap-4">
+                              <div className="flex items-center gap-2">
+                                <div
+                                  className="size-2 rounded-full"
+                                  style={{ backgroundColor: entry.color }}
+                                />
+                                <span className="text-xs text-muted-gray">
+                                  {entry.name === 'gastos' ? 'Gastos' : 'Gustos'}
+                                </span>
+                              </div>
+                              <span className="font-mono text-sm font-semibold text-on-surface">
+                                {formatCurrency(Number(entry.value))}
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                      )
+                    }
+                    return null
+                  }}
+                />
+
+                <Line
+                  type="monotone"
+                  dataKey="gastos"
+                  name="gastos"
+                  stroke="#3b82f6"
+                  strokeWidth={3}
+                  isAnimationActive={true}
+                  animationDuration={600}
+                  dot={(props) => {
+                    const { cx, cy, fill } = props
+                    return (
+                      <circle
+                        cx={cx}
+                        cy={cy}
+                        r={4}
+                        fill="#3b82f6"
+                        stroke="var(--surface)"
+                        strokeWidth={2}
+                      />
+                    )
+                  }}
+                  activeDot={(props) => {
+                    const { cx, cy } = props
+                    return (
+                      <circle
+                        cx={cx}
+                        cy={cy}
+                        r={7}
+                        fill="#3b82f6"
+                        stroke="var(--surface)"
+                        strokeWidth={3}
+                        filter="drop-shadow(0 0 6px rgba(59, 130, 246, 0.5))"
+                      />
+                    )
+                  }}
+                />
+
+                <Line
+                  type="monotone"
+                  dataKey="gustos"
+                  name="gustos"
+                  stroke="#a855f7"
+                  strokeWidth={3}
+                  isAnimationActive={true}
+                  animationDuration={600}
+                  dot={(props) => {
+                    const { cx, cy } = props
+                    return (
+                      <circle
+                        cx={cx}
+                        cy={cy}
+                        r={4}
+                        fill="#a855f7"
+                        stroke="var(--surface)"
+                        strokeWidth={2}
+                      />
+                    )
+                  }}
+                  activeDot={(props) => {
+                    const { cx, cy } = props
+                    return (
+                      <circle
+                        cx={cx}
+                        cy={cy}
+                        r={7}
+                        fill="#a855f7"
+                        stroke="var(--surface)"
+                        strokeWidth={3}
+                        filter="drop-shadow(0 0 6px rgba(168, 85, 247, 0.5))"
+                      />
+                    )
+                  }}
+                />
               </LineChart>
             </ChartContainer>
-          </CardContent>
-        </Card>
 
-        <Card className="border-graphite bg-surface shadow-vault">
-          <CardHeader>
-            <CardTitle className="text-on-surface">Lectura rápida</CardTitle>
-            <CardDescription className="text-muted-gray">
-              Estado actual de deuda, deseos comprados y cierre de lista.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="rounded-2xl border border-graphite bg-abyss/85 p-4">
-              <div className="flex items-center gap-2 text-muted-gray">
-                <Landmark className="size-4" />
-                <span className="text-xs uppercase tracking-[0.2em]">Deuda pagada acumulada</span>
+            <div className="grid gap-3 rounded-lg border border-graphite/50 bg-abyss/40 p-4 sm:grid-cols-2">
+              <div>
+                <p className="text-xs uppercase tracking-widest text-muted-gray">Promedio de Gastos</p>
+                <p className="mt-2 text-lg font-semibold text-blue-400">
+                  {formatCurrency(
+                    report.spendingTrendSeries.length > 0
+                      ? report.spendingTrendSeries.reduce((sum, item) => sum + item.gastos, 0) / report.spendingTrendSeries.length
+                      : 0,
+                  )}
+                </p>
               </div>
-              <p className="mt-3 text-2xl font-semibold text-on-surface">{formatCurrency(report.totalDebtPaid)}</p>
-              <p className="mt-1 text-xs text-muted-gray">
-                Quedan {formatCurrency(report.totalDebtRemaining)} pendientes en {report.activeDebtCount} deuda(s) activas.
-              </p>
-            </div>
-
-            <div className="rounded-2xl border border-graphite bg-abyss/85 p-4">
-              <div className="flex items-center gap-2 text-muted-gray">
-                <PiggyBank className="size-4" />
-                <span className="text-xs uppercase tracking-[0.2em]">Deseos ya descontados</span>
+              <div>
+                <p className="text-xs uppercase tracking-widest text-muted-gray">Promedio de Gustos</p>
+                <p className="mt-2 text-lg font-semibold text-violet-400">
+                  {formatCurrency(
+                    report.spendingTrendSeries.length > 0
+                      ? report.spendingTrendSeries.reduce((sum, item) => sum + item.gustos, 0) / report.spendingTrendSeries.length
+                      : 0,
+                  )}
+                </p>
               </div>
-              <p className="mt-3 text-2xl font-semibold text-on-surface">{formatCurrency(report.reservedForPurchasedWishlist)}</p>
-              <p className="mt-1 text-xs text-muted-gray">
-                Este monto ya salió del ahorro real por deseos marcados como comprados.
-              </p>
-            </div>
-
-            <div className="rounded-2xl border border-graphite bg-abyss/85 p-4">
-              <div className="flex items-center gap-2 text-muted-gray">
-                <Target className="size-4" />
-                <span className="text-xs uppercase tracking-[0.2em]">Cierre mensual</span>
-              </div>
-              <p className="mt-3 text-lg font-semibold text-on-surface">
-                {report.currentSnapshot?.label ?? 'Aun no hay cierre guardado'}
-              </p>
-              <p className="mt-1 text-xs text-muted-gray">
-                {report.currentSnapshot
-                  ? `${report.currentSnapshot.expenses.length} gasto(s) y ${report.currentSnapshot.wants.length} gusto(s) guardados en el reset mensual.`
-                  : 'Haz el reset mensual cuando cierres el mes para alimentar este bloque automáticamente.'}
-              </p>
-            </div>
-
-            <div className="rounded-2xl border border-graphite bg-abyss/85 p-4">
-              <div className="flex items-center gap-2 text-muted-gray">
-                <CalendarDays className="size-4" />
-                <span className="text-xs uppercase tracking-[0.2em]">Alcance hasta cobro</span>
-              </div>
-              <p className="mt-3 text-lg font-semibold text-on-surface">
-                {report.currentSummary?.daysRemainingInCycle
-                  ? `${report.currentSummary.daysRemainingInCycle} día(s) hasta fin de mes`
-                  : 'Mes cerrado'}
-              </p>
-              <p className="mt-1 text-xs text-muted-gray">
-                {report.currentSummary?.daysRemainingInCycle
-                  ? `Para aguantar hasta ${new Date(report.currentSummary.cycleEndsAt).toLocaleDateString('es-ES')} te conviene no pasar de ${formatCurrency(report.currentSummary.recommendedDailyAvailable)} por día de saldo libre.`
-                  : 'Este bloque se recalcula solo en el mes actual, cuando aun falta para el proximo cobro.'}
-              </p>
             </div>
           </CardContent>
         </Card>
+
       </section>
 
       <section className="grid gap-4">
@@ -769,6 +847,99 @@ export default function Reports() {
                 ))}
               </div>
             )}
+          </CardContent>
+        </Card>
+      </section>
+
+      <section className="grid gap-4 xl:grid-cols-2">
+        <Card className="border-graphite bg-surface shadow-vault">
+          <CardHeader>
+            <CardTitle className="text-on-surface">Lectura rápida</CardTitle>
+            <CardDescription className="text-muted-gray">
+              Estado actual de deuda, deseos comprados y cierre de lista.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="rounded-2xl border border-graphite bg-abyss/85 p-4">
+              <div className="flex items-center gap-2 text-muted-gray">
+                <Landmark className="size-4" />
+                <span className="text-xs uppercase tracking-[0.2em]">Deuda pagada acumulada</span>
+              </div>
+              <p className="mt-3 text-2xl font-semibold text-on-surface">{formatCurrency(report.totalDebtPaid)}</p>
+              <p className="mt-1 text-xs text-muted-gray">
+                Quedan {formatCurrency(report.totalDebtRemaining)} pendientes en {report.activeDebtCount} deuda(s) activas.
+              </p>
+            </div>
+
+            <div className="rounded-2xl border border-graphite bg-abyss/85 p-4">
+              <div className="flex items-center gap-2 text-muted-gray">
+                <PiggyBank className="size-4" />
+                <span className="text-xs uppercase tracking-[0.2em]">Deseos ya descontados</span>
+              </div>
+              <p className="mt-3 text-2xl font-semibold text-on-surface">{formatCurrency(report.reservedForPurchasedWishlist)}</p>
+              <p className="mt-1 text-xs text-muted-gray">
+                Este monto ya salió del ahorro real por deseos marcados como comprados.
+              </p>
+            </div>
+
+            <div className="rounded-2xl border border-graphite bg-abyss/85 p-4">
+              <div className="flex items-center gap-2 text-muted-gray">
+                <Target className="size-4" />
+                <span className="text-xs uppercase tracking-[0.2em]">Cierre mensual</span>
+              </div>
+              <p className="mt-3 text-lg font-semibold text-on-surface">
+                {report.currentSnapshot?.label ?? 'Aun no hay cierre guardado'}
+              </p>
+              <p className="mt-1 text-xs text-muted-gray">
+                {report.currentSnapshot
+                  ? `${report.currentSnapshot.expenses.length} gasto(s) y ${report.currentSnapshot.wants.length} gusto(s) guardados en el reset mensual.`
+                  : 'Haz el reset mensual cuando cierres el mes para alimentar este bloque automáticamente.'}
+              </p>
+            </div>
+
+            <div className="rounded-2xl border border-graphite bg-abyss/85 p-4">
+              <div className="flex items-center gap-2 text-muted-gray">
+                <CalendarDays className="size-4" />
+                <span className="text-xs uppercase tracking-[0.2em]">Alcance hasta cobro</span>
+              </div>
+              <p className="mt-3 text-lg font-semibold text-on-surface">
+                {report.currentSummary?.daysRemainingInCycle
+                  ? `${report.currentSummary.daysRemainingInCycle} día(s) hasta fin de mes`
+                  : 'Mes cerrado'}
+              </p>
+              <p className="mt-1 text-xs text-muted-gray">
+                {report.currentSummary?.daysRemainingInCycle
+                  ? `Para aguantar hasta ${new Date(report.currentSummary.cycleEndsAt).toLocaleDateString('es-ES')} te conviene no pasar de ${formatCurrency(report.currentSummary.recommendedDailyAvailable)} por día de saldo libre.`
+                  : 'Este bloque se recalcula solo en el mes actual, cuando aun falta para el proximo cobro.'}
+              </p>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="border-graphite bg-surface shadow-vault">
+          <CardHeader>
+            <CardTitle className="text-on-surface">Siguientes pasos sugeridos</CardTitle>
+            <CardDescription className="text-muted-gray">
+              Accesos rápidos para corregir lo que el informe detecta.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="grid gap-3">
+            <Button variant="secondary" className="justify-between bg-surface-container-high text-on-surface hover:bg-surface-container-higher" onClick={() => navigate('/salary')}>
+              Revisar salario del mes
+              <ArrowRight className="size-4" />
+            </Button>
+            <Button variant="secondary" className="justify-between bg-surface-container-high text-on-surface hover:bg-surface-container-higher" onClick={() => navigate('/expenses')}>
+              Ajustar gastos esenciales
+              <ArrowRight className="size-4" />
+            </Button>
+            <Button variant="secondary" className="justify-between bg-surface-container-high text-on-surface hover:bg-surface-container-higher" onClick={() => navigate('/wants')}>
+              Ajustar gustos y caprichos
+              <ArrowRight className="size-4" />
+            </Button>
+            <Button variant="secondary" className="justify-between bg-surface-container-high text-on-surface hover:bg-surface-container-higher" onClick={() => navigate('/debts')}>
+              Revisar plan de deudas
+              <ArrowRight className="size-4" />
+            </Button>
           </CardContent>
         </Card>
       </section>
@@ -983,33 +1154,6 @@ export default function Reports() {
                 Todavía no existe historial mensual. Usa el reset del mes cuando cierres compras para que esta sección tenga memoria.
               </p>
             ) : null}
-          </CardContent>
-        </Card>
-
-        <Card className="border-graphite bg-surface shadow-vault">
-          <CardHeader>
-            <CardTitle className="text-on-surface">Siguientes pasos sugeridos</CardTitle>
-            <CardDescription className="text-muted-gray">
-              Accesos rápidos para corregir lo que el informe detecta.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="grid gap-3">
-            <Button variant="secondary" className="justify-between bg-surface-container-high text-on-surface hover:bg-surface-container-higher" onClick={() => navigate('/salary')}>
-              Revisar salario del mes
-              <ArrowRight className="size-4" />
-            </Button>
-            <Button variant="secondary" className="justify-between bg-surface-container-high text-on-surface hover:bg-surface-container-higher" onClick={() => navigate('/expenses')}>
-              Ajustar gastos esenciales
-              <ArrowRight className="size-4" />
-            </Button>
-            <Button variant="secondary" className="justify-between bg-surface-container-high text-on-surface hover:bg-surface-container-higher" onClick={() => navigate('/wants')}>
-              Ajustar gustos y caprichos
-              <ArrowRight className="size-4" />
-            </Button>
-            <Button variant="secondary" className="justify-between bg-surface-container-high text-on-surface hover:bg-surface-container-higher" onClick={() => navigate('/debts')}>
-              Revisar plan de deudas
-              <ArrowRight className="size-4" />
-            </Button>
           </CardContent>
         </Card>
       </section>
