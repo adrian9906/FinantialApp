@@ -671,7 +671,7 @@ export default function Reports() {
                   isAnimationActive={true}
                   animationDuration={600}
                   dot={(props) => {
-                    const { cx, cy, fill } = props
+                    const { cx, cy } = props
                     return (
                       <circle
                         cx={cx}
