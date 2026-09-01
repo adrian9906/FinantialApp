@@ -283,14 +283,14 @@ export default function Reports() {
         if (gastos === 0 && monthlyPlanningHistory.length > 0) {
           const historicalEntry = monthlyPlanningHistory.find((h) => h.month === entry.month)
           if (historicalEntry?.expenses && historicalEntry.expenses.length > 0) {
-            gastos = historicalEntry.expenses.reduce((sum: number, exp: any) => sum + (exp.amount ?? 0), 0)
+            gastos = historicalEntry.expenses.reduce((sum: number, exp: { amount?: number }) => sum + (exp.amount ?? 0), 0)
           }
         }
 
         if (gustos === 0 && monthlyPlanningHistory.length > 0) {
           const historicalEntry = monthlyPlanningHistory.find((h) => h.month === entry.month)
           if (historicalEntry?.wants && historicalEntry.wants.length > 0) {
-            gustos = historicalEntry.wants.reduce((sum: number, want: any) => sum + (want.amount ?? 0), 0)
+            gustos = historicalEntry.wants.reduce((sum: number, want: { amount?: number }) => sum + (want.amount ?? 0), 0)
           }
         }
 
