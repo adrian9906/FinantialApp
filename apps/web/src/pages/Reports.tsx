@@ -82,6 +82,7 @@ export default function Reports() {
   const monthlyPlanningHistory = useFinanceStore((state) => state.monthlyPlanningHistory)
   const formula = usePreferencesStore((state) => state.formula)
   const [isExporting, setIsExporting] = useState(false)
+  const [spendingTrendFilter, setSpendingTrendFilter] = useState<'all' | 'gastos' | 'gustos'>('all')
 
   function getTimelineTone(kind: ReturnType<typeof buildFinancialTimeline>[number]['kind']) {
     if (kind === 'salary') return 'border-emerald-500/25 bg-emerald-500/10 text-emerald-200'
@@ -268,16 +269,34 @@ export default function Reports() {
 
     const spendingTrendSeries = monthlySummaries
       .sort((left, right) => left.month.localeCompare(right.month))
-      .map((entry) => ({
-        label: entry.shortLabel,
-        month: entry.label,
-        salario: entry.salary,
-        gastos: entry.expenses,
-        gustos: entry.wants,
-        ahorros: entry.savings,
-        deuda: entry.debtRemaining,
-        libre: entry.freeBalance,
-      }))
+      .map((entry) => {
+        let gastos = entry.expenses
+        let gustos = entry.wants
+
+        // Si no hay datos en transacciones, intenta obtenerlos del historial de cierre
+        if ((gastos === 0 || gustos === 0) && monthlyPlanningHistory.length > 0) {
+          const historicalEntry = monthlyPlanningHistory.find((h) => h.month === entry.month)
+          if (historicalEntry) {
+            if (gastos === 0 && historicalEntry.expenses && historicalEntry.expenses.length > 0) {
+              gastos = historicalEntry.expenses.reduce((sum: number, exp: any) => sum + (exp.amount ?? 0), 0)
+            }
+            if (gustos === 0 && historicalEntry.wants && historicalEntry.wants.length > 0) {
+              gustos = historicalEntry.wants.reduce((sum: number, want: any) => sum + (want.amount ?? 0), 0)
+            }
+          }
+        }
+
+        return {
+          label: entry.shortLabel,
+          month: entry.label,
+          salario: entry.salary,
+          gastos,
+          gustos,
+          ahorros: entry.savings,
+          deuda: entry.debtRemaining,
+          libre: entry.freeBalance,
+        }
+      })
 
     const spendingTrendSignals = [
       { label: 'Gastos', direction: getTrendDirection(spendingTrendSeries.map((entry) => entry.gastos)) },
@@ -580,16 +599,27 @@ export default function Reports() {
 
       <section className="grid gap-4">
         <Card className="border-graphite bg-surface shadow-vault">
-          <CardHeader className="gap-4 sm:flex-row sm:items-start sm:justify-between">
+          <CardHeader className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
             <div>
               <CardTitle className="text-on-surface">Línea temporal: Gastos vs Gustos</CardTitle>
               <CardDescription className="text-muted-gray">
                 Evolución mes a mes de ambas categorías. Toca cada punto para ver el importe exacto y detectar tendencias de subida o bajada.
               </CardDescription>
             </div>
-            <Badge variant="secondary" className="bg-surface-container-high text-on-surface">
-              {report.spendingTrendSeries.length} mes(es) de historial
-            </Badge>
+            <div className="flex items-center gap-3">
+              <Badge variant="secondary" className="bg-surface-container-high text-on-surface">
+                {report.spendingTrendSeries.length} mes(es) de historial
+              </Badge>
+              <select
+                value={spendingTrendFilter}
+                onChange={(e) => setSpendingTrendFilter(e.target.value as 'all' | 'gastos' | 'gustos')}
+                className="rounded-lg border border-graphite bg-abyss px-3 py-2 text-sm font-medium text-on-surface hover:border-primary/50"
+              >
+                <option value="all">Ambos</option>
+                <option value="gastos">Solo Gastos</option>
+                <option value="gustos">Solo Gustos</option>
+              </select>
+            </div>
           </CardHeader>
           <CardContent className="space-y-6">
             <div className="flex flex-wrap gap-3">
@@ -606,160 +636,178 @@ export default function Reports() {
               ))}
             </div>
 
-            <ChartContainer config={spendingTrendConfig} className="h-[400px] w-full">
-              <LineChart data={report.spendingTrendSeries} margin={{ top: 20, right: 16, left: -12, bottom: 8 }}>
-                <CartesianGrid
-                  vertical={false}
-                  stroke="var(--graphite)"
-                  strokeDasharray="2 4"
-                  strokeOpacity={0.3}
-                />
-                <XAxis
-                  dataKey="label"
-                  tickLine={false}
-                  axisLine={false}
-                  tick={{ fontSize: 12, fill: 'var(--muted-gray)', fontWeight: 500 }}
-                />
-                <YAxis
-                  tickLine={false}
-                  axisLine={false}
-                  tick={{ fontSize: 12, fill: 'var(--muted-gray)' }}
-                  tickFormatter={(value) => `$${(value / 1000).toFixed(0)}k`}
-                />
-                <ChartTooltip
-                  cursor={{ stroke: 'var(--primary)', strokeDasharray: '6 3', strokeOpacity: 0.5 }}
-                  contentStyle={{
-                    backgroundColor: 'var(--abyss)',
-                    border: '1px solid var(--graphite)',
-                    borderRadius: '12px',
-                    boxShadow: '0 8px 32px rgba(0, 0, 0, 0.4)',
-                  }}
-                  content={({ active, payload, label }) => {
-                    if (active && payload?.length) {
-                      return (
-                        <div className="space-y-2 p-4">
-                          <p className="text-sm font-semibold text-on-surface">{label}</p>
-                          {payload.map((entry, index) => (
-                            <div key={`tooltip-${index}`} className="flex items-center justify-between gap-4">
-                              <div className="flex items-center gap-2">
-                                <div
-                                  className="size-2 rounded-full"
-                                  style={{ backgroundColor: entry.color }}
-                                />
-                                <span className="text-xs text-muted-gray">
-                                  {entry.name === 'gastos' ? 'Gastos' : 'Gustos'}
-                                </span>
-                              </div>
-                              <span className="font-mono text-sm font-semibold text-on-surface">
-                                {formatCurrency(Number(entry.value))}
-                              </span>
+            {report.spendingTrendSeries.length === 0 ? (
+              <div className="rounded-2xl border border-dashed border-graphite bg-abyss/70 p-8 text-center text-sm text-muted-gray">
+                No hay datos de gastos o gustos para mostrar la línea temporal.
+              </div>
+            ) : (
+              <>
+                <ChartContainer config={spendingTrendConfig} className="h-[400px] w-full">
+                  <LineChart data={report.spendingTrendSeries} margin={{ top: 20, right: 16, left: -12, bottom: 8 }}>
+                    <CartesianGrid
+                      vertical={false}
+                      stroke="var(--graphite)"
+                      strokeDasharray="2 4"
+                      strokeOpacity={0.3}
+                    />
+                    <XAxis
+                      dataKey="label"
+                      tickLine={false}
+                      axisLine={false}
+                      tick={{ fontSize: 12, fill: 'var(--muted-gray)', fontWeight: 500 }}
+                    />
+                    <YAxis
+                      tickLine={false}
+                      axisLine={false}
+                      tick={{ fontSize: 12, fill: 'var(--muted-gray)' }}
+                      tickFormatter={(value) => `$${(value / 1000).toFixed(0)}k`}
+                    />
+                    <ChartTooltip
+                      cursor={{ stroke: 'var(--primary)', strokeDasharray: '6 3', strokeOpacity: 0.5 }}
+                      contentStyle={{
+                        backgroundColor: 'var(--abyss)',
+                        border: '1px solid var(--graphite)',
+                        borderRadius: '12px',
+                        boxShadow: '0 8px 32px rgba(0, 0, 0, 0.4)',
+                      }}
+                      content={({ active, payload, label }) => {
+                        if (active && payload?.length) {
+                          return (
+                            <div className="space-y-2 p-4">
+                              <p className="text-sm font-semibold text-on-surface">{label}</p>
+                              {payload.map((entry, index) => (
+                                <div key={`tooltip-${index}`} className="flex items-center justify-between gap-4">
+                                  <div className="flex items-center gap-2">
+                                    <div
+                                      className="size-2 rounded-full"
+                                      style={{ backgroundColor: entry.color }}
+                                    />
+                                    <span className="text-xs text-muted-gray">
+                                      {entry.name === 'gastos' ? 'Gastos' : 'Gustos'}
+                                    </span>
+                                  </div>
+                                  <span className="font-mono text-sm font-semibold text-on-surface">
+                                    {formatCurrency(Number(entry.value))}
+                                  </span>
+                                </div>
+                              ))}
                             </div>
-                          ))}
-                        </div>
-                      )
-                    }
-                    return null
-                  }}
-                />
+                          )
+                        }
+                        return null
+                      }}
+                    />
 
-                <Line
-                  type="monotone"
-                  dataKey="gastos"
-                  name="gastos"
-                  stroke="#3b82f6"
-                  strokeWidth={3}
-                  isAnimationActive={true}
-                  animationDuration={600}
-                  dot={(props) => {
-                    const { cx, cy } = props
-                    return (
-                      <circle
-                        cx={cx}
-                        cy={cy}
-                        r={4}
-                        fill="#3b82f6"
-                        stroke="var(--surface)"
-                        strokeWidth={2}
-                      />
-                    )
-                  }}
-                  activeDot={(props) => {
-                    const { cx, cy } = props
-                    return (
-                      <circle
-                        cx={cx}
-                        cy={cy}
-                        r={7}
-                        fill="#3b82f6"
-                        stroke="var(--surface)"
+                    {(spendingTrendFilter === 'all' || spendingTrendFilter === 'gastos') && (
+                      <Line
+                        type="monotone"
+                        dataKey="gastos"
+                        name="gastos"
+                        stroke="#3b82f6"
                         strokeWidth={3}
-                        filter="drop-shadow(0 0 6px rgba(59, 130, 246, 0.5))"
+                        isAnimationActive={true}
+                        animationDuration={600}
+                        dot={(props) => {
+                          const { cx, cy } = props
+                          return (
+                            <circle
+                              cx={cx}
+                              cy={cy}
+                              r={4}
+                              fill="#3b82f6"
+                              stroke="var(--surface)"
+                              strokeWidth={2}
+                            />
+                          )
+                        }}
+                        activeDot={(props) => {
+                          const { cx, cy } = props
+                          return (
+                            <circle
+                              cx={cx}
+                              cy={cy}
+                              r={7}
+                              fill="#3b82f6"
+                              stroke="var(--surface)"
+                              strokeWidth={3}
+                              filter="drop-shadow(0 0 6px rgba(59, 130, 246, 0.5))"
+                            />
+                          )
+                        }}
                       />
-                    )
-                  }}
-                />
+                    )}
 
-                <Line
-                  type="monotone"
-                  dataKey="gustos"
-                  name="gustos"
-                  stroke="#a855f7"
-                  strokeWidth={3}
-                  isAnimationActive={true}
-                  animationDuration={600}
-                  dot={(props) => {
-                    const { cx, cy } = props
-                    return (
-                      <circle
-                        cx={cx}
-                        cy={cy}
-                        r={4}
-                        fill="#a855f7"
-                        stroke="var(--surface)"
-                        strokeWidth={2}
-                      />
-                    )
-                  }}
-                  activeDot={(props) => {
-                    const { cx, cy } = props
-                    return (
-                      <circle
-                        cx={cx}
-                        cy={cy}
-                        r={7}
-                        fill="#a855f7"
-                        stroke="var(--surface)"
+                    {(spendingTrendFilter === 'all' || spendingTrendFilter === 'gustos') && (
+                      <Line
+                        type="monotone"
+                        dataKey="gustos"
+                        name="gustos"
+                        stroke="#a855f7"
                         strokeWidth={3}
-                        filter="drop-shadow(0 0 6px rgba(168, 85, 247, 0.5))"
+                        isAnimationActive={true}
+                        animationDuration={600}
+                        dot={(props) => {
+                          const { cx, cy } = props
+                          return (
+                            <circle
+                              cx={cx}
+                              cy={cy}
+                              r={4}
+                              fill="#a855f7"
+                              stroke="var(--surface)"
+                              strokeWidth={2}
+                            />
+                          )
+                        }}
+                        activeDot={(props) => {
+                          const { cx, cy } = props
+                          return (
+                            <circle
+                              cx={cx}
+                              cy={cy}
+                              r={7}
+                              fill="#a855f7"
+                              stroke="var(--surface)"
+                              strokeWidth={3}
+                              filter="drop-shadow(0 0 6px rgba(168, 85, 247, 0.5))"
+                            />
+                          )
+                        }}
                       />
-                    )
-                  }}
-                />
-              </LineChart>
-            </ChartContainer>
+                    )}
+                  </LineChart>
+                </ChartContainer>
 
-            <div className="grid gap-3 rounded-lg border border-graphite/50 bg-abyss/40 p-4 sm:grid-cols-2">
-              <div>
-                <p className="text-xs uppercase tracking-widest text-muted-gray">Promedio de Gastos</p>
-                <p className="mt-2 text-lg font-semibold text-blue-400">
-                  {formatCurrency(
-                    report.spendingTrendSeries.length > 0
-                      ? report.spendingTrendSeries.reduce((sum, item) => sum + item.gastos, 0) / report.spendingTrendSeries.length
-                      : 0,
+                <div className="grid gap-3 rounded-lg border border-graphite/50 bg-abyss/40 p-4 sm:grid-cols-2">
+                  {(spendingTrendFilter === 'all' || spendingTrendFilter === 'gastos') && (
+                    <div>
+                      <p className="text-xs uppercase tracking-widest text-muted-gray">Promedio de Gastos</p>
+                      <p className="mt-2 text-lg font-semibold text-blue-400">
+                        {formatCurrency(
+                          report.spendingTrendSeries.reduce((sum, item) => sum + item.gastos, 0) / report.spendingTrendSeries.length,
+                        )}
+                      </p>
+                      <p className="mt-1 text-xs text-muted-gray">
+                        Máximo: {formatCurrency(Math.max(...report.spendingTrendSeries.map((item) => item.gastos)))} | Mínimo: {formatCurrency(Math.min(...report.spendingTrendSeries.map((item) => item.gastos)))}
+                      </p>
+                    </div>
                   )}
-                </p>
-              </div>
-              <div>
-                <p className="text-xs uppercase tracking-widest text-muted-gray">Promedio de Gustos</p>
-                <p className="mt-2 text-lg font-semibold text-violet-400">
-                  {formatCurrency(
-                    report.spendingTrendSeries.length > 0
-                      ? report.spendingTrendSeries.reduce((sum, item) => sum + item.gustos, 0) / report.spendingTrendSeries.length
-                      : 0,
+                  {(spendingTrendFilter === 'all' || spendingTrendFilter === 'gustos') && (
+                    <div>
+                      <p className="text-xs uppercase tracking-widest text-muted-gray">Promedio de Gustos</p>
+                      <p className="mt-2 text-lg font-semibold text-violet-400">
+                        {formatCurrency(
+                          report.spendingTrendSeries.reduce((sum, item) => sum + item.gustos, 0) / report.spendingTrendSeries.length,
+                        )}
+                      </p>
+                      <p className="mt-1 text-xs text-muted-gray">
+                        Máximo: {formatCurrency(Math.max(...report.spendingTrendSeries.map((item) => item.gustos)))} | Mínimo: {formatCurrency(Math.min(...report.spendingTrendSeries.map((item) => item.gustos)))}
+                      </p>
+                    </div>
                   )}
-                </p>
-              </div>
-            </div>
+                </div>
+              </>
+            )}
           </CardContent>
         </Card>
 
