@@ -270,19 +270,27 @@ export default function Reports() {
     const spendingTrendSeries = monthlySummaries
       .sort((left, right) => left.month.localeCompare(right.month))
       .map((entry) => {
-        let gastos = entry.expenses
-        let gustos = entry.wants
+        // Recalcular datos directamente desde transacciones para garantizar precisión
+        const monthTransactions = transactions.filter((t) => t.date.slice(0, 7) === entry.month)
+        let gastos = monthTransactions
+          .filter((t) => t.type === 'expense')
+          .reduce((sum, t) => sum + Math.max(0, t.amount), 0)
+        let gustos = monthTransactions
+          .filter((t) => t.type === 'want')
+          .reduce((sum, t) => sum + Math.max(0, t.amount), 0)
 
-        // Si no hay datos en transacciones, intenta obtenerlos del historial de cierre
-        if ((gastos === 0 || gustos === 0) && monthlyPlanningHistory.length > 0) {
+        // Si no hay transacciones en este mes, intenta obtenerlos del historial de cierre
+        if (gastos === 0 && monthlyPlanningHistory.length > 0) {
           const historicalEntry = monthlyPlanningHistory.find((h) => h.month === entry.month)
-          if (historicalEntry) {
-            if (gastos === 0 && historicalEntry.expenses && historicalEntry.expenses.length > 0) {
-              gastos = historicalEntry.expenses.reduce((sum: number, exp: any) => sum + (exp.amount ?? 0), 0)
-            }
-            if (gustos === 0 && historicalEntry.wants && historicalEntry.wants.length > 0) {
-              gustos = historicalEntry.wants.reduce((sum: number, want: any) => sum + (want.amount ?? 0), 0)
-            }
+          if (historicalEntry?.expenses && historicalEntry.expenses.length > 0) {
+            gastos = historicalEntry.expenses.reduce((sum: number, exp: any) => sum + (exp.amount ?? 0), 0)
+          }
+        }
+
+        if (gustos === 0 && monthlyPlanningHistory.length > 0) {
+          const historicalEntry = monthlyPlanningHistory.find((h) => h.month === entry.month)
+          if (historicalEntry?.wants && historicalEntry.wants.length > 0) {
+            gustos = historicalEntry.wants.reduce((sum: number, want: any) => sum + (want.amount ?? 0), 0)
           }
         }
 
