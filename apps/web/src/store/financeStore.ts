@@ -29,6 +29,9 @@ import { useAuthStore } from '@/store/authStore'
 import { usePreferencesStore } from '@/store/preferencesStore'
 
 const GUEST_FINANCE_STORAGE_KEY = 'plata-guest-finance'
+let localRevision = 0
+let syncInFlight: Promise<boolean> | null = null
+let followUpSyncRequired = false
 
 type DebtInput = Omit<Debt, 'id' | 'paidAmount' | 'remainingAmount' | 'progress' | 'isSettled'> & {
   initialPayment?: number
@@ -245,12 +248,11 @@ function getAuthenticatedUserId() {
   return user.id
 }
 
-function isAuthenticatedOfflineMode() {
-  return Boolean(getAuthenticatedUserId()) && !isOnline()
-}
-
 function isLocalMutationMode() {
-  return isGuestMode() || isAuthenticatedOfflineMode()
+  // Always update the on-device snapshot first.  navigator.onLine is not
+  // reliable in Capacitor: it can remain true without usable internet.
+  // The pending snapshot is uploaded in the background when the API is reachable.
+  return isGuestMode() || Boolean(getAuthenticatedUserId())
 }
 
 function makeId(prefix: string) {
@@ -296,6 +298,14 @@ function updateLocalState(
     persistLocalSnapshot(buildSnapshotFromState(state, next), !isGuestMode())
     return next
   })
+
+  localRevision += 1
+
+  if (!isGuestMode() && isOnline()) {
+    queueMicrotask(() => {
+      void useFinanceStore.getState().syncPendingChanges().catch(() => {})
+    })
+  }
 }
 
 function updateRemoteState(
@@ -392,27 +402,48 @@ export const useFinanceStore = create<FinanceStore>()((set, get) => ({
       })
     }
   },
-  syncPendingChanges: async () => {
-    const userId = getAuthenticatedUserId()
-    if (!userId || !isOnline() || !hasPendingSync(userId)) {
-      return false
-    }
+  syncPendingChanges: () => {
+    if (syncInFlight) return syncInFlight
 
-    const snapshot = buildSnapshotFromState(get())
-    const synced = await requestJson<BootstrapPayload>('/bootstrap/sync', {
-      method: 'PUT',
-      body: JSON.stringify(snapshot),
+    syncInFlight = (async () => {
+      const userId = getAuthenticatedUserId()
+      if (!userId || !isOnline() || !hasPendingSync(userId)) return false
+
+      const revisionAtStart = localRevision
+      const snapshot = buildSnapshotFromState(get())
+      const synced = await requestJson<BootstrapPayload>('/bootstrap/sync', {
+        method: 'PUT',
+        body: JSON.stringify(snapshot),
+      })
+
+      if (localRevision !== revisionAtStart) {
+        // A user change arrived while the upload was running. Keep the newer
+        // on-device state and leave it queued for the next upload.
+        markPendingSync(userId, true)
+        followUpSyncRequired = true
+        return false
+      }
+
+      await persistCachedBootstrap(userId, synced)
+      markPendingSync(userId, false)
+      set({
+        ...normalizeBootstrapSnapshot(synced),
+        hasLoaded: true,
+        loadedKey: `user:${userId}`,
+      })
+      return true
+    })()
+
+    void syncInFlight.finally(() => {
+      syncInFlight = null
+      const userId = getAuthenticatedUserId()
+      if (followUpSyncRequired && userId && hasPendingSync(userId) && isOnline()) {
+        followUpSyncRequired = false
+        queueMicrotask(() => { void useFinanceStore.getState().syncPendingChanges().catch(() => {}) })
+      }
     })
 
-    await persistCachedBootstrap(userId, synced)
-    markPendingSync(userId, false)
-    set({
-      ...normalizeBootstrapSnapshot(synced),
-      hasLoaded: true,
-      loadedKey: `user:${userId}`,
-    })
-
-    return true
+    return syncInFlight
   },
   reset: () => {
     set({

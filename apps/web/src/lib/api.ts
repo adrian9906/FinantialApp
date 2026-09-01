@@ -24,7 +24,7 @@ export function isNetworkRequestError(error: unknown) {
   if (error instanceof DOMException) return true
 
   const message = error instanceof Error ? error.message.toLowerCase() : ''
-  return message.includes('failed to fetch') || message.includes('network') || message.includes('load failed')
+  return message.includes('failed to fetch') || message.includes('network') || message.includes('load failed') || message.includes('aborted')
 }
 
 export async function requestJson<T>(path: string, init?: RequestInit): Promise<T> {
@@ -40,11 +40,14 @@ export async function requestJson<T>(path: string, init?: RequestInit): Promise<
     headers['Authorization'] = `Bearer ${token}`
   }
 
+  const controller = new AbortController()
+  const timeoutId = window.setTimeout(() => controller.abort(), 8_000)
   const response = await fetch(getApiUrl(path), {
     credentials: 'include',
     headers,
+    signal: init?.signal ?? controller.signal,
     ...restInit,
-  })
+  }).finally(() => window.clearTimeout(timeoutId))
 
   if (!response.ok) {
     const text = await response.text()
