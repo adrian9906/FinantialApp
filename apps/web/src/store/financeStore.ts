@@ -9,6 +9,7 @@ import type {
   Reminder,
   Salary,
   SavingsGoal,
+  Subscription,
   Transaction,
   WishlistItem,
 } from '@plata/shared'
@@ -67,6 +68,9 @@ interface FinanceStore extends BootstrapPayload {
   updateReminder: (id: string, data: Partial<Omit<Reminder, 'id'>>) => Promise<void>
   toggleReminder: (id: string) => Promise<void>
   removeReminder: (id: string) => Promise<void>
+  addSubscription: (subscription: Omit<Subscription, 'id'>) => Promise<void>
+  updateSubscription: (id: string, data: Partial<Omit<Subscription, 'id'>>) => Promise<void>
+  removeSubscription: (id: string) => Promise<void>
 }
 
 function getEmptyState(): BootstrapPayload {
@@ -219,6 +223,7 @@ function buildSnapshotFromState(state: BootstrapPayload, next?: Partial<Bootstra
     projections: next?.projections ?? state.projections,
     savingsGoals: next?.savingsGoals ?? state.savingsGoals,
     reminders: next?.reminders ?? state.reminders,
+    subscriptions: next?.subscriptions ?? state.subscriptions,
   }
 }
 
@@ -1214,6 +1219,39 @@ export const useFinanceStore = create<FinanceStore>()((set, get) => ({
       updateLocalState(set, (state) => ({
         reminders: state.reminders.filter((entry) => entry.id !== id),
       }))
+    }
+  },
+  addSubscription: async (subscription) => {
+    const createLocal = () => updateLocalState(set, (state) => ({ subscriptions: [{ ...subscription, id: makeId('subscription') }, ...state.subscriptions] }))
+    if (isLocalMutationMode()) { createLocal(); return }
+    try {
+      const created = await requestJson<Subscription>('/subscriptions', { method: 'POST', body: JSON.stringify(subscription) })
+      updateRemoteState(set, (state) => ({ subscriptions: [created, ...state.subscriptions] }))
+    } catch (error) {
+      if (!shouldFallbackToLocalMutation(error)) throw error
+      createLocal()
+    }
+  },
+  updateSubscription: async (id, data) => {
+    const updateLocal = () => updateLocalState(set, (state) => ({ subscriptions: state.subscriptions.map((entry) => entry.id === id ? { ...entry, ...data } : entry) }))
+    if (isLocalMutationMode()) { updateLocal(); return }
+    try {
+      const updated = await requestJson<Subscription>(`/subscriptions/${id}`, { method: 'PUT', body: JSON.stringify(data) })
+      updateRemoteState(set, (state) => ({ subscriptions: state.subscriptions.map((entry) => entry.id === id ? updated : entry) }))
+    } catch (error) {
+      if (!shouldFallbackToLocalMutation(error)) throw error
+      updateLocal()
+    }
+  },
+  removeSubscription: async (id) => {
+    const removeLocal = () => updateLocalState(set, (state) => ({ subscriptions: state.subscriptions.filter((entry) => entry.id !== id) }))
+    if (isLocalMutationMode()) { removeLocal(); return }
+    try {
+      await requestJson<void>(`/subscriptions/${id}`, { method: 'DELETE' })
+      updateRemoteState(set, (state) => ({ subscriptions: state.subscriptions.filter((entry) => entry.id !== id) }))
+    } catch (error) {
+      if (!shouldFallbackToLocalMutation(error)) throw error
+      removeLocal()
     }
   },
 }))

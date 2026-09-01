@@ -35,6 +35,7 @@ import {
   User,
   UserPlus,
   Wallet,
+  Repeat2,
   X,
   type LucideProps,
 } from 'lucide-react'
@@ -73,6 +74,7 @@ import {
   IconUser,
   IconUserPlus,
   IconWallet,
+  IconRepeat,
   IconX,
   type IconProps as TablerProps,
 } from '@tabler/icons-react'
@@ -118,6 +120,7 @@ export type AppIconName =
   | 'grip'
   | 'arrow-up'
   | 'arrow-down'
+  | 'subscriptions'
 
 type SvgIcon = ComponentType<LucideProps>
 type TablerIcon = ComponentType<TablerProps>
@@ -160,6 +163,7 @@ const lucideIcons: Record<AppIconName, SvgIcon> = {
   grip: GripVertical,
   'arrow-up': ArrowUp,
   'arrow-down': ArrowDown,
+  subscriptions: Repeat2,
 }
 
 const tablerIcons: Record<AppIconName, TablerIcon> = {
@@ -200,6 +204,7 @@ const tablerIcons: Record<AppIconName, TablerIcon> = {
   grip: IconGripVertical,
   'arrow-up': IconArrowUp,
   'arrow-down': IconArrowDown,
+  subscriptions: IconRepeat,
 }
 
 const materialSymbols: Record<AppIconName, string> = {
@@ -240,6 +245,7 @@ const materialSymbols: Record<AppIconName, string> = {
   grip: 'drag_indicator',
   'arrow-up': 'keyboard_arrow_up',
   'arrow-down': 'keyboard_arrow_down',
+  subscriptions: 'autorenew',
 }
 
 export function getIconPackLabel(iconPack: AppIconPack) {

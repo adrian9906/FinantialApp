@@ -9,6 +9,7 @@ import type {
   Reminder,
   Salary,
   SavingsGoal,
+  Subscription,
   Transaction,
   WishlistItem,
 } from '@plata/shared'
@@ -405,7 +406,7 @@ async function loadBootstrap(userId: string) {
     }
   }
 
-  const [salaries, expenses, wants, savings, debts, wishlist, monthlyPlanningHistory, events, projections, savingsGoals, reminders] = await Promise.all([
+  const [salaries, expenses, wants, savings, debts, wishlist, monthlyPlanningHistory, events, projections, savingsGoals, reminders, subscriptions] = await Promise.all([
     prisma.salario.findMany({
       where: { usuarioId: userId },
       orderBy: [
@@ -442,6 +443,7 @@ async function loadBootstrap(userId: string) {
     prisma.proyeccion.findMany({ where: { usuarioId: userId }, orderBy: { createdAt: 'desc' } }),
     prisma.metaAhorro.findMany({ where: { usuarioId: userId }, orderBy: { createdAt: 'desc' } }),
     prisma.notificacion.findMany({ where: { usuarioId: userId }, orderBy: { fecha: 'asc' } }),
+    prisma.suscripcion.findMany({ where: { usuarioId: userId }, orderBy: [{ estado: 'asc' }, { diaCobro: 'asc' }] }),
   ])
 
   const transactions = sortByDateDesc(
@@ -463,7 +465,12 @@ async function loadBootstrap(userId: string) {
     projections: projections.map(serializeProjection),
     savingsGoals: savingsGoals.map(serializeSavingsGoal),
     reminders: reminders.map(serializeReminder),
+    subscriptions: subscriptions.map(serializeSubscription),
   }
+}
+
+function serializeSubscription(entry: { id: string; nombre: string; cantidad: number; diaCobro: number; estado: string; fechaInicio: Date; fechaCancelacion: Date | null }): Subscription {
+  return { id: entry.id, name: entry.nombre, amount: entry.cantidad, billingDay: entry.diaCobro, status: entry.estado === 'cancelled' ? 'cancelled' : 'active', startedAt: toDateString(entry.fechaInicio), cancelledAt: entry.fechaCancelacion ? toDateString(entry.fechaCancelacion) : undefined }
 }
 
 function normalizeSyncPayload(body: JsonRecord): BootstrapPayload {
@@ -477,6 +484,7 @@ function normalizeSyncPayload(body: JsonRecord): BootstrapPayload {
     projections: Array.isArray(body.projections) ? body.projections as Projection[] : [],
     savingsGoals: Array.isArray(body.savingsGoals) ? body.savingsGoals as SavingsGoal[] : [],
     reminders: Array.isArray(body.reminders) ? body.reminders as Reminder[] : [],
+    subscriptions: Array.isArray(body.subscriptions) ? body.subscriptions as Subscription[] : [],
   }
 }
 
@@ -500,6 +508,7 @@ async function syncBootstrap(userId: string, body: JsonRecord) {
     await tx.proyeccion.deleteMany({ where: { usuarioId: userId } })
     await tx.metaAhorro.deleteMany({ where: { usuarioId: userId } })
     await tx.notificacion.deleteMany({ where: { usuarioId: userId } })
+    await tx.suscripcion.deleteMany({ where: { usuarioId: userId } })
 
     for (const entry of payload.salaries) {
       await tx.salario.create({
@@ -676,6 +685,19 @@ async function syncBootstrap(userId: string, body: JsonRecord) {
           usuarioId: userId,
         },
       })
+    }
+
+    for (const entry of payload.subscriptions) {
+      await tx.suscripcion.create({ data: {
+        id: entry.id,
+        nombre: String(entry.name ?? '').trim() || 'Suscripción',
+        cantidad: Math.max(0, Number(entry.amount ?? 0)),
+        diaCobro: Math.max(1, Math.min(31, Math.round(Number(entry.billingDay ?? 1)))),
+        estado: entry.status === 'cancelled' ? 'cancelled' : 'active',
+        fechaInicio: entry.startedAt ? new Date(entry.startedAt) : new Date(),
+        fechaCancelacion: entry.cancelledAt ? new Date(entry.cancelledAt) : null,
+        usuarioId: userId,
+      } })
     }
   })
 
@@ -1334,6 +1356,24 @@ async function saveReminder(userId: string, body: JsonRecord, id?: string) {
   return serializeReminder(entry)
 }
 
+async function saveSubscription(userId: string, body: JsonRecord, id?: string) {
+  const prisma = await getPrisma()
+  const payload = {
+    nombre: String(body.name ?? '').trim(),
+    cantidad: Math.max(0, Number(body.amount ?? 0)),
+    diaCobro: Math.max(1, Math.min(31, Math.round(Number(body.billingDay ?? 1)))),
+    estado: body.status === 'cancelled' ? 'cancelled' : 'active',
+    fechaInicio: body.startedAt ? new Date(String(body.startedAt)) : new Date(),
+    fechaCancelacion: body.cancelledAt ? new Date(String(body.cancelledAt)) : null,
+  }
+  if (!payload.nombre) throw new Error('El nombre de la suscripción es obligatorio.')
+  if (payload.cantidad <= 0) throw new Error('El importe debe ser mayor que cero.')
+  const entry = id
+    ? await prisma.suscripcion.update({ where: { id }, data: payload })
+    : await prisma.suscripcion.create({ data: { ...payload, usuarioId: userId } })
+  return serializeSubscription(entry)
+}
+
 export async function handleApiRequest(req: IncomingMessage, res: ServerResponse) {
   const url = new URL(req.url ?? '/', 'http://localhost')
   const { pathname } = url
@@ -1730,6 +1770,26 @@ export async function handleApiRequest(req: IncomingMessage, res: ServerResponse
       }
       if (method === 'DELETE') {
         await prisma.notificacion.delete({ where: { id } })
+        sendEmpty(res)
+        return true
+      }
+    }
+
+    if (pathname === '/api/subscriptions' && method === 'POST') {
+      sendJson(res, 201, await saveSubscription(authenticatedUser.id, await readJsonBody(req)))
+      return true
+    }
+
+    const subscriptionMatch = pathname.match(/^\/api\/subscriptions\/([^/]+)$/)
+    if (subscriptionMatch) {
+      const id = subscriptionMatch[1]
+      const prisma = await getPrisma()
+      if (method === 'PUT') {
+        sendJson(res, 200, await saveSubscription(authenticatedUser.id, await readJsonBody(req), id))
+        return true
+      }
+      if (method === 'DELETE') {
+        await prisma.suscripcion.delete({ where: { id } })
         sendEmpty(res)
         return true
       }

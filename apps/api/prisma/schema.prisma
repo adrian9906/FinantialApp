@@ -25,6 +25,7 @@ model Usuario {
   proyecciones   Proyeccion[]
   metasAhorro    MetaAhorro[]
   notificaciones Notificacion[]
+  suscripciones  Suscripcion[]
   sesiones       Sesion[]
 
   @@map("usuarios")
@@ -227,6 +228,23 @@ model Notificacion {
   usuario     Usuario  @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
 
   @@map("notificaciones")
+}
+
+model Suscripcion {
+  id                String   @id @default(uuid())
+  nombre            String
+  cantidad          Float
+  diaCobro          Int
+  estado            String   @default("active")
+  fechaInicio       DateTime @default(now())
+  fechaCancelacion  DateTime?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+  usuarioId         String
+  usuario           Usuario  @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+
+  @@index([usuarioId, estado])
+  @@map("suscripciones")
 }
 
 model Sesion {

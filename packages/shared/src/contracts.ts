@@ -7,6 +7,7 @@ import type {
   Reminder,
   Salary,
   SavingsGoal,
+  Subscription,
   Transaction,
   WishlistItem,
 } from './types'
@@ -39,6 +40,7 @@ export interface BootstrapPayload {
   projections: Projection[]
   savingsGoals: SavingsGoal[]
   reminders: Reminder[]
+  subscriptions: Subscription[]
 }
 
 export function createEmptyBootstrapPayload(): BootstrapPayload {
@@ -52,6 +54,7 @@ export function createEmptyBootstrapPayload(): BootstrapPayload {
     projections: [],
     savingsGoals: [],
     reminders: [],
+    subscriptions: [],
   }
 }
 
@@ -71,5 +74,6 @@ export function normalizeBootstrapPayload(payload?: Partial<BootstrapPayload> | 
     projections: payload?.projections ?? [],
     savingsGoals: payload?.savingsGoals ?? [],
     reminders: payload?.reminders ?? [],
+    subscriptions: payload?.subscriptions ?? [],
   }
 }

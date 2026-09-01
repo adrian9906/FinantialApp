@@ -12,6 +12,7 @@ import Wishlist from '@/pages/Wishlist'
 import Events from '@/pages/Events'
 import Projections from '@/pages/Projections'
 import Reminders from '@/pages/Reminders'
+import Subscriptions from '@/pages/Subscriptions'
 import Settings from '@/pages/Settings'
 import Reports from '@/pages/Reports'
 import NotFound from '@/pages/NotFound'
@@ -84,6 +85,7 @@ function ProtectedApp() {
   const projections = useFinanceStore((state) => state.projections)
   const savingsGoals = useFinanceStore((state) => state.savingsGoals)
   const reminders = useFinanceStore((state) => state.reminders)
+  const subscriptions = useFinanceStore((state) => state.subscriptions)
 
   useEffect(() => {
     if (!hasChecked) {
@@ -113,8 +115,9 @@ function ProtectedApp() {
       projections,
       savingsGoals,
       reminders,
+      subscriptions,
     })
-  }, [authMode, user, salaries, transactions, debts, wishlist, monthlyPlanningHistory, events, projections, savingsGoals, reminders])
+  }, [authMode, user, salaries, transactions, debts, wishlist, monthlyPlanningHistory, events, projections, savingsGoals, reminders, subscriptions])
 
   useEffect(() => {
     if (authMode !== 'authenticated') return
@@ -161,6 +164,7 @@ function ProtectedApp() {
         <Route path="events" element={<Events />} />
         <Route path="projections" element={<Projections />} />
         <Route path="reminders" element={<Reminders />} />
+        <Route path="subscriptions" element={<Subscriptions />} />
         <Route path="reports" element={<Reports />} />
         <Route path="settings" element={<Settings />} />
         <Route path="*" element={<NotFound />} />

@@ -1,6 +1,6 @@
 import { useMemo } from 'react'
 
-import { type CurrencyPreference, USD_CURRENCY, usePreferencesStore } from '@/store/preferencesStore'
+import { normalizeCurrencyPreference, type CurrencyPreference, USD_CURRENCY, usePreferencesStore } from '@/store/preferencesStore'
 
 export const CURRENCY_CATALOG: CurrencyPreference[] = [
   USD_CURRENCY,
@@ -36,15 +36,18 @@ function getFormatter(currency: CurrencyPreference) {
 
 export function getActiveCurrency() {
   const { currencies, activeCurrencyCode } = usePreferencesStore.getState()
-  return currencies.find((currency) => currency.code === activeCurrencyCode) ?? USD_CURRENCY
+  const currency = currencies.find((entry) => entry.code === String(activeCurrencyCode).trim().toUpperCase())
+  return currency ? normalizeCurrencyPreference(currency) : USD_CURRENCY
 }
 
 export function getCurrencyByCode(code?: string) {
   const normalizedCode = code?.trim().toUpperCase()
   if (!normalizedCode) return USD_CURRENCY
   const { currencies } = usePreferencesStore.getState()
-  return currencies.find((currency) => currency.code === normalizedCode)
-    ?? CURRENCY_CATALOG.find((currency) => currency.code === normalizedCode)
+  const savedCurrency = currencies.find((currency) => currency.code.trim().toUpperCase() === normalizedCode)
+  return savedCurrency
+    ? normalizeCurrencyPreference(savedCurrency)
+    : CURRENCY_CATALOG.find((currency) => currency.code === normalizedCode)
     ?? USD_CURRENCY
 }
 
@@ -99,7 +102,9 @@ export function formatMoneyWithCode(value: number, currency = getActiveCurrency(
 export function useMoney() {
   const currencies = usePreferencesStore((state) => state.currencies)
   const activeCurrencyCode = usePreferencesStore((state) => state.activeCurrencyCode)
-  const currency = currencies.find((entry) => entry.code === activeCurrencyCode) ?? USD_CURRENCY
+  const currency = normalizeCurrencyPreference(
+    currencies.find((entry) => entry.code === String(activeCurrencyCode).trim().toUpperCase()) ?? USD_CURRENCY,
+  )
 
   return useMemo(() => (value: number) => formatMoney(value, currency), [currency])
 }
@@ -107,7 +112,9 @@ export function useMoney() {
 export function useMoneyWithCode() {
   const currencies = usePreferencesStore((state) => state.currencies)
   const activeCurrencyCode = usePreferencesStore((state) => state.activeCurrencyCode)
-  const currency = currencies.find((entry) => entry.code === activeCurrencyCode) ?? USD_CURRENCY
+  const currency = normalizeCurrencyPreference(
+    currencies.find((entry) => entry.code === String(activeCurrencyCode).trim().toUpperCase()) ?? USD_CURRENCY,
+  )
 
   return useMemo(() => (value: number) => formatMoneyWithCode(value, currency), [currency])
 }
@@ -115,7 +122,9 @@ export function useMoneyWithCode() {
 export function useCurrencyInput() {
   const currencies = usePreferencesStore((state) => state.currencies)
   const activeCurrencyCode = usePreferencesStore((state) => state.activeCurrencyCode)
-  const currency = currencies.find((entry) => entry.code === activeCurrencyCode) ?? USD_CURRENCY
+  const currency = normalizeCurrencyPreference(
+    currencies.find((entry) => entry.code === String(activeCurrencyCode).trim().toUpperCase()) ?? USD_CURRENCY,
+  )
 
   return useMemo(() => ({
     currency,

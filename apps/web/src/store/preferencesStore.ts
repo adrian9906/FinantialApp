@@ -65,6 +65,31 @@ export const USD_CURRENCY: CurrencyPreference = {
   exchangeRate: 1,
 }
 
+export function normalizeCurrencyPreference(currency: CurrencyPreference): CurrencyPreference {
+  const code = currency.code.trim().toUpperCase()
+
+  if (code === 'USD') return USD_CURRENCY
+
+  return {
+    ...currency,
+    code,
+    exchangeRate: Math.max(0.000001, Number(currency.exchangeRate) || 1),
+  }
+}
+
+function normalizeCurrencies(currencies: CurrencyPreference[]) {
+  const uniqueCurrencies = new Map<string, CurrencyPreference>()
+
+  currencies.forEach((currency) => {
+    const normalized = normalizeCurrencyPreference(currency)
+    if (normalized.code !== 'USD' && !uniqueCurrencies.has(normalized.code)) {
+      uniqueCurrencies.set(normalized.code, normalized)
+    }
+  })
+
+  return [USD_CURRENCY, ...uniqueCurrencies.values()]
+}
+
 const defaultState = {
   appearance: 'dark' as AppAppearance,
   theme: 'obsidian' as AppTheme,
@@ -107,13 +132,14 @@ export const usePreferencesStore = create<PreferencesStore>()(
         }
       }),
       setFormula: (formula) => set({ formula: normalizeFormula(formula) }),
-      setActiveCurrency: (code) => set((state) => ({
-        activeCurrencyCode: state.currencies.some((currency) => currency.code === code) ? code : 'USD',
-      })),
+      setActiveCurrency: (code) => set((state) => {
+        const normalizedCode = code.trim().toUpperCase()
+        return {
+          activeCurrencyCode: state.currencies.some((currency) => currency.code === normalizedCode) ? normalizedCode : 'USD',
+        }
+      }),
       saveCurrency: (currency) => set((state) => {
-        const normalized = currency.code === 'USD'
-          ? USD_CURRENCY
-          : { ...currency, code: currency.code.toUpperCase(), exchangeRate: Math.max(0.000001, currency.exchangeRate) }
+        const normalized = normalizeCurrencyPreference(currency)
         const exists = state.currencies.some((entry) => entry.code === normalized.code)
         return {
           currencies: exists
@@ -122,10 +148,11 @@ export const usePreferencesStore = create<PreferencesStore>()(
         }
       }),
       removeCurrency: (code) => set((state) => {
-        if (code === 'USD') return state
+        const normalizedCode = code.trim().toUpperCase()
+        if (normalizedCode === 'USD') return state
         return {
-          currencies: state.currencies.filter((currency) => currency.code !== code),
-          activeCurrencyCode: state.activeCurrencyCode === code ? 'USD' : state.activeCurrencyCode,
+          currencies: state.currencies.filter((currency) => currency.code !== normalizedCode),
+          activeCurrencyCode: state.activeCurrencyCode === normalizedCode ? 'USD' : state.activeCurrencyCode,
         }
       }),
       toggleDashboardWidget: (profileId, widgetId) => set((state) => {
@@ -166,7 +193,7 @@ export const usePreferencesStore = create<PreferencesStore>()(
       merge: (persisted, current) => {
         const saved = persisted as Partial<PreferencesStore>
         const currencies = saved.currencies?.length
-          ? [USD_CURRENCY, ...saved.currencies.filter((currency) => currency.code !== 'USD')]
+          ? normalizeCurrencies(saved.currencies)
           : current.currencies
         return {
           ...current,
@@ -179,8 +206,8 @@ export const usePreferencesStore = create<PreferencesStore>()(
             const hasCustom = (saved.customFonts ?? current.customFonts).some((font) => font.id === nextTypography)
             return hasPreset || hasCustom ? nextTypography : 'inter'
           })(),
-          activeCurrencyCode: currencies.some((currency) => currency.code === saved.activeCurrencyCode)
-            ? saved.activeCurrencyCode ?? 'USD'
+          activeCurrencyCode: currencies.some((currency) => currency.code === saved.activeCurrencyCode?.trim().toUpperCase())
+            ? saved.activeCurrencyCode?.trim().toUpperCase() ?? 'USD'
             : 'USD',
         }
       },

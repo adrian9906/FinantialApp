@@ -16,6 +16,7 @@ export function useMonthlyOverview() {
   const wishlist = useFinanceStore((state) => state.wishlist)
   const savingsGoals = useFinanceStore((state) => state.savingsGoals)
   const monthlyPlanningHistory = useFinanceStore((state) => state.monthlyPlanningHistory)
+  const subscriptions = useFinanceStore((state) => state.subscriptions)
   const formula = usePreferencesStore((state) => state.formula)
 
   return useMemo(() => {
@@ -36,6 +37,10 @@ export function useMonthlyOverview() {
     const assignedSavingsGoals = savingsGoals.reduce((sum, goal) => sum + goal.currentAmount, 0)
     const freeSavings = Math.max(0, accumulatedSavings - assignedSavingsGoals)
     const wantsEnabled = formula.wants > 0
+    const activeSubscriptions = subscriptions.filter((subscription) => subscription.status === 'active')
+    const monthlySubscriptions = activeSubscriptions.reduce((sum, subscription) => sum + subscription.amount, 0)
+    const actualExpenses = overview.totalExpenses
+    const committedExpenses = actualExpenses + monthlySubscriptions
     const savingsRollover = formula.rolloverSavings && wantsEnabled
       ? Math.max(0, overview.budgetSavings - totalSavings)
       : 0
@@ -45,6 +50,9 @@ export function useMonthlyOverview() {
 
     return {
       ...overview,
+      actualExpenses,
+      totalExpenses: committedExpenses,
+      remainingExpenses: overview.budgetExpenses - committedExpenses,
       totalSavings,
       accumulatedSavings,
       freeSavings,
@@ -59,6 +67,8 @@ export function useMonthlyOverview() {
       borrowedSavingsAcquired: funding.borrowedAcquired,
       borrowedSavingsUsed: funding.borrowedUsed,
       savingsUsages: funding.usages,
+      activeSubscriptions,
+      monthlySubscriptions,
     }
-  }, [debts, formula, monthlyPlanningHistory, salaries, savingsGoals, transactions, wishlist])
+  }, [debts, formula, monthlyPlanningHistory, salaries, savingsGoals, subscriptions, transactions, wishlist])
 }

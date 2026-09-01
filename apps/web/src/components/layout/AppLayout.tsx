@@ -34,6 +34,7 @@ const navItems = [
   { to: '/events', icon: 'events', label: 'Eventos' },
   { to: '/projections', icon: 'trending', label: 'Proyecciones' },
   { to: '/reminders', icon: 'bell', label: 'Recordatorios' },
+  { to: '/subscriptions', icon: 'subscriptions', label: 'Suscripciones' },
   { to: '/reports', icon: 'reports', label: 'Informes' },
   { to: '/settings', icon: 'settings', label: 'Ajustes' },
 ] satisfies Array<{ to: string, icon: AppIconName, label: string }>

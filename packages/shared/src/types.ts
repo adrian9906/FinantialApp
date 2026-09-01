@@ -118,3 +118,14 @@ export interface AuthUser {
   name: string
   email: string
 }
+
+/** A recurring monthly commitment. It is planned spending, not a posted expense. */
+export interface Subscription {
+  id: string
+  name: string
+  amount: number
+  billingDay: number
+  status: 'active' | 'cancelled'
+  startedAt: string
+  cancelledAt?: string
+}
