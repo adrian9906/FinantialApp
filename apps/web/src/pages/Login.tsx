@@ -2,6 +2,7 @@ import { useEffect, useReducer, type FormEvent } from 'react'
 import {
   Eye,
   EyeOff,
+  LoaderCircle,
   LockKeyhole,
   Mail,
   ShieldCheck,
@@ -310,7 +311,12 @@ function LoginForm({
         disabled={isSubmitting || isChecking}
         className="h-12 w-full bg-primary-container text-primary-foreground shadow-vault hover:brightness-110"
       >
-        {isSubmitting ? 'Entrando...' : 'Entrar a Plata App'}
+        {isSubmitting ? (
+          <>
+            <LoaderCircle className="size-4 animate-spin" aria-hidden="true" />
+            Iniciando sesión...
+          </>
+        ) : 'Entrar a Plata App'}
       </Button>
     </form>
   )

@@ -39,8 +39,6 @@ export function useMonthlyOverview() {
     const wantsEnabled = formula.wants > 0
     const activeSubscriptions = subscriptions.filter((subscription) => subscription.status === 'active')
     const monthlySubscriptions = activeSubscriptions.reduce((sum, subscription) => sum + subscription.amount, 0)
-    const actualExpenses = overview.totalExpenses
-    const committedExpenses = actualExpenses + monthlySubscriptions
     const savingsRollover = formula.rolloverSavings && wantsEnabled
       ? Math.max(0, overview.budgetSavings - totalSavings)
       : 0
@@ -50,9 +48,7 @@ export function useMonthlyOverview() {
 
     return {
       ...overview,
-      actualExpenses,
-      totalExpenses: committedExpenses,
-      remainingExpenses: overview.budgetExpenses - committedExpenses,
+      actualExpenses: overview.totalExpenses,
       totalSavings,
       accumulatedSavings,
       freeSavings,

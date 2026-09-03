@@ -114,10 +114,46 @@ function normalizeDebt(entry: Partial<Debt>): Debt {
 function normalizeBootstrapSnapshot(payload?: Partial<BootstrapPayload> | null): BootstrapPayload {
   const snapshot = normalizeBootstrapPayload(payload)
 
-  return {
+  return ensureCurrentSubscriptionExpenses({
     ...snapshot,
     debts: snapshot.debts.map(normalizeDebt),
+  })
+}
+
+function getSubscriptionExpenseMarker(subscriptionId: string, month = getMonthKey()) {
+  return `[subscription:${subscriptionId}:${month}]`
+}
+
+function getSubscriptionExpenseDate(subscription: Subscription, month = getMonthKey()) {
+  const [year, monthNumber] = month.split('-').map(Number)
+  const lastDay = new Date(Date.UTC(year, monthNumber, 0)).getUTCDate()
+  const day = Math.min(Math.max(1, subscription.billingDay), lastDay)
+  return `${month}-${String(day).padStart(2, '0')}`
+}
+
+function createSubscriptionExpense(subscription: Subscription, month = getMonthKey()): Transaction {
+  return {
+    id: `subscription-expense:${subscription.id}:${month}`,
+    amount: subscription.amount,
+    type: 'expense',
+    description: `services::checked::0::Suscripción · ${subscription.name} ${getSubscriptionExpenseMarker(subscription.id, month)}`,
+    date: getSubscriptionExpenseDate(subscription, month),
+    createdAt: new Date().toISOString(),
   }
+}
+
+function ensureCurrentSubscriptionExpenses(snapshot: BootstrapPayload): BootstrapPayload {
+  const month = getMonthKey()
+  const missingExpenses = snapshot.subscriptions
+    .filter((subscription) => subscription.status === 'active' && subscription.startedAt.slice(0, 7) <= month)
+    .filter((subscription) => !snapshot.transactions.some(
+      (transaction) => transaction.description.includes(getSubscriptionExpenseMarker(subscription.id, month)),
+    ))
+    .map((subscription) => createSubscriptionExpense(subscription, month))
+
+  if (missingExpenses.length === 0) return snapshot
+
+  return { ...snapshot, transactions: [...missingExpenses, ...snapshot.transactions] }
 }
 
 function buildMonthlyPlanningHistory(transactions: Transaction[]): MonthlyPlanningHistory {
@@ -358,6 +394,16 @@ export const useFinanceStore = create<FinanceStore>()((set, get) => ({
 
     const cachedSnapshot = normalizeBootstrapSnapshot(await readCachedBootstrap(userId))
 
+    // The device snapshot is authoritative while it has mutations queued for
+    // upload. Loading the server first would discard offline subscriptions.
+    if (hasPendingSync(userId)) {
+      set({ ...cachedSnapshot, hasLoaded: true, loadedKey: activeKey })
+      if (isOnline()) {
+        queueMicrotask(() => { void get().syncPendingChanges().catch(() => {}) })
+      }
+      return
+    }
+
     if (!isOnline()) {
       const salaries = carrySalaryForwardToMonth(
         cachedSnapshot.salaries,
@@ -424,10 +470,20 @@ export const useFinanceStore = create<FinanceStore>()((set, get) => ({
         return false
       }
 
-      await persistCachedBootstrap(userId, synced)
+      const missingSubscription = snapshot.subscriptions.some(
+        (subscription) => !synced.subscriptions.some((entry) => entry.id === subscription.id),
+      )
+      if (missingSubscription) {
+        // Keep local data if an outdated server response ignores subscriptions.
+        markPendingSync(userId, true)
+        return false
+      }
+
+      const normalizedSynced = normalizeBootstrapSnapshot(synced)
+      await persistCachedBootstrap(userId, normalizedSynced)
       markPendingSync(userId, false)
       set({
-        ...normalizeBootstrapSnapshot(synced),
+        ...normalizedSynced,
         hasLoaded: true,
         loadedKey: `user:${userId}`,
       })
@@ -1253,7 +1309,13 @@ export const useFinanceStore = create<FinanceStore>()((set, get) => ({
     }
   },
   addSubscription: async (subscription) => {
-    const createLocal = () => updateLocalState(set, (state) => ({ subscriptions: [{ ...subscription, id: makeId('subscription') }, ...state.subscriptions] }))
+    const createLocal = () => updateLocalState(set, (state) => {
+      const created = { ...subscription, id: makeId('subscription') }
+      return {
+        subscriptions: [created, ...state.subscriptions],
+        transactions: [createSubscriptionExpense(created), ...state.transactions],
+      }
+    })
     if (isLocalMutationMode()) { createLocal(); return }
     try {
       const created = await requestJson<Subscription>('/subscriptions', { method: 'POST', body: JSON.stringify(subscription) })
@@ -1264,7 +1326,18 @@ export const useFinanceStore = create<FinanceStore>()((set, get) => ({
     }
   },
   updateSubscription: async (id, data) => {
-    const updateLocal = () => updateLocalState(set, (state) => ({ subscriptions: state.subscriptions.map((entry) => entry.id === id ? { ...entry, ...data } : entry) }))
+    const updateLocal = () => updateLocalState(set, (state) => {
+      const subscription = state.subscriptions.find((entry) => entry.id === id)
+      if (!subscription) return {}
+      const updated = { ...subscription, ...data }
+      const marker = getSubscriptionExpenseMarker(id)
+      return {
+        subscriptions: state.subscriptions.map((entry) => entry.id === id ? updated : entry),
+        transactions: state.transactions.map((transaction) => transaction.description.includes(marker)
+          ? { ...transaction, amount: updated.amount, date: getSubscriptionExpenseDate(updated), description: createSubscriptionExpense(updated).description }
+          : transaction),
+      }
+    })
     if (isLocalMutationMode()) { updateLocal(); return }
     try {
       const updated = await requestJson<Subscription>(`/subscriptions/${id}`, { method: 'PUT', body: JSON.stringify(data) })

@@ -668,7 +668,8 @@ export default function Reports() {
                       tickLine={false}
                       axisLine={false}
                       tick={{ fontSize: 12, fill: 'var(--muted-gray)' }}
-                      tickFormatter={(value) => `$${(value / 1000).toFixed(0)}k`}
+                      width={96}
+                      tickFormatter={(value) => formatCurrency(Number(value))}
                     />
                     <ChartTooltip
                       cursor={{ stroke: 'var(--primary)', strokeDasharray: '6 3', strokeOpacity: 0.5 }}

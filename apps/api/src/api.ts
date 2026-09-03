@@ -406,6 +406,8 @@ async function loadBootstrap(userId: string) {
     }
   }
 
+  await ensureSubscriptionExpenses(userId, prisma)
+
   const [salaries, expenses, wants, savings, debts, wishlist, monthlyPlanningHistory, events, projections, savingsGoals, reminders, subscriptions] = await Promise.all([
     prisma.salario.findMany({
       where: { usuarioId: userId },
@@ -471,6 +473,62 @@ async function loadBootstrap(userId: string) {
 
 function serializeSubscription(entry: { id: string; nombre: string; cantidad: number; diaCobro: number; estado: string; fechaInicio: Date; fechaCancelacion: Date | null }): Subscription {
   return { id: entry.id, name: entry.nombre, amount: entry.cantidad, billingDay: entry.diaCobro, status: entry.estado === 'cancelled' ? 'cancelled' : 'active', startedAt: toDateString(entry.fechaInicio), cancelledAt: entry.fechaCancelacion ? toDateString(entry.fechaCancelacion) : undefined }
+}
+
+function getSubscriptionExpenseMarker(subscriptionId: string, month: string) {
+  return `[subscription:${subscriptionId}:${month}]`
+}
+
+function getSubscriptionChargeDate(month: string, billingDay: number) {
+  const [year, monthNumber] = month.split('-').map(Number)
+  const lastDay = new Date(Date.UTC(year, monthNumber, 0)).getUTCDate()
+  return new Date(Date.UTC(year, monthNumber - 1, Math.min(Math.max(1, billingDay), lastDay)))
+}
+
+function getNextMonth(month: string) {
+  const [year, monthNumber] = month.split('-').map(Number)
+  return new Date(Date.UTC(year, monthNumber, 1)).toISOString().slice(0, 7)
+}
+
+async function ensureSubscriptionExpenses(userId: string, prisma: Awaited<ReturnType<typeof getPrisma>>) {
+  const currentMonth = toMonthString(new Date())
+  const subscriptions = await prisma.suscripcion.findMany({ where: { usuarioId: userId } })
+
+  for (const subscription of subscriptions) {
+    let month = toMonthString(subscription.fechaInicio)
+    const finalMonth = subscription.fechaCancelacion
+      ? toMonthString(subscription.fechaCancelacion) < currentMonth ? toMonthString(subscription.fechaCancelacion) : currentMonth
+      : currentMonth
+
+    while (month <= finalMonth) {
+      const marker = getSubscriptionExpenseMarker(subscription.id, month)
+      const existing = await prisma.gasto.findFirst({
+        where: { usuarioId: userId, items: { some: { nombre: { contains: marker } } } },
+        select: { id: true },
+      })
+
+      if (!existing) {
+        const date = getSubscriptionChargeDate(month, subscription.diaCobro)
+        await prisma.gasto.create({
+          data: {
+            cantidad: subscription.cantidad,
+            fecha: date,
+            usuarioId: userId,
+            items: {
+              create: {
+                nombre: `services::checked::0::Suscripción · ${subscription.nombre} ${marker}`,
+                precio: subscription.cantidad,
+                fecha: date,
+                categoria: 'expense',
+              },
+            },
+          },
+        })
+      }
+
+      month = getNextMonth(month)
+    }
+  }
 }
 
 function normalizeSyncPayload(body: JsonRecord): BootstrapPayload {
@@ -1371,6 +1429,7 @@ async function saveSubscription(userId: string, body: JsonRecord, id?: string) {
   const entry = id
     ? await prisma.suscripcion.update({ where: { id }, data: payload })
     : await prisma.suscripcion.create({ data: { ...payload, usuarioId: userId } })
+  await ensureSubscriptionExpenses(userId, prisma)
   return serializeSubscription(entry)
 }
 
