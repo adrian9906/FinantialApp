@@ -147,7 +147,7 @@ function ensureCurrentSubscriptionExpenses(snapshot: BootstrapPayload): Bootstra
   const missingExpenses = snapshot.subscriptions
     .filter((subscription) => subscription.status === 'active' && subscription.startedAt.slice(0, 7) <= month)
     .filter((subscription) => !snapshot.transactions.some(
-      (transaction) => transaction.description.includes(getSubscriptionExpenseMarker(subscription.id, month)),
+      (transaction) => (transaction.description ?? '').includes(getSubscriptionExpenseMarker(subscription.id, month)),
     ))
     .map((subscription) => createSubscriptionExpense(subscription, month))
 
@@ -1333,7 +1333,7 @@ export const useFinanceStore = create<FinanceStore>()((set, get) => ({
       const marker = getSubscriptionExpenseMarker(id)
       return {
         subscriptions: state.subscriptions.map((entry) => entry.id === id ? updated : entry),
-        transactions: state.transactions.map((transaction) => transaction.description.includes(marker)
+        transactions: state.transactions.map((transaction) => (transaction.description ?? '').includes(marker)
           ? { ...transaction, amount: updated.amount, date: getSubscriptionExpenseDate(updated), description: createSubscriptionExpense(updated).description }
           : transaction),
       }
