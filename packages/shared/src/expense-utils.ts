@@ -1,4 +1,4 @@
-import type { Transaction } from './types'
+import type { Transaction } from './types.js'
 
 export type ExpenseBuiltInCategory = 'food' | 'home' | 'services' | 'gym' | 'health' | 'essentials'
 export type ExpenseCategory = ExpenseBuiltInCategory | `custom:${string}`

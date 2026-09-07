@@ -1,15 +1,15 @@
-import type { AllocationFormula } from './preferences'
-import type { Debt, MonthlyPlanningHistory, Salary, Transaction } from './types'
-import { getEffectiveExpenseTotal } from './expense-utils'
+import type { AllocationFormula } from './preferences.js'
+import type { Debt, MonthlyPlanningHistory, Salary, Transaction } from './types.js'
+import { getEffectiveExpenseTotal } from './expense-utils.js'
 import {
   getExpenseTransferTotal,
   getExpenseWithdrawalTotal,
   parseSavingDescription,
   getWantTransferTotal,
   getWantWithdrawalTotal,
-} from './saving-utils'
-import { getEffectiveWantTotal } from './want-utils'
-import { getMonthKey, getSalaryForMonth } from './salary-utils'
+} from './saving-utils.js'
+import { getEffectiveWantTotal } from './want-utils.js'
+import { getMonthKey, getSalaryForMonth } from './salary-utils.js'
 
 export interface MonthlyOverviewOptions {
   periodStart?: string | null

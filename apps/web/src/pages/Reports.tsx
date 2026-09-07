@@ -201,7 +201,7 @@ export default function Reports() {
       })
     } else if (currentSummary?.effectiveSalaryMonth && currentSummary.effectiveSalaryMonth !== currentMonthKey) {
       findings.push({
-        title: 'La meta distribuida usa tu ultimo salario vigente',
+        title: 'La meta distribuida usa tu último salario vigente',
         body: `Como no cambiaste el salario en ${formatMonthLabel(currentMonthKey)}, la formula sigue usando el monto registrado en ${formatMonthLabel(currentSummary.effectiveSalaryMonth)}.`,
         tone: 'neutral',
       })
@@ -216,7 +216,7 @@ export default function Reports() {
     } else {
       findings.push({
         title: 'Los gastos esenciales siguen bajo control',
-        body: `Aun tienes ${formatCurrency(Math.max(0, (currentSummary?.budgetExpenses ?? 0) - (currentSummary?.expenses ?? 0)))} libres dentro del bloque de gastos del mes.`,
+        body: `Aún tienes ${formatCurrency(Math.max(0, (currentSummary?.budgetExpenses ?? 0) - (currentSummary?.expenses ?? 0)))} libres dentro del bloque de gastos del mes.`,
         tone: 'good',
       })
     }
@@ -229,8 +229,8 @@ export default function Reports() {
       })
     } else {
       findings.push({
-        title: 'La meta de ahorro del mes ya esta cubierta',
-        body: 'Tu ahorro real iguala o supera lo que exigia la formula para este periodo.',
+        title: 'La meta de ahorro del mes ya está cubierta',
+        body: 'Tu ahorro real iguala o supera lo que exigía la fórmula para este período.',
         tone: 'good',
       })
     }
@@ -945,7 +945,7 @@ export default function Reports() {
                 <span className="text-xs uppercase tracking-[0.2em]">Cierre mensual</span>
               </div>
               <p className="mt-3 text-lg font-semibold text-on-surface">
-                {report.currentSnapshot?.label ?? 'Aun no hay cierre guardado'}
+                {report.currentSnapshot?.label ?? 'Aún no hay cierre guardado'}
               </p>
               <p className="mt-1 text-xs text-muted-gray">
                 {report.currentSnapshot
@@ -967,7 +967,7 @@ export default function Reports() {
               <p className="mt-1 text-xs text-muted-gray">
                 {report.currentSummary?.daysRemainingInCycle
                   ? `Para aguantar hasta ${new Date(report.currentSummary.cycleEndsAt).toLocaleDateString('es-ES')} te conviene no pasar de ${formatCurrency(report.currentSummary.recommendedDailyAvailable)} por día de saldo libre.`
-                  : 'Este bloque se recalcula solo en el mes actual, cuando aun falta para el proximo cobro.'}
+                  : 'Este bloque se recalcula solo en el mes actual, cuando aún falta para el próximo cobro.'}
               </p>
             </div>
           </CardContent>

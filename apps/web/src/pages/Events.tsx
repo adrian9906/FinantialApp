@@ -207,13 +207,13 @@ export default function Events() {
             <Wallet className="size-5 text-emerald-400" />
           </div>
           <div className="text-[28px] font-semibold text-on-surface">{formatMoney(availableForNewEvents)}</div>
-          <p className="mt-2 text-sm text-muted-gray">Lo que aun puedes apartar sin pasarte del dinero libre de gustos.</p>
+          <p className="mt-2 text-sm text-muted-gray">Lo que aún puedes apartar sin pasarte del dinero libre de gustos.</p>
         </div>
 
         <div className="relative min-h-[132px] overflow-hidden rounded-xl bg-surface p-5 shadow-vault">
           <div className="pointer-events-none absolute right-0 top-0 -mr-10 -mt-10 h-32 w-32 rounded-full bg-primary-container opacity-10 blur-2xl" />
           <div className="relative z-10 mb-2 flex items-center justify-between text-muted-gray">
-            <span className="text-base font-medium">Proximo evento</span>
+            <span className="text-base font-medium">Próximo evento</span>
             <Timer className="size-5 text-warning" />
           </div>
           <div className="relative z-10">
@@ -245,7 +245,7 @@ export default function Events() {
                   <h2 className="mt-2 text-[30px] font-semibold text-on-surface sm:text-2xl">
                     {MONTH_LABELS[calendarMonth.getMonth()]} {calendarMonth.getFullYear()}
                   </h2>
-                  <p className="mt-1 text-sm text-muted-gray">Pulsa un dia con eventos para ver cuanto dinero apartaste y si lleva notificacion.</p>
+                  <p className="mt-1 text-sm text-muted-gray">Pulsa un día con eventos para ver cuánto dinero apartaste y si lleva notificación.</p>
                 </div>
 
                 <div className="inline-flex w-full items-center justify-between gap-1 rounded-xl border border-graphite bg-abyss p-1 sm:w-auto sm:justify-start">
@@ -357,7 +357,7 @@ export default function Events() {
                   <span>Evento</span>
                   <span>Fecha</span>
                   <span className="text-right">Monto</span>
-                  <span className="text-center">Notificacion</span>
+                  <span className="text-center">Notificación</span>
                   <span className="text-right">Acciones</span>
                 </div>
                 <div className="h-full divide-y divide-graphite overflow-auto">
@@ -428,7 +428,7 @@ export default function Events() {
                     label="Fecha"
                     value={form.date}
                     onChange={(value) => setForm({ ...form, date: value })}
-                    description="Selecciona el dia del evento o compromiso futuro."
+                    description="Selecciona el día del evento o compromiso futuro."
                   />
                 </div>
 
@@ -454,14 +454,14 @@ export default function Events() {
               </div>
 
               <div className="space-y-2">
-                <Label className="text-medium-gray">Notificacion</Label>
+                <Label className="text-medium-gray">Notificación</Label>
                 <Select value={form.isNotification ? 'yes' : 'no'} onValueChange={(value) => setForm({ ...form, isNotification: value === 'yes' })}>
                   <SelectTrigger className="border-graphite bg-abyss text-on-surface">
-                    <SelectValue>{form.isNotification ? 'Con notificacion' : 'Sin notificacion'}</SelectValue>
+                    <SelectValue>{form.isNotification ? 'Con notificación' : 'Sin notificación'}</SelectValue>
                   </SelectTrigger>
                   <SelectContent className="border-graphite bg-surface">
-                    <SelectItem value="yes">Con notificacion</SelectItem>
-                    <SelectItem value="no">Sin notificacion</SelectItem>
+                    <SelectItem value="yes">Con notificación</SelectItem>
+                    <SelectItem value="no">Sin notificación</SelectItem>
                   </SelectContent>
                 </Select>
               </div>

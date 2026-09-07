@@ -272,7 +272,7 @@ export default function Salary() {
                   {month ? `${MONTH_LABELS[monthValueToDate(month).getMonth()]} ${monthValueToDate(month).getFullYear()}` : 'Elige un mes'}
                 </p>
                 <p className="mt-1 text-sm text-muted-gray">
-                  {month ? `Valor guardado: ${month}` : 'Selecciona el periodo que se va a registrar en SQLite.'}
+                  {month ? `Valor guardado: ${month}` : 'Selecciona el período que se va a registrar en SQLite.'}
                 </p>
               </Card>
             </div>

@@ -256,7 +256,7 @@ export async function exportMonthlyReport(params: {
       ]),
     },
     {
-      name: 'Top categorias actual',
+      name: 'Top categorías actual',
       columns: ['Categoria', 'Tipo', 'Monto total', 'Repeticiones'],
       rows: currentRankings.topCategoriesByAmount.map((entry) => [
         entry.label,

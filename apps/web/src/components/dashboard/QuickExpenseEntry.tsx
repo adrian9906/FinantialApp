@@ -140,7 +140,7 @@ export function QuickExpenseEntry() {
             <ReceiptText className="size-4" />
           </div>
           <div className="min-w-0 flex-1">
-            <label htmlFor="quick-expense" className="sr-only">Registrar gasto rapido</label>
+            <label htmlFor="quick-expense" className="sr-only">Registrar gasto rápido</label>
             <Input
               id="quick-expense"
               value={entry}
@@ -167,7 +167,7 @@ export function QuickExpenseEntry() {
               setTargetWasChanged(true)
             }}
           >
-            <SelectTrigger aria-label="Categoria del gasto" className="h-10 min-w-36 border-graphite bg-surface-container-low text-on-surface">
+            <SelectTrigger aria-label="Categoría del gasto" className="h-10 min-w-36 border-graphite bg-surface-container-low text-on-surface">
               <SelectValue>{activeCategoryLabel}</SelectValue>
             </SelectTrigger>
             <SelectContent className="border-graphite bg-surface">

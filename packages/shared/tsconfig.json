@@ -2,14 +2,14 @@
   "compilerOptions": {
     "target": "ES2023",
     "lib": ["ES2023"],
-    "module": "ESNext",
-    "moduleResolution": "Bundler",
-    "allowImportingTsExtensions": true,
-    "verbatimModuleSyntax": true,
-    "declaration": false,
-    "noEmit": true,
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "declaration": true,
+    "outDir": "dist",
+    "rootDir": "src",
     "strict": false,
     "skipLibCheck": true
   },
-  "include": ["src"]
+  "include": ["src"],
+  "exclude": ["src/**/*.test.mts"]
 }

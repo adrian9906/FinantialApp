@@ -413,7 +413,7 @@ export default function Wishlist() {
         <Card className="border-0 bg-surface shadow-vault">
           <div className="flex flex-col items-center gap-3 py-16 text-sm text-muted-gray">
             <ShoppingCart className="size-8" />
-            <p>Tu lista de deseos esta vacia</p>
+            <p>Tu lista de deseos está vacía</p>
             <Button variant="secondary" onClick={() => handleOpen()} className="bg-surface-container-high text-on-surface hover:bg-surface-container-high/80">
               Agrega tu primer articulo
             </Button>
@@ -506,7 +506,7 @@ export default function Wishlist() {
                         ? `Comprado. Se descontaron ${formatCurrency(reservedAmount)} de tus ahorros.`
                         : canBePurchased
                           ? `Listo para comprar. Saldrian ${formatCurrency(Math.max(0, item.price - externalContribution))} de tus ahorros.`
-                          : `Aun faltan ${formatCurrency(projection.remaining)} para poder comprarlo.`}
+                          : `Aún faltan ${formatCurrency(projection.remaining)} para poder comprarlo.`}
                     </p>
                     {item.sourceUrl ? (
                       <a
@@ -531,7 +531,7 @@ export default function Wishlist() {
                           ? `Ya se descontaron ${formatCurrency(reservedAmount)} de tus ahorros.`
                           : canBePurchased
                             ? `Ya puedes comprarlo. De tus ahorros saldrian ${formatCurrency(Math.max(0, item.price - externalContribution))}.`
-                            : `Aun no alcanza el ahorro disponible mas el aporte externo para cubrir ${formatCurrency(item.price)}.`}
+                            : `Aún no alcanza el ahorro disponible más el aporte externo para cubrir ${formatCurrency(item.price)}.`}
                       </p>
                     </div>
                     <Checkbox
@@ -756,7 +756,7 @@ export default function Wishlist() {
       >
         <DialogContent className="max-h-[88vh] overflow-y-auto border-graphite bg-surface sm:max-w-5xl">
           <DialogHeader>
-            <DialogTitle className="text-on-surface">{editId ? 'Editar articulo' : 'Agregar deseo'}</DialogTitle>
+            <DialogTitle className="text-on-surface">{editId ? 'Editar artículo' : 'Agregar deseo'}</DialogTitle>
             <DialogDescription>
               Define el producto aqui. Si no sabes el precio o no tienes imagen, busca opciones reales por tienda y elige la que prefieras.
             </DialogDescription>
@@ -882,7 +882,7 @@ export default function Wishlist() {
               </Card>
 
               <div className="space-y-2">
-                <Label className="text-medium-gray">Nombre del articulo</Label>
+                <Label className="text-medium-gray">Nombre del artículo</Label>
                 <Input
                   placeholder="Laptop nueva"
                   value={form.name}
@@ -945,7 +945,7 @@ export default function Wishlist() {
                 <p className="mt-1 text-sm text-muted-gray">
                   {form.sourceStore
                     ? `Este deseo esta enlazado a ${getStoreLabel(form.sourceStore)} y puedes conservar la referencia del producto.`
-                    : 'Si eliges una opcion del buscador se guardaran tienda, moneda y enlace del producto.'}
+                    : 'Si eliges una opción del buscador se guardarán tienda, moneda y enlace del producto.'}
                 </p>
                 {form.sourceUrl ? (
                   <a href={form.sourceUrl} target="_blank" rel="noreferrer" className="mt-3 inline-flex items-center gap-1 text-sm text-primary hover:underline">
@@ -957,9 +957,9 @@ export default function Wishlist() {
 
               <Card className="border-graphite bg-abyss p-4 shadow-vault-sm">
                 <p className="text-xs uppercase tracking-[0.22em] text-medium-gray">Resumen del deseo</p>
-                <p className="mt-2 text-lg font-semibold text-on-surface">{form.name || 'Articulo sin nombre'}</p>
+                <p className="mt-2 text-lg font-semibold text-on-surface">{form.name || 'Artículo sin nombre'}</p>
                 <p className="mt-1 text-sm text-muted-gray">
-                  {form.price ? `Meta: ${formatCurrency(formPriceInUsd)}` : 'Agrega el precio para activar la proyeccion de compra.'}
+                  {form.price ? `Meta: ${formatCurrency(formPriceInUsd)}` : 'Agrega el precio para activar la proyección de compra.'}
                 </p>
                 <p className="mt-1 text-sm text-muted-gray">Ahorro libre ahora mismo: {formatCurrency(currentFreeSavedAmount)}</p>
                 <p className="mt-1 text-sm text-muted-gray">Apartado en bolsillos: {formatCurrency(overview.assignedSavingsGoals)}</p>

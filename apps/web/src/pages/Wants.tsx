@@ -762,12 +762,12 @@ setCustomCategoryName('')
         <DialogContent className="max-h-[88dvh] overflow-y-auto border-graphite bg-surface sm:max-w-4xl">
           <DialogHeader>
             <DialogTitle className="text-on-surface">{editId ? 'Editar gusto' : 'Agregar gusto'}</DialogTitle>
-            <DialogDescription>Guarda cada gusto como un item individual, organizado por categoria.</DialogDescription>
+            <DialogDescription>Guarda cada gusto como un item individual, organizado por categoría.</DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
             <div className="grid gap-4 lg:grid-cols-2">
               <div className="space-y-2">
-                <Label className="text-medium-gray">Categoria</Label>
+                <Label className="text-medium-gray">Categoría</Label>
                 <Select value={form.category} onValueChange={(value) => { setFormError(null); categoryWasChanged.current = true; setForm((current) => ({ ...current, category: value as WantCategory })) }}>
                   <SelectTrigger className="bg-abyss border-graphite text-on-surface">
                     <SelectValue>{getCategoryMeta(form.category).label}</SelectValue>
@@ -845,7 +845,7 @@ setCustomCategoryName('')
               label="Fecha"
               value={form.date}
               onChange={(value) => { setFormError(null); setForm((current) => ({ ...current, date: value })) }}
-              description="Marca el dia en que planeas comprar o disfrutar este gusto."
+              description="Marca el día en que planeas comprar o disfrutar este gusto."
             />
 
             <ReceiptOcrPanel transactionType="want" userRules={userRules} onApply={applyReceiptDraft} onAddItems={handleAddReceiptItems} />

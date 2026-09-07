@@ -1,4 +1,4 @@
-import type { Debt, Reminder } from './types'
+import type { Debt, Reminder } from './types.js'
 
 export function isReceivable(debt: Debt) {
   return debt.direction === 'receivable'

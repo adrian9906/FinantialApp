@@ -1,5 +1,5 @@
-import type { Transaction, WishlistItem } from './types'
-import { getWishlistReservedAmount, isWishlistPurchased } from './wishlist'
+import type { Transaction, WishlistItem } from './types.js'
+import { getWishlistReservedAmount, isWishlistPurchased } from './wishlist.js'
 
 export type SavingDescription =
   | {

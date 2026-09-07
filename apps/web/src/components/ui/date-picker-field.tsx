@@ -81,7 +81,7 @@ export function DatePickerField({ label, value, onChange, description }: DatePic
           <p className="text-xs uppercase tracking-[0.22em] text-medium-gray">Seleccionado</p>
           <p className="mt-2 text-lg font-semibold text-on-surface capitalize">{formatDateLabel(value)}</p>
           <p className="mt-1 text-sm text-muted-gray">
-            {value ? `Valor guardado: ${value}` : description ?? 'Selecciona el dia exacto que quieres guardar.'}
+            {value ? `Valor guardado: ${value}` : description ?? 'Selecciona el día exacto que quieres guardar.'}
           </p>
         </Card>
 

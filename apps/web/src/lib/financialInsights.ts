@@ -147,7 +147,7 @@ export function buildFinancialScore({
     status === 'fuerte'
       ? 'Tus decisiones del mes estan sosteniendo bien la salud financiera.'
       : status === 'estable'
-        ? 'Vas bien, pero aun hay margen claro para mejorar equilibrio y disciplina.'
+        ? 'Vas bien, pero aún hay margen claro para mejorar equilibrio y disciplina.'
         : status === 'atencion'
           ? 'El mes necesita ajustes para no tensionar tu liquidez.'
           : 'Tu panorama actual exige acciones rapidas para recuperar control.'
@@ -292,7 +292,7 @@ export function buildSmartAlerts({
     alerts.push({
       id: 'debt-pressure',
       level: 'warning',
-      title: 'La deuda esta presionando demasiado tu ingreso',
+      title: 'La deuda está presionando demasiado tu ingreso',
       description: `El saldo pendiente equivale a ${Math.round((totalDebtRemaining / overview.totalSalary) * 100)}% del salario actual.`,
       actionLabel: 'Priorizar pagos',
       href: '/debts',

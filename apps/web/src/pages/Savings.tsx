@@ -219,7 +219,7 @@ export default function Savings() {
     const availableForGoal = Math.max(0, freeSavings + currentGoalAmount)
 
     if (currentAmount > availableForGoal) {
-      setGoalError(`Solo puedes asignar hasta ${formatMoney(availableForGoal)} segun el ahorro libre actual.`)
+      setGoalError(`Solo puedes asignar hasta ${formatMoney(availableForGoal)} según el ahorro libre actual.`)
       return
     }
 
@@ -417,7 +417,7 @@ export default function Savings() {
               <p className="mt-2 text-2xl font-semibold text-on-surface">
                 {formatMoney(savingsGoals.reduce((sum, goal) => sum + goal.monthlyContribution, 0))}
               </p>
-              <p className="mt-1 text-xs text-muted-gray">Cuanto piensas meter cada mes entre todas tus metas.</p>
+              <p className="mt-1 text-xs text-muted-gray">Cuánto piensas meter cada mes entre todas tus metas.</p>
             </Card>
           </div>
         </Card>
@@ -485,7 +485,7 @@ export default function Savings() {
             <Card className="border-dashed border-graphite bg-surface/80 p-8 shadow-vault md:col-span-2">
               <div className="flex flex-col items-center gap-3 text-center text-sm text-muted-gray">
                 <PiggyBank className="size-8 text-primary" />
-                <p>Aun no tienes bolsillos de ahorro. Crea metas como emergencia, viaje, renta o teléfono.</p>
+                <p>Aún no tienes bolsillos de ahorro. Crea metas como emergencia, viaje, renta o teléfono.</p>
               </div>
             </Card>
           )}
@@ -582,7 +582,7 @@ export default function Savings() {
               label="Fecha"
               value={form.date}
               onChange={(value) => { setFormError(null); setForm({ ...form, date: value }) }}
-              description="Elige cuando entro realmente ese aporte al ahorro."
+              description="Elige cuándo entró realmente ese aporte al ahorro."
             />
             {formError ? <p className="text-sm text-error">{formError}</p> : null}
           </div>
@@ -599,8 +599,8 @@ export default function Savings() {
             <DialogTitle className="text-on-surface">Sacar dinero de ahorros</DialogTitle>
             <DialogDescription>
               {selectedSourceGoal
-                ? 'Registra para que se uso el dinero. Se restara del bolsillo y del ahorro total, sin pasarlo a otra seccion.'
-                : 'Usa esta opcion cuando necesites sacar dinero guardado para un gasto, un gusto o un proposito puntual.'}
+                ? 'Registra para qué se usó el dinero. Se restará del bolsillo y del ahorro total, sin pasarlo a otra sección.'
+                : 'Usa esta opción cuando necesites sacar dinero guardado para un gasto, un gusto o un propósito puntual.'}
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
@@ -737,7 +737,7 @@ export default function Savings() {
                 />
               </div>
               <div className="space-y-2">
-                <Label className="text-medium-gray">Categoria</Label>
+                <Label className="text-medium-gray">Categoría</Label>
                 <Select
                   value={goalForm.category}
                   onValueChange={(value) => {

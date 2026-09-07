@@ -10,8 +10,8 @@ import type {
   Subscription,
   Transaction,
   WishlistItem,
-} from './types'
-import { getWishlistExternalContribution, isWishlistPurchased } from './wishlist'
+} from './types.js'
+import { getWishlistExternalContribution, isWishlistPurchased } from './wishlist.js'
 
 export type AuthMode = 'anonymous' | 'guest' | 'authenticated'
 

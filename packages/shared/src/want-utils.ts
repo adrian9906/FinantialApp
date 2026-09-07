@@ -1,4 +1,4 @@
-import type { Transaction } from './types'
+import type { Transaction } from './types.js'
 
 export type WantBuiltInCategory = 'outings' | 'shopping' | 'gaming' | 'subscriptions' | 'selfcare'
 export type WantCategory = WantBuiltInCategory | `custom:${string}`

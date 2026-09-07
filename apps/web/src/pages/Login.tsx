@@ -123,7 +123,7 @@ function AuthHero() {
           Entra con tu cuenta o prueba la experiencia sin tocar la base de datos.
         </h1>
         <p className="max-w-xl text-base leading-7 text-muted-gray">
-          Crea tu espacio financiero, inicia sesion con tus datos o entra como invitado para guardar todo solo en este dispositivo.
+          Crea tu espacio financiero, inicia sesión con tus datos o entra como invitado para guardar todo solo en este dispositivo.
         </p>
       </div>
 
@@ -166,7 +166,7 @@ function AuthCardHeader({ currentView, onSwitchView }: AuthCardHeaderProps) {
                 : 'text-muted-gray hover:text-on-surface',
             )}
           >
-            {view === 'login' ? 'Iniciar sesion' : 'Crear cuenta'}
+            {view === 'login' ? 'Iniciar sesión' : 'Crear cuenta'}
           </button>
         ))}
       </div>
@@ -302,7 +302,7 @@ function LoginForm({
 
       <RememberCheckbox
         checked={form.rememberMe}
-        helper="Manten la sesion abierta en este dispositivo."
+        helper="Mantén la sesión abierta en este dispositivo."
         onCheckedChange={(checked) => onFieldChange('rememberMe', checked)}
       />
 
@@ -382,7 +382,7 @@ function RegisterForm({
         <PasswordField
           label="Contraseña"
           value={form.password}
-          placeholder="Minimo 6 caracteres"
+          placeholder="Mínimo 6 caracteres"
           autoComplete="new-password"
           visible={passwordVisibility.password}
           onToggle={onTogglePassword}
@@ -402,7 +402,7 @@ function RegisterForm({
 
       <RememberCheckbox
         checked={form.rememberMe}
-        helper="Mantener abierta la sesion despues de crear la cuenta."
+        helper="Mantener abierta la sesión después de crear la cuenta."
         onCheckedChange={(checked) => onFieldChange('rememberMe', checked)}
       />
 
@@ -550,7 +550,7 @@ export default function Login() {
       await login(state.loginForm)
       navigate(redirectTo, { replace: true })
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : 'No se pudo iniciar sesion.')
+      toast.error(error instanceof Error ? error.message : 'No se pudo iniciar sesión.')
     } finally {
       dispatch({ type: 'setSubmitting', value: false })
     }

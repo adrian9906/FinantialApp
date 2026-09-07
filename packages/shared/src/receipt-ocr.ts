@@ -1,7 +1,7 @@
-import type { CategorizationRule } from './categorization'
-import { findCategorizationRule } from './categorization'
-import type { ExpenseCategory } from './expense-utils'
-import type { WantCategory } from './want-utils'
+import type { CategorizationRule } from './categorization.js'
+import { findCategorizationRule } from './categorization.js'
+import type { ExpenseCategory } from './expense-utils.js'
+import type { WantCategory } from './want-utils.js'
 
 export type ReceiptOCRFieldConfidence = 'high' | 'medium' | 'low'
 export type ReceiptOCRTransactionType = 'expense' | 'want'

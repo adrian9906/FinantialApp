@@ -40,7 +40,7 @@ const navItems = [
 ] satisfies Array<{ to: string, icon: AppIconName, label: string }>
 
 function handleSupportClick() {
-  toast.info('El acceso a soporte estara disponible pronto.')
+  toast.info('El acceso a soporte estará disponible pronto.')
 }
 
 export function Sidebar() {
@@ -165,7 +165,7 @@ export function Sidebar() {
                 className="rounded-lg px-3 py-2 text-sm text-muted-gray hover:text-on-surface focus:bg-surface-container-high focus:text-on-surface"
               >
                 <AppIcon name="logout" className="size-[18px]" />
-                {authMode === 'guest' ? 'Salir del modo invitado' : 'Cerrar sesion'}
+                {authMode === 'guest' ? 'Salir del modo invitado' : 'Cerrar sesión'}
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
@@ -237,7 +237,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
               <div className="space-y-1">
                 <p className="font-semibold text-on-surface">Estas usando Plata App como invitado.</p>
                 <p className="text-[color:color-mix(in_srgb,var(--on-surface)_78%,var(--warning))]">
-                  Tus datos se guardan solo en este navegador. Si quieres guardarlos en tu cuenta, inicia sesion o crea una cuenta.
+                  Tus datos se guardan solo en este navegador. Si quieres guardarlos en tu cuenta, inicia sesión o crea una cuenta.
                 </p>
               </div>
 
@@ -246,7 +246,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                   to="/login?mode=login"
                   className="inline-flex h-10 items-center justify-center rounded-lg border border-amber-500/35 bg-transparent px-4 text-sm font-medium text-on-surface transition-colors hover:bg-amber-200/15"
                 >
-                  Iniciar sesion
+                  Iniciar sesión
                 </NavLink>
                 <NavLink
                   to="/login?mode=register"

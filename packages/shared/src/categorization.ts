@@ -1,5 +1,5 @@
-import type { ExpenseCategory } from './expense-utils'
-import type { WantCategory } from './want-utils'
+import type { ExpenseCategory } from './expense-utils.js'
+import type { WantCategory } from './want-utils.js'
 
 export type CategorizationTarget =
   | { transactionType: 'expense'; category: ExpenseCategory }

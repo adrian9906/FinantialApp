@@ -1,4 +1,4 @@
-import { createEmptyBootstrapPayload, type BootstrapPayload } from './contracts'
+import { createEmptyBootstrapPayload, type BootstrapPayload } from './contracts.js'
 
 export const SYNC_PROTOCOL = 2
 export const syncCollections = ['salaries', 'transactions', 'debts', 'wishlist', 'monthlyPlanningHistory', 'events', 'projections', 'savingsGoals', 'reminders', 'subscriptions'] as const

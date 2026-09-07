@@ -375,7 +375,7 @@ function SummaryCard({
     <Card className="border-graphite bg-surface p-6 shadow-vault">
       <SectionIntro
         eyebrow="Resumen activo"
-        title="Tu configuracion actual"
+        title="Tu configuración actual"
         description=""
         icon={
           <div className="flex size-11 items-center justify-center rounded-2xl bg-secondary/10 text-secondary shadow-vault-sm">
@@ -864,8 +864,8 @@ function MonthlyResetCard() {
         scope === 'all'
           ? 'Se restauraron gastos y gustos desde el historial.'
           : scope === 'expenses'
-            ? 'Se restauro la lista de gastos.'
-            : 'Se restauro la lista de gustos.',
+            ? 'Se restauró la lista de gastos.'
+            : 'Se restauró la lista de gustos.',
       )
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'No se pudo restaurar el historial.')
@@ -954,7 +954,7 @@ function MonthlyResetCard() {
         <SectionIntro
           eyebrow="Historial"
           title="Listas reutilizables"
-          description="Cada cierre mensual guarda una version de tu lista para que puedas recuperarla luego completa o por categoria."
+          description="Cada cierre mensual guarda una versión de tu lista para que puedas recuperarla luego completa o por categoría."
           icon={
             <div className="flex size-11 items-center justify-center rounded-2xl bg-primary/10 text-primary shadow-vault-sm">
               <AppIcon name="history" className="size-5" />
@@ -1275,7 +1275,7 @@ export default function Settings() {
 
       <SettingsSection
         eyebrow="Vision general"
-        title="Resumen de configuracion"
+        title="Resumen de configuración"
         description="Revisa de un vistazo la fórmula activa y el estilo visual que está usando la app en este momento."
       >
         <SummaryCard

@@ -157,7 +157,7 @@ export function GlobalSearchDialog() {
                   <SelectValue placeholder="Categoria" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="all">Todas las categorias</SelectItem>
+                  <SelectItem value="all">Todas las categorías</SelectItem>
                   {filterOptions.categories.map((option) => (
                     <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>
                   ))}
@@ -182,7 +182,7 @@ export function GlobalSearchDialog() {
                 inputMode="decimal"
                 value={minAmount}
                 onChange={(event) => setMinAmount(event.target.value)}
-                placeholder="Monto minimo"
+                placeholder="Monto mínimo"
                 className="border-graphite bg-abyss text-on-surface"
               />
               <Input
@@ -190,7 +190,7 @@ export function GlobalSearchDialog() {
                 inputMode="decimal"
                 value={maxAmount}
                 onChange={(event) => setMaxAmount(event.target.value)}
-                placeholder="Monto maximo"
+                placeholder="Monto máximo"
                 className="border-graphite bg-abyss text-on-surface"
               />
             </div>

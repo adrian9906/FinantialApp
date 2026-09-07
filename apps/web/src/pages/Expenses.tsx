@@ -97,7 +97,7 @@ const CATEGORY_META: Record<ExpenseBuiltInCategory, ExpenseCategoryMeta> = {
   },
   essentials: {
     label: 'Otros esenciales',
-    hint: 'Todo lo necesario que no cae en otra categoria.',
+    hint: 'Todo lo necesario que no cae en otra categoría.',
     icon: Package,
     accent: 'text-amber-300',
     badge: 'bg-amber-400/15 text-amber-300',
@@ -745,12 +745,12 @@ export default function Expenses() {
         <DialogContent className="max-h-[88dvh] overflow-y-auto border-graphite bg-surface sm:max-w-4xl">
           <DialogHeader>
             <DialogTitle className="text-on-surface">{editId ? 'Editar producto' : 'Agregar producto'}</DialogTitle>
-            <DialogDescription>Guarda cada producto esencial como un gasto individual, organizado por categoria.</DialogDescription>
+            <DialogDescription>Guarda cada producto esencial como un gasto individual, organizado por categoría.</DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
             <div className="grid gap-4 lg:grid-cols-2">
               <div className="space-y-2">
-                <Label className="text-medium-gray">Categoria</Label>
+                <Label className="text-medium-gray">Categoría</Label>
                 <Select value={form.category} onValueChange={(value) => { setFormError(null); categoryWasChanged.current = true; setForm((current) => ({ ...current, category: value as ExpenseCategory })) }}>
                   <SelectTrigger className="bg-abyss border-graphite text-on-surface">
                     <SelectValue>{getCategoryMeta(form.category).label}</SelectValue>
@@ -837,7 +837,7 @@ export default function Expenses() {
               label="Fecha"
               value={form.date}
               onChange={(value) => { setFormError(null); setForm((current) => ({ ...current, date: value })) }}
-              description="Ubica el dia en que este producto entra en tu lista o se compra."
+              description="Ubica el día en que este producto entra en tu lista o se compra."
             />
 
             <ReceiptOcrPanel transactionType="expense" userRules={userRules} onApply={applyReceiptDraft} onAddItems={handleAddReceiptItems} />

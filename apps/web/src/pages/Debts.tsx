@@ -322,7 +322,7 @@ export default function Debts() {
 
       {averageInterest > 0 ? (
         <Card className="border-graphite bg-surface p-4 shadow-vault-sm">
-          <p className="text-xs uppercase tracking-[0.18em] text-medium-gray">Interes promedio</p>
+          <p className="text-xs uppercase tracking-[0.18em] text-medium-gray">Interés promedio</p>
           <p className="mt-2 text-lg font-semibold text-on-surface">{averageInterest.toFixed(2)}%</p>
         </Card>
       ) : null}
@@ -572,7 +572,7 @@ export default function Debts() {
               <Input
                 value={form.history}
                 onChange={(e) => { setFormError(null); setForm({ ...form, history: e.target.value }) }}
-                placeholder="Prestamo personal, tarjeta, hipoteca..."
+                placeholder="Préstamo personal, tarjeta, hipoteca..."
                 className="bg-abyss border-graphite text-on-surface"
               />
             </div>
@@ -651,7 +651,7 @@ export default function Debts() {
             <DialogDescription>
               {paymentDebt
                 ? `Vas a registrar un nuevo abono para "${paymentDebt.history}" descontándolo de tus ahorros.`
-                : 'Registra cuanto vas a pagar ahora.'}
+                : 'Registra cuánto vas a pagar ahora.'}
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4">

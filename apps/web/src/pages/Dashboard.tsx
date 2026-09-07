@@ -187,7 +187,7 @@ export default function Dashboard() {
           ? 'Pausa gastos flexibles para proteger tu plan'
           : 'Tu mes mantiene margen de maniobra'
   const decisionDescription = overview.totalSalary <= 0
-    ? 'Con una base de ingreso podemos reservar ahorro, deuda y calcular cuanto puedes gastar con seguridad.'
+    ? 'Con una base de ingreso podemos reservar ahorro, deuda y calcular cuánto puedes gastar con seguridad.'
     : forecast.projectedBalance < 0
       ? `Al ritmo actual cerrarías con un déficit de ${formatMoney(Math.abs(forecast.projectedBalance))}.`
       : `Puedes usar hasta ${formatMoney(forecast.safePerDay)} por día durante los ${forecast.remainingDays} días restantes sin tocar el ahorro protegido.`
@@ -243,13 +243,13 @@ export default function Dashboard() {
       await restoreMonthlyPlan(latestHistory.id, scope)
       toast.success(
         scope === 'all'
-          ? 'Se restauro la ultima lista del mes anterior.'
+          ? 'Se restauró la última lista del mes anterior.'
           : scope === 'expenses'
-            ? 'Se restauraron los gastos del ultimo cierre.'
-            : 'Se restauraron los gustos del ultimo cierre.',
+            ? 'Se restauraron los gastos del último cierre.'
+            : 'Se restauraron los gustos del último cierre.',
       )
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : 'No se pudo restaurar la ultima lista.')
+      toast.error(error instanceof Error ? error.message : 'No se pudo restaurar la última lista.')
     } finally {
       setRestoringScope(null)
     }
@@ -321,7 +321,7 @@ export default function Dashboard() {
                 <p className={`mt-2 text-3xl font-semibold tabular-nums ${forecast.projectedBalance < 0 ? 'text-error' : 'text-on-surface'}`}>
                   {formatMoney(forecast.safeRemaining)}
                 </p>
-                <p className="mt-1 text-xs text-muted-gray">despues de deuda, cierre y ahorro protegido</p>
+                <p className="mt-1 text-xs text-muted-gray">después de deuda, cierre y ahorro protegido</p>
               </div>
             </div>
 
@@ -337,10 +337,10 @@ export default function Dashboard() {
                 <p className="mt-1 text-xs text-muted-gray">fuera del margen disponible</p>
               </div>
               <div className="rounded-2xl border border-graphite bg-surface-container-low p-4">
-                <p className="text-xs text-medium-gray">Proximo foco</p>
+                <p className="text-xs text-medium-gray">Próximo foco</p>
                 <p className="mt-2 line-clamp-2 text-sm font-semibold text-on-surface">{primaryAlert?.title ?? 'Sin alertas urgentes'}</p>
                 <Button variant="ghost" size="sm" onClick={() => navigate(primaryAlert?.href ?? '/reports')} className="mt-1 h-7 px-0 text-primary hover:bg-transparent">
-                  {primaryAlert?.actionLabel ?? 'Revisar analisis'} <ArrowRight className="size-3.5" />
+                  {primaryAlert?.actionLabel ?? 'Revisar análisis'} <ArrowRight className="size-3.5" />
                 </Button>
               </div>
             </div>
@@ -731,7 +731,7 @@ export default function Dashboard() {
           <CardContent className="space-y-4">
             <div className="grid gap-3 sm:grid-cols-3">
               <div className="rounded-2xl border border-graphite bg-surface-container-low p-4">
-                <p className="text-xs uppercase tracking-[0.2em] text-medium-gray">Ultimo cierre</p>
+                <p className="text-xs uppercase tracking-[0.2em] text-medium-gray">Último cierre</p>
                 <p className="mt-2 text-sm font-semibold text-on-surface">{latestHistory?.label ?? 'Sin historial'}</p>
               </div>
               <div className="rounded-2xl border border-graphite bg-surface-container-low p-4">

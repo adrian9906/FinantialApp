@@ -1,4 +1,4 @@
-import type { Salary } from './types'
+import type { Salary } from './types.js'
 
 export function getMonthKey(value = new Date()) {
   const year = value.getFullYear()
