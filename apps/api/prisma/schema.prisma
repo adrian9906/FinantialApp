@@ -28,8 +28,33 @@ model Usuario {
   suscripciones  Suscripcion[]
   sesiones       Sesion[]
   preferencia    PreferenciaUsuario?
+  syncRecords    SyncRecord[]
+  syncReceipts   SyncReceipt[]
 
   @@map("usuarios")
+}
+
+model SyncRecord {
+  usuarioId String
+  key       String
+  revision  String
+  usuario   Usuario @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+
+  @@id([usuarioId, key])
+  @@map("sync_records")
+}
+
+model SyncReceipt {
+  usuarioId String
+  operationId String
+  key       String
+  digest    String
+  version   String
+  createdAt DateTime @default(now())
+  usuario   Usuario @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+
+  @@id([usuarioId, operationId])
+  @@map("sync_receipts")
 }
 
 model Salario {

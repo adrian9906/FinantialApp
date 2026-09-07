@@ -20,7 +20,7 @@ import { useEffect } from 'react'
 import { useFinanceStore } from '@/store/financeStore'
 import { useAuthStore } from '@/store/authStore'
 import { usePreferencesStore } from '@/store/preferencesStore'
-import { persistCachedBootstrap } from '@/lib/offline'
+import { SyncStatusProvider } from '@/components/sync/SyncStatusProvider'
 import Login from '@/pages/Login'
 import { getTypographyFamily } from '@/lib/typography'
 
@@ -74,18 +74,7 @@ function ProtectedApp() {
   const checkSession = useAuthStore((state) => state.checkSession)
   const user = useAuthStore((state) => state.user)
   const hydrate = useFinanceStore((state) => state.hydrate)
-  const syncPendingChanges = useFinanceStore((state) => state.syncPendingChanges)
   const reset = useFinanceStore((state) => state.reset)
-  const salaries = useFinanceStore((state) => state.salaries)
-  const transactions = useFinanceStore((state) => state.transactions)
-  const debts = useFinanceStore((state) => state.debts)
-  const wishlist = useFinanceStore((state) => state.wishlist)
-  const monthlyPlanningHistory = useFinanceStore((state) => state.monthlyPlanningHistory)
-  const events = useFinanceStore((state) => state.events)
-  const projections = useFinanceStore((state) => state.projections)
-  const savingsGoals = useFinanceStore((state) => state.savingsGoals)
-  const reminders = useFinanceStore((state) => state.reminders)
-  const subscriptions = useFinanceStore((state) => state.subscriptions)
   const hydrateCurrencyPreferences = usePreferencesStore((state) => state.hydrateCurrencyPreferences)
 
   useEffect(() => {
@@ -107,39 +96,6 @@ function ProtectedApp() {
     if (authMode !== 'authenticated' || !user) return
     void hydrateCurrencyPreferences(user.id).catch(() => {})
   }, [authMode, hydrateCurrencyPreferences, user])
-
-  useEffect(() => {
-    if (authMode !== 'authenticated' || !user) return
-
-    void persistCachedBootstrap(user.id, {
-      salaries,
-      transactions,
-      debts,
-      wishlist,
-      monthlyPlanningHistory,
-      events,
-      projections,
-      savingsGoals,
-      reminders,
-      subscriptions,
-    })
-  }, [authMode, user, salaries, transactions, debts, wishlist, monthlyPlanningHistory, events, projections, savingsGoals, reminders, subscriptions])
-
-  useEffect(() => {
-    if (authMode !== 'authenticated') return
-
-    function handleOnline() {
-      void syncPendingChanges().catch(() => {})
-      if (user) void hydrateCurrencyPreferences(user.id).catch(() => {})
-    }
-
-    window.addEventListener('online', handleOnline)
-    void syncPendingChanges().catch(() => {})
-
-    return () => {
-      window.removeEventListener('online', handleOnline)
-    }
-  }, [authMode, hydrateCurrencyPreferences, syncPendingChanges, user])
 
   if (isChecking && !hasChecked) {
     return (
@@ -193,6 +149,7 @@ export default function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <AppPreferencesEffects />
+      <SyncStatusProvider />
       <BrowserRouter>
         <AppRoutes />
       </BrowserRouter>

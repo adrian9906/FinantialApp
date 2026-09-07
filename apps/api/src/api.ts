@@ -1,7 +1,9 @@
+import { createHash, randomUUID } from 'node:crypto'
+import { createEmptyBootstrapPayload, SYNC_PROTOCOL, canonicalJson, syncCollections, syncKey, getSyncValue, type SyncOperation, type SyncResponse } from '@plata/shared'
+import { parseSyncOperation } from './sync-validation.js'
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import type {
   AppEvent,
-  BootstrapPayload,
   Debt,
   MonthlyPlanningHistory,
   MonthlyPlanningItem,
@@ -445,8 +447,8 @@ async function requireUser(req: IncomingMessage, res: ServerResponse): Promise<A
   return user
 }
 
-async function loadBootstrap(userId: string) {
-  const prisma = await getPrisma()
+async function loadBootstrap(userId: string, prisma: Prisma.TransactionClient, materialize = false) {
+  if (materialize) {
   const currentMonth = toMonthString(new Date())
   const currentMonthDate = toMonthDate(currentMonth)
   const latestSalary = await prisma.salario.findFirst({
@@ -495,6 +497,7 @@ async function loadBootstrap(userId: string) {
   }
 
   await ensureSubscriptionExpenses(userId, prisma)
+  }
 
   const [salaries, expenses, wants, savings, debts, wishlist, monthlyPlanningHistory, events, projections, savingsGoals, reminders, subscriptions] = await Promise.all([
     prisma.salario.findMany({
@@ -578,7 +581,7 @@ function getNextMonth(month: string) {
   return new Date(Date.UTC(year, monthNumber, 1)).toISOString().slice(0, 7)
 }
 
-async function ensureSubscriptionExpenses(userId: string, prisma: Awaited<ReturnType<typeof getPrisma>>) {
+async function ensureSubscriptionExpenses(userId: string, prisma: Prisma.TransactionClient) {
   const currentMonth = toMonthString(new Date())
   const subscriptions = await prisma.suscripcion.findMany({ where: { usuarioId: userId } })
 
@@ -619,42 +622,27 @@ async function ensureSubscriptionExpenses(userId: string, prisma: Awaited<Return
   }
 }
 
-function normalizeSyncPayload(body: JsonRecord): BootstrapPayload {
-  return {
-    salaries: Array.isArray(body.salaries) ? body.salaries as Salary[] : [],
-    transactions: Array.isArray(body.transactions) ? body.transactions as Transaction[] : [],
-    debts: Array.isArray(body.debts) ? body.debts as Debt[] : [],
-    wishlist: Array.isArray(body.wishlist) ? body.wishlist as WishlistItem[] : [],
-    monthlyPlanningHistory: Array.isArray(body.monthlyPlanningHistory) ? body.monthlyPlanningHistory as MonthlyPlanningHistory[] : [],
-    events: Array.isArray(body.events) ? body.events as AppEvent[] : [],
-    projections: Array.isArray(body.projections) ? body.projections as Projection[] : [],
-    savingsGoals: Array.isArray(body.savingsGoals) ? body.savingsGoals as SavingsGoal[] : [],
-    reminders: Array.isArray(body.reminders) ? body.reminders as Reminder[] : [],
-    subscriptions: Array.isArray(body.subscriptions) ? body.subscriptions as Subscription[] : [],
-  }
-}
-
-async function syncBootstrap(userId: string, body: JsonRecord) {
-  const prisma = await getPrisma()
-  const payload = normalizeSyncPayload(body)
+async function writeSyncRecord(userId: string, operation: SyncOperation, tx: Prisma.TransactionClient) {
+  const payload = createEmptyBootstrapPayload()
+  if (operation.value) Object.assign(payload, { [operation.collection]: [operation.value] })
   const transactions = payload.transactions
   const expenses = transactions.filter((entry) => entry.type === 'expense')
   const wants = transactions.filter((entry) => entry.type === 'want')
   const savings = transactions.filter((entry) => entry.type === 'saving')
 
-  await prisma.$transaction(async (tx) => {
-    await tx.salario.deleteMany({ where: { usuarioId: userId } })
-    await tx.ahorro.deleteMany({ where: { usuarioId: userId } })
-    await tx.gasto.deleteMany({ where: { usuarioId: userId } })
-    await tx.gusto.deleteMany({ where: { usuarioId: userId } })
-    await tx.deuda.deleteMany({ where: { usuarioId: userId } })
-    await tx.deseo.deleteMany({ where: { usuarioId: userId } })
-    await tx.historialMensual.deleteMany({ where: { usuarioId: userId } })
-    await tx.evento.deleteMany({ where: { usuarioId: userId } })
-    await tx.proyeccion.deleteMany({ where: { usuarioId: userId } })
-    await tx.metaAhorro.deleteMany({ where: { usuarioId: userId } })
-    await tx.notificacion.deleteMany({ where: { usuarioId: userId } })
-    await tx.suscripcion.deleteMany({ where: { usuarioId: userId } })
+  {
+    if (operation.collection === 'salaries') await tx.salario.deleteMany({ where: { usuarioId: userId, id: operation.entityId } })
+    if (operation.collection === 'transactions') await tx.ahorro.deleteMany({ where: { usuarioId: userId, id: operation.entityId } })
+    if (operation.collection === 'transactions') await tx.gasto.deleteMany({ where: { usuarioId: userId, id: operation.entityId } })
+    if (operation.collection === 'transactions') await tx.gusto.deleteMany({ where: { usuarioId: userId, id: operation.entityId } })
+    if (operation.collection === 'debts') await tx.deuda.deleteMany({ where: { usuarioId: userId, id: operation.entityId } })
+    if (operation.collection === 'wishlist') await tx.deseo.deleteMany({ where: { usuarioId: userId, id: operation.entityId } })
+    if (operation.collection === 'monthlyPlanningHistory') await tx.historialMensual.deleteMany({ where: { usuarioId: userId, id: operation.entityId } })
+    if (operation.collection === 'events') await tx.evento.deleteMany({ where: { usuarioId: userId, id: operation.entityId } })
+    if (operation.collection === 'projections') await tx.proyeccion.deleteMany({ where: { usuarioId: userId, id: operation.entityId } })
+    if (operation.collection === 'savingsGoals') await tx.metaAhorro.deleteMany({ where: { usuarioId: userId, id: operation.entityId } })
+    if (operation.collection === 'reminders') await tx.notificacion.deleteMany({ where: { usuarioId: userId, id: operation.entityId } })
+    if (operation.collection === 'subscriptions') await tx.suscripcion.deleteMany({ where: { usuarioId: userId, id: operation.entityId } })
 
     for (const entry of payload.salaries) {
       await tx.salario.create({
@@ -847,9 +835,7 @@ async function syncBootstrap(userId: string, body: JsonRecord) {
         usuarioId: userId,
       } })
     }
-  })
-
-  return loadBootstrap(userId)
+  }
 }
 
 async function createMonthlyReset(
@@ -1534,6 +1520,59 @@ async function saveSubscription(userId: string, body: JsonRecord, id?: string) {
   return serializeSubscription(entry)
 }
 
+function syncDigest(value: unknown) {
+  return createHash('sha256').update(canonicalJson(value)).digest('hex')
+}
+
+async function syncEnvelope(userId: string, tx: Prisma.TransactionClient): Promise<SyncResponse> {
+  const snapshot = await loadBootstrap(userId, tx)
+  const records = await tx.syncRecord.findMany({ where: { usuarioId: userId } })
+  const revisions = new Map(records.map((record) => [record.key, record.revision]))
+  const versions: Record<string, string> = Object.fromEntries(records.map((record) => [record.key, `${record.revision}:deleted`]))
+  for (const collection of syncCollections) {
+    for (const value of snapshot[collection]) {
+      const key = syncKey(collection, value.id)
+      versions[key] = `${revisions.get(key) ?? 'initial'}:${syncDigest(value)}`
+    }
+  }
+  return { protocol: SYNC_PROTOCOL, snapshot, versions, acknowledged: [] }
+}
+
+export async function exchangeSync(userId: string, operation?: SyncOperation): Promise<SyncResponse> {
+  const prisma = await getPrisma()
+  return prisma.$transaction(async (tx) => {
+    // Serialize reads/version checks/writes for this account across API instances.
+    await tx.$queryRaw`SELECT id FROM usuarios WHERE id = ${userId} FOR UPDATE`
+    const current = await syncEnvelope(userId, tx)
+    if (!operation) return current
+    const key = syncKey(operation.collection, operation.entityId)
+    const receipt = await tx.syncReceipt.findUnique({ where: { usuarioId_operationId: { usuarioId: userId, operationId: operation.id } } })
+    if (receipt) {
+      if (receipt.digest !== syncDigest(operation)) throw new Error('El identificador de operación ya se utilizó con otros datos.')
+      return { ...current, acknowledged: [operation.id] }
+    }
+    let baseVersion = operation.baseVersion
+    if (baseVersion?.startsWith('op:')) {
+      const previous = await tx.syncReceipt.findUnique({ where: { usuarioId_operationId: { usuarioId: userId, operationId: baseVersion.slice(3) } } })
+      baseVersion = previous?.key === key ? previous.version : baseVersion
+    }
+    const remote = getSyncValue(current.snapshot, operation.collection, operation.entityId)
+    const version = current.versions[key] ?? null
+    if (baseVersion !== version) {
+      return { ...current, conflict: { operationId: operation.id, key, remote, version } }
+    }
+    await writeSyncRecord(userId, operation, tx)
+    await tx.syncRecord.upsert({
+      where: { usuarioId_key: { usuarioId: userId, key } },
+      create: { usuarioId: userId, key, revision: randomUUID() },
+      update: { revision: randomUUID() },
+    })
+    const result = await syncEnvelope(userId, tx)
+    await tx.syncReceipt.create({ data: { usuarioId: userId, operationId: operation.id, key, digest: syncDigest(operation), version: result.versions[key] } })
+    return { ...result, acknowledged: [operation.id] }
+  }, { timeout: 20000, maxWait: 5000 })
+}
+
 export async function handleApiRequest(req: IncomingMessage, res: ServerResponse) {
   const url = new URL(req.url ?? '/', 'http://localhost')
   const { pathname } = url
@@ -1672,12 +1711,30 @@ export async function handleApiRequest(req: IncomingMessage, res: ServerResponse
     }
 
     if (pathname === '/api/bootstrap' && method === 'GET') {
-      sendJson(res, 200, await loadBootstrap(authenticatedUser.id))
+      sendJson(res, 200, (await exchangeSync(authenticatedUser.id)).snapshot)
       return true
     }
 
-    if (pathname === '/api/bootstrap/sync' && method === 'PUT') {
-      sendJson(res, 200, await syncBootstrap(authenticatedUser.id, await readJsonBody(req)))
+    if (pathname === '/api/sync' && (method === 'GET' || method === 'POST')) {
+      let operation: SyncOperation | undefined
+      if (method === 'POST') {
+        try {
+          const body = await readJsonBody(req)
+          if (body.protocol !== SYNC_PROTOCOL) throw new Error('Actualiza la app para sincronizar.')
+          operation = parseSyncOperation(body.operation)
+        } catch {
+          sendJson(res, 400, { error: 'Cambio de sincronización inválido. Los datos locales se conservan.' })
+          return true
+        }
+      }
+      res.setHeader('Cache-Control', 'no-store')
+      sendJson(res, 200, await exchangeSync(authenticatedUser.id, operation))
+      return true
+    }
+
+    // Old clients cannot overwrite newer records without a version check.
+    if (['POST', 'PUT', 'PATCH', 'DELETE'].includes(method) && /^\/api\/(bootstrap|salaries|expenses|wants|savings|debts|wishlist|events|projections|savings-goals|reminders|subscriptions|monthly-planning)(\/|$)/.test(pathname)) {
+      sendJson(res, 426, { error: 'Actualiza la app para sincronizar de forma segura. Conserva los datos locales.' })
       return true
     }
 

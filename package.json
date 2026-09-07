@@ -23,7 +23,8 @@
     "db:generate": "pnpm --dir apps/api db:generate",
     "db:migrate": "pnpm --dir apps/api db:migrate",
     "db:push": "pnpm --dir apps/api db:push",
-    "db:studio": "pnpm --dir apps/api db:studio"
+    "db:studio": "pnpm --dir apps/api db:studio",
+    "test:sync": "tsx packages/shared/src/sync.test.mts"
   },
   "devDependencies": {
     "@rolldown/binding-win32-x64-msvc": "1.0.3"

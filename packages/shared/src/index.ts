@@ -1,4 +1,5 @@
 export * from './types'
+export * from './sync'
 export * from './contracts'
 export * from './preferences'
 export * from './theme'
