@@ -21,7 +21,7 @@ import {
   normalizeSalaryHistory,
 } from '@plata/shared'
 
-import { parseExpenseDescription } from '@/lib/expense-utils'
+import { buildExpenseDescription, parseExpenseDescription } from '@/lib/expense-utils'
 import { isNetworkRequestError, requestJson } from '@/lib/api'
 import { hasPendingSync, isOnline, markPendingSync, persistCachedBootstrap, readCachedBootstrap } from '@/lib/offline'
 import { parseWantDescription } from '@/lib/want-utils'
@@ -157,33 +157,32 @@ function ensureCurrentSubscriptionExpenses(snapshot: BootstrapPayload): Bootstra
 }
 
 function buildMonthlyPlanningHistory(transactions: Transaction[]): MonthlyPlanningHistory {
-  const expenses = transactions
-    .filter((transaction) => transaction.type === 'expense')
-    .map<MonthlyPlanningItem>((transaction) => {
-      const parsed = parseExpenseDescription(transaction.description)
+  const expenses = transactions.flatMap<MonthlyPlanningItem>((transaction) => {
+    if (transaction.type !== 'expense') return []
+    const parsed = parseExpenseDescription(transaction.description)
 
-      return {
-        amount: transaction.amount,
-        itemName: parsed.itemName,
-        category: parsed.category,
-        status: parsed.status,
-        date: transaction.date,
-      }
-    })
+    return [{
+      amount: transaction.amount,
+      itemName: parsed.itemName,
+      category: parsed.category,
+      status: parsed.status,
+      date: transaction.date,
+      unnecessary: parsed.unnecessary,
+    }]
+  })
 
-  const wants = transactions
-    .filter((transaction) => transaction.type === 'want')
-    .map<MonthlyPlanningItem>((transaction) => {
-      const parsed = parseWantDescription(transaction.description)
+  const wants = transactions.flatMap<MonthlyPlanningItem>((transaction) => {
+    if (transaction.type !== 'want') return []
+    const parsed = parseWantDescription(transaction.description)
 
-      return {
-        amount: transaction.amount,
-        itemName: parsed.itemName,
-        category: parsed.category,
-        status: parsed.status,
-        date: transaction.date,
-      }
-    })
+    return [{
+      amount: transaction.amount,
+      itemName: parsed.itemName,
+      category: parsed.category,
+      status: parsed.status,
+      date: transaction.date,
+    }]
+  })
 
   const now = new Date()
 
@@ -212,7 +211,12 @@ function buildTransactionsFromHistory(
       ...history.expenses.map((entry) => ({
         amount: entry.amount,
         type: 'expense' as const,
-        description: `${entry.category}::${entry.status}::${entry.itemName.trim()}`,
+        description: buildExpenseDescription(
+          entry.category as ReturnType<typeof parseExpenseDescription>['category'],
+          entry.itemName,
+          entry.status,
+          entry.unnecessary,
+        ),
         date: today,
       })),
     )

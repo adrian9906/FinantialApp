@@ -27,6 +27,7 @@ model Usuario {
   notificaciones Notificacion[]
   suscripciones  Suscripcion[]
   sesiones       Sesion[]
+  preferencia    PreferenciaUsuario?
 
   @@map("usuarios")
 }
@@ -118,6 +119,7 @@ model Item {
   precio    Float
   fecha     DateTime @default(now())
   categoria String
+  innecesario Boolean  @default(false)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
   gastoId   String?
@@ -126,6 +128,17 @@ model Item {
   gusto     Gusto?   @relation(fields: [gustoId], references: [id], onDelete: Cascade)
 
   @@map("items")
+}
+
+model PreferenciaUsuario {
+  usuarioId    String   @id
+  monedas      Json
+  monedaActiva String   @default("USD")
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  usuario      Usuario  @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+
+  @@map("preferencias_usuario")
 }
 
 model Evento {

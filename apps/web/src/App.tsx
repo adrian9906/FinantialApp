@@ -86,6 +86,7 @@ function ProtectedApp() {
   const savingsGoals = useFinanceStore((state) => state.savingsGoals)
   const reminders = useFinanceStore((state) => state.reminders)
   const subscriptions = useFinanceStore((state) => state.subscriptions)
+  const hydrateCurrencyPreferences = usePreferencesStore((state) => state.hydrateCurrencyPreferences)
 
   useEffect(() => {
     if (!hasChecked) {
@@ -101,6 +102,11 @@ function ProtectedApp() {
 
     reset()
   }, [authMode, hydrate, reset])
+
+  useEffect(() => {
+    if (authMode !== 'authenticated' || !user) return
+    void hydrateCurrencyPreferences(user.id).catch(() => {})
+  }, [authMode, hydrateCurrencyPreferences, user])
 
   useEffect(() => {
     if (authMode !== 'authenticated' || !user) return
@@ -124,6 +130,7 @@ function ProtectedApp() {
 
     function handleOnline() {
       void syncPendingChanges().catch(() => {})
+      if (user) void hydrateCurrencyPreferences(user.id).catch(() => {})
     }
 
     window.addEventListener('online', handleOnline)
@@ -132,7 +139,7 @@ function ProtectedApp() {
     return () => {
       window.removeEventListener('online', handleOnline)
     }
-  }, [authMode, syncPendingChanges])
+  }, [authMode, hydrateCurrencyPreferences, syncPendingChanges, user])
 
   if (isChecking && !hasChecked) {
     return (

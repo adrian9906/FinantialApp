@@ -51,6 +51,11 @@ interface FormState {
 type ViewMode = 'cards' | 'list'
 
 const DEFAULT_STORES: PriceScoutStoreValue[] = PRICESCOUT_STORE_OPTIONS.map((option) => option.value)
+const PRIORITY_ORDER: Record<FormState['priority'], number> = {
+  high: 0,
+  medium: 1,
+  low: 2,
+}
 const dateFormatter = new Intl.DateTimeFormat('es-ES', {
   day: 'numeric',
   month: 'short',
@@ -76,6 +81,10 @@ function getPriorityBadgeClass(priority: FormState['priority']) {
   if (priority === 'low') return 'border-red-500/30 bg-red-500/15 text-red-200'
   if (priority === 'medium') return 'border-amber-500/30 bg-amber-500/15 text-amber-200'
   return 'border-emerald-500/30 bg-emerald-500/15 text-emerald-200'
+}
+
+function sortWishlistByPriority<T extends { priority: FormState['priority'] }>(items: T[]) {
+  return items.toSorted((left, right) => PRIORITY_ORDER[left.priority] - PRIORITY_ORDER[right.priority])
 }
 
 function getStoreLabel(store?: string) {
@@ -142,8 +151,8 @@ export default function Wishlist() {
 
   const currentFreeSavedAmount = Math.max(0, overview.freeSavings)
   const purchasedCount = wishlist.filter((item) => isWishlistPurchased(item)).length
-  const pendingWishlist = wishlist.filter((item) => !isWishlistPurchased(item))
-  const purchasedWishlist = wishlist.filter((item) => isWishlistPurchased(item))
+  const pendingWishlist = sortWishlistByPriority(wishlist.filter((item) => !isWishlistPurchased(item)))
+  const purchasedWishlist = sortWishlistByPriority(wishlist.filter((item) => isWishlistPurchased(item)))
   const wishlistSections = [
     {
       id: 'pending',

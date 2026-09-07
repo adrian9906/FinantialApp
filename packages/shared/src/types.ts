@@ -71,6 +71,7 @@ export interface MonthlyPlanningItem {
   category: string
   status: 'pending' | 'checked'
   date: string
+  unnecessary?: boolean
 }
 
 export interface MonthlyPlanningHistory {

@@ -14,6 +14,7 @@ import type {
   WishlistItem,
 } from '@plata/shared'
 import type { Prisma } from '@prisma/client'
+import { buildExpenseDescription, parseExpenseDescription } from '@plata/shared'
 
 import { clearSession, createSession, getSessionUser, hashPassword, verifyPassword } from './auth.js'
 import { getPrisma } from './prisma.js'
@@ -111,6 +112,84 @@ function normalizePriority(value: unknown): 'low' | 'medium' | 'high' {
   return 'medium'
 }
 
+type CurrencyPreferencePayload = {
+  code: string
+  name: string
+  country: string
+  locale: string
+  exchangeRate: number
+}
+
+const USD_CURRENCY_PREFERENCE: CurrencyPreferencePayload = {
+  code: 'USD',
+  name: 'Dólar estadounidense',
+  country: 'Estados Unidos',
+  locale: 'en-US',
+  exchangeRate: 1,
+}
+
+function normalizeCurrencyPreferences(value: unknown): CurrencyPreferencePayload[] {
+  const currencies = Array.isArray(value) ? value : []
+  const normalized = new Map<string, CurrencyPreferencePayload>([['USD', USD_CURRENCY_PREFERENCE]])
+
+  for (const candidate of currencies.slice(0, 30)) {
+    if (!candidate || typeof candidate !== 'object') continue
+    const entry = candidate as JsonRecord
+    const code = String(entry.code ?? '').trim().toUpperCase().slice(0, 8)
+    if (!code || code === 'USD' || normalized.has(code)) continue
+
+    normalized.set(code, {
+      code,
+      name: String(entry.name ?? code).trim().slice(0, 80) || code,
+      country: String(entry.country ?? '').trim().slice(0, 80),
+      locale: String(entry.locale ?? 'en-US').trim().slice(0, 32) || 'en-US',
+      exchangeRate: Math.max(0.000001, Number(entry.exchangeRate) || 1),
+    })
+  }
+
+  return [...normalized.values()]
+}
+
+async function loadCurrencyPreferences(userId: string) {
+  const prisma = await getPrisma()
+  const entry = await prisma.preferenciaUsuario.findUnique({ where: { usuarioId: userId } })
+
+  if (!entry) {
+    return { exists: false, currencies: [USD_CURRENCY_PREFERENCE], activeCurrencyCode: 'USD' }
+  }
+
+  const currencies = normalizeCurrencyPreferences(entry.monedas)
+  const activeCurrencyCode = currencies.some((currency) => currency.code === entry.monedaActiva)
+    ? entry.monedaActiva
+    : 'USD'
+
+  return { exists: true, currencies, activeCurrencyCode }
+}
+
+async function saveCurrencyPreferences(userId: string, body: JsonRecord) {
+  const prisma = await getPrisma()
+  const currencies = normalizeCurrencyPreferences(body.currencies)
+  const requestedActiveCode = String(body.activeCurrencyCode ?? 'USD').trim().toUpperCase()
+  const activeCurrencyCode = currencies.some((currency) => currency.code === requestedActiveCode)
+    ? requestedActiveCode
+    : 'USD'
+
+  await prisma.preferenciaUsuario.upsert({
+    where: { usuarioId: userId },
+    update: {
+      monedas: currencies as unknown as Prisma.InputJsonValue,
+      monedaActiva: activeCurrencyCode,
+    },
+    create: {
+      usuarioId: userId,
+      monedas: currencies as unknown as Prisma.InputJsonValue,
+      monedaActiva: activeCurrencyCode,
+    },
+  })
+
+  return { exists: true, currencies, activeCurrencyCode }
+}
+
 function serializeSalary(entry: { id: string; salario: number; fecha: Date }): Salary {
   return {
     id: entry.id,
@@ -124,13 +203,21 @@ function serializeExpense(entry: {
   cantidad: number
   fecha: Date
   createdAt: Date
-  items: Array<{ nombre: string }>
+  items: Array<{ nombre: string; innecesario: boolean }>
 }): Transaction {
+  const item = entry.items[0]
+  const parsed = parseExpenseDescription(item?.nombre)
+
   return {
     id: entry.id,
     amount: entry.cantidad,
     type: 'expense',
-    description: entry.items[0]?.nombre ?? 'Gasto',
+    description: buildExpenseDescription(
+      parsed.category,
+      parsed.itemName,
+      parsed.status,
+      item?.innecesario ?? parsed.unnecessary,
+    ),
     date: toDateString(entry.fecha),
     createdAt: entry.createdAt.toISOString(),
   }
@@ -241,6 +328,7 @@ function parseMonthlyPlanningItems(value: unknown): MonthlyPlanningItem[] {
       category: String(item.category ?? ''),
       status: item.status === 'pending' ? 'pending' : 'checked',
       date: String(item.date ?? toDateString(new Date())),
+      unnecessary: Boolean(item.unnecessary),
     }
   })
 }
@@ -580,6 +668,7 @@ async function syncBootstrap(userId: string, body: JsonRecord) {
     }
 
     for (const entry of expenses) {
+      const expenseMetadata = parseExpenseDescription(entry.description)
       await tx.gasto.create({
         data: {
           id: entry.id,
@@ -593,6 +682,7 @@ async function syncBootstrap(userId: string, body: JsonRecord) {
               precio: Number(entry.amount ?? 0),
               fecha: entry.date ? new Date(entry.date) : new Date(),
               categoria: 'expense',
+              innecesario: expenseMetadata.unnecessary,
             },
           },
         },
@@ -845,6 +935,12 @@ async function restoreMonthlyReset(
   await prisma.$transaction(async (tx) => {
     if (scope === 'expenses' || scope === 'all') {
       for (const entry of expenses) {
+        const description = buildExpenseDescription(
+          entry.category as ReturnType<typeof parseExpenseDescription>['category'],
+          entry.itemName,
+          entry.status,
+          entry.unnecessary,
+        )
         const created = await tx.gasto.create({
           data: {
             cantidad: entry.amount,
@@ -852,10 +948,11 @@ async function restoreMonthlyReset(
             usuarioId: userId,
             items: {
               create: {
-                nombre: `${entry.category}::${entry.status}::${entry.itemName}`,
+                nombre: description,
                 precio: entry.amount,
                 fecha: today,
                 categoria: 'expense',
+                innecesario: Boolean(entry.unnecessary),
               },
             },
           },
@@ -1036,6 +1133,7 @@ async function saveTransaction(
   const amount = Number(body.amount ?? 0)
   const description = String(body.description ?? '').trim()
   const date = body.date ? new Date(String(body.date)) : new Date()
+  const expenseMetadata = kind === 'expense' ? parseExpenseDescription(description) : null
 
   if (!description) {
     throw new Error('La descripcion es obligatoria.')
@@ -1066,6 +1164,7 @@ async function saveTransaction(
                     precio: amount,
                     fecha: date,
                     categoria: 'expense',
+                    innecesario: expenseMetadata?.unnecessary ?? false,
                   },
                 },
               }
@@ -1075,6 +1174,7 @@ async function saveTransaction(
                   precio: amount,
                   fecha: date,
                   categoria: 'expense',
+                  innecesario: expenseMetadata?.unnecessary ?? false,
                 },
               },
         },
@@ -1095,6 +1195,7 @@ async function saveTransaction(
             precio: amount,
             fecha: date,
             categoria: 'expense',
+            innecesario: expenseMetadata?.unnecessary ?? false,
           },
         },
       },
@@ -1557,6 +1658,16 @@ export async function handleApiRequest(req: IncomingMessage, res: ServerResponse
 
     const authenticatedUser = await requireUser(req, res)
     if (!authenticatedUser) {
+      return true
+    }
+
+    if (pathname === '/api/preferences/currencies' && method === 'GET') {
+      sendJson(res, 200, await loadCurrencyPreferences(authenticatedUser.id))
+      return true
+    }
+
+    if (pathname === '/api/preferences/currencies' && method === 'PUT') {
+      sendJson(res, 200, await saveCurrencyPreferences(authenticatedUser.id, await readJsonBody(req)))
       return true
     }
 

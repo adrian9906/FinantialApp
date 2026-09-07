@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import { buildExpenseTransferSavingDescription, createLearnedCategorizationRule, findCategorizationRule, type ReceiptOCRLineItem, type ReceiptOCRParsedDraft } from '@plata/shared'
-import { ArrowUpRight, Check, Dumbbell, HeartPulse, House, Package, Pencil, Plus, ShoppingBasket, Trash2, Wifi, type LucideIcon } from 'lucide-react'
+import { Check, Dumbbell, HeartPulse, House, Package, Pencil, Plus, ShoppingBasket, Trash2, Wifi, type LucideIcon } from 'lucide-react'
 import { useFinanceStore } from '@/store/financeStore'
 import { buildExpenseDescription, createCustomExpenseCategory, getExpenseCategoryLabel, getPlannedExpenseTotal, parseExpenseDescription, type ExpenseBuiltInCategory, type ExpenseCategory } from '@/lib/expense-utils'
 import { useMonthlyOverview } from '@/lib/useMonthlyOverview'
@@ -27,9 +27,10 @@ import { ScrollArea } from '@/components/ui/scroll-area'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { PlanningHistoryPicker } from '@/components/planning/PlanningHistoryPicker'
 import { PlanningListHistory } from '@/components/planning/PlanningListHistory'
+import { TransactionDateFilter } from '@/components/planning/TransactionDateFilter'
 import { buildPlanningHistorySuggestions, buildReusablePlanningListDrafts } from '@/lib/productivity'
 import { toast } from 'sonner'
-import { getTodayDateKey } from '@/lib/date'
+import { filterAndSortTransactionsByDate, getTodayDateKey, type TransactionDateFilter as TransactionDateFilterValue } from '@/lib/date'
 import { ReceiptOcrPanel } from '@/components/ocr/ReceiptOcrPanel'
 import { useAuthStore } from '@/store/authStore'
 import { usePreferencesStore } from '@/store/preferencesStore'
@@ -213,6 +214,7 @@ export default function Expenses() {
   const [transferError, setTransferError] = useState<string | null>(null)
   const [restoringListId, setRestoringListId] = useState<string | null>(null)
   const [customCategoryName, setCustomCategoryName] = useState('')
+  const [dateFilter, setDateFilter] = useState<TransactionDateFilterValue>('all')
   const categoryWasChanged = useRef(false)
   const [form, setForm] = useState<ExpenseFormState>({
     amount: '',
@@ -384,11 +386,12 @@ export default function Expenses() {
     return Array.from(categories)
   })()
 
+  const filteredExpenseItems = filterAndSortTransactionsByDate(expenseItems, dateFilter)
+
   const groupedExpenses = expenseCategories.map((key) => {
     const meta = getCategoryMeta(key)
-    const items = expenseItems
+    const items = filteredExpenseItems
       .filter((item) => item.category === key)
-      .sort((a, b) => a.itemName.localeCompare(b.itemName))
 
     const total = items.reduce((sum, item) => sum + item.amount, 0)
     const completed = items.filter((item) => item.status === 'checked').length
@@ -402,9 +405,9 @@ export default function Expenses() {
     }
   })
 
-  const expenseCount = expenseItems.length
-  const checkedCount = expenseItems.filter((item) => item.status === 'checked').length
-  const pendingCount = expenseItems.filter((item) => item.status === 'pending').length
+  const expenseCount = filteredExpenseItems.length
+  const checkedCount = filteredExpenseItems.filter((item) => item.status === 'checked').length
+  const pendingCount = filteredExpenseItems.filter((item) => item.status === 'pending').length
   const currentItemAmount = editId ? expenseItems.find((item) => item.id === editId)?.amount ?? 0 : 0
   const plannedTotal = getPlannedExpenseTotal(transactions) - currentItemAmount
   const availableToPlan = Math.max(0, overview.budgetExpenses - plannedTotal)
@@ -600,18 +603,14 @@ export default function Expenses() {
         onReuse={(entry) => void handleReuseList(entry)}
       />
 
-      {expenseItems.length === 0 ? (
-        <Card className="border-0 bg-surface shadow-vault">
-          <div className="flex flex-col items-center gap-3 py-16 text-sm text-muted-gray">
-            <ArrowUpRight className="size-8" />
-            <p>No hay productos registrados</p>
-            <Button variant="secondary" onClick={() => handleOpen()} className="bg-surface-container-high text-on-surface hover:bg-surface-container-higher">
-              Crear tu primera lista
-            </Button>
-          </div>
-        </Card>
-      ) : (
-        <div className="grid gap-4 xl:grid-cols-2 2xl:grid-cols-3">
+      <TransactionDateFilter
+        value={dateFilter}
+        onChange={setDateFilter}
+        resultCount={filteredExpenseItems.length}
+        itemLabel="gasto"
+      />
+
+      <div className="grid gap-4 xl:grid-cols-2 2xl:grid-cols-3">
           {groupedExpenses.map(({ key, meta, items, total, completed }) => {
             const Icon = meta.icon
 
@@ -740,8 +739,7 @@ export default function Expenses() {
               </Card>
             )
           })}
-        </div>
-      )}
+      </div>
 
       <Dialog open={open} onOpenChange={(nextOpen) => { if (!isSaving) setOpen(nextOpen) }}>
         <DialogContent className="max-h-[88dvh] overflow-y-auto border-graphite bg-surface sm:max-w-4xl">

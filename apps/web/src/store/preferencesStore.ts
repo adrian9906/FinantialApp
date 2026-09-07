@@ -17,6 +17,8 @@ import {
   normalizeFormula,
 } from '@plata/shared'
 import type { CustomTypographyOption } from '@/lib/typography'
+import { requestJson } from '@/lib/api'
+import { useAuthStore } from '@/store/authStore'
 
 interface PreferencesStore {
   appearance: AppAppearance
@@ -41,6 +43,8 @@ interface PreferencesStore {
   setActiveCurrency: (code: string) => void
   saveCurrency: (currency: CurrencyPreference) => void
   removeCurrency: (code: string) => void
+  hydrateCurrencyPreferences: (userId: string) => Promise<void>
+  syncCurrencyPreferences: () => Promise<void>
   toggleDashboardWidget: (profileId: string, widgetId: DashboardWidgetId) => void
   moveDashboardWidget: (profileId: string, widgetId: DashboardWidgetId, direction: -1 | 1) => void
   saveCategoryRule: (profileId: string, rule: CategorizationRule) => void
@@ -90,6 +94,73 @@ function normalizeCurrencies(currencies: CurrencyPreference[]) {
   return [USD_CURRENCY, ...uniqueCurrencies.values()]
 }
 
+interface CurrencyPreferencesResponse {
+  exists: boolean
+  currencies: CurrencyPreference[]
+  activeCurrencyCode: string
+}
+
+let currencyRevision = 0
+let currencySyncInFlight: Promise<void> | null = null
+let currencySyncQueued = false
+
+function getCurrencyPendingKey(userId: string) {
+  return `plata-currency-preferences-pending:${userId}`
+}
+
+function hasPendingCurrencyPreferences(userId: string) {
+  return typeof window !== 'undefined' && window.localStorage.getItem(getCurrencyPendingKey(userId)) === '1'
+}
+
+function markCurrencyPreferencesPending(userId: string, pending: boolean) {
+  if (typeof window === 'undefined') return
+  if (pending) {
+    window.localStorage.setItem(getCurrencyPendingKey(userId), '1')
+  } else {
+    window.localStorage.removeItem(getCurrencyPendingKey(userId))
+  }
+}
+
+function getAuthenticatedUserId() {
+  const { authMode, user } = useAuthStore.getState()
+  return authMode === 'authenticated' ? user?.id ?? null : null
+}
+
+function syncCurrencyPreferencesToServer() {
+  if (currencySyncInFlight) {
+    currencySyncQueued = true
+    return currencySyncInFlight
+  }
+
+  currencySyncInFlight = (async () => {
+    do {
+      currencySyncQueued = false
+      const userId = getAuthenticatedUserId()
+      if (!userId) return
+
+      const { currencies, activeCurrencyCode } = usePreferencesStore.getState()
+      await requestJson<CurrencyPreferencesResponse>('/preferences/currencies', {
+        method: 'PUT',
+        body: JSON.stringify({ currencies, activeCurrencyCode }),
+      })
+      if (!currencySyncQueued) markCurrencyPreferencesPending(userId, false)
+    } while (currencySyncQueued)
+  })().finally(() => {
+    currencySyncInFlight = null
+  })
+
+  return currencySyncInFlight
+}
+
+function scheduleCurrencySync() {
+  currencyRevision += 1
+  const userId = getAuthenticatedUserId()
+  if (userId) markCurrencyPreferencesPending(userId, true)
+  queueMicrotask(() => {
+    void syncCurrencyPreferencesToServer().catch(() => {})
+  })
+}
+
 const defaultState = {
   appearance: 'dark' as AppAppearance,
   theme: 'obsidian' as AppTheme,
@@ -132,29 +203,60 @@ export const usePreferencesStore = create<PreferencesStore>()(
         }
       }),
       setFormula: (formula) => set({ formula: normalizeFormula(formula) }),
-      setActiveCurrency: (code) => set((state) => {
+      setActiveCurrency: (code) => {
+        set((state) => {
+          const normalizedCode = code.trim().toUpperCase()
+          return {
+            activeCurrencyCode: state.currencies.some((currency) => currency.code === normalizedCode) ? normalizedCode : 'USD',
+          }
+        })
+        scheduleCurrencySync()
+      },
+      saveCurrency: (currency) => {
+        set((state) => {
+          const normalized = normalizeCurrencyPreference(currency)
+          const exists = state.currencies.some((entry) => entry.code === normalized.code)
+          return {
+            currencies: exists
+              ? state.currencies.map((entry) => entry.code === normalized.code ? normalized : entry)
+              : [...state.currencies, normalized],
+          }
+        })
+        scheduleCurrencySync()
+      },
+      removeCurrency: (code) => {
         const normalizedCode = code.trim().toUpperCase()
-        return {
-          activeCurrencyCode: state.currencies.some((currency) => currency.code === normalizedCode) ? normalizedCode : 'USD',
-        }
-      }),
-      saveCurrency: (currency) => set((state) => {
-        const normalized = normalizeCurrencyPreference(currency)
-        const exists = state.currencies.some((entry) => entry.code === normalized.code)
-        return {
-          currencies: exists
-            ? state.currencies.map((entry) => entry.code === normalized.code ? normalized : entry)
-            : [...state.currencies, normalized],
-        }
-      }),
-      removeCurrency: (code) => set((state) => {
-        const normalizedCode = code.trim().toUpperCase()
-        if (normalizedCode === 'USD') return state
-        return {
+        if (normalizedCode === 'USD') return
+        set((state) => ({
           currencies: state.currencies.filter((currency) => currency.code !== normalizedCode),
           activeCurrencyCode: state.activeCurrencyCode === normalizedCode ? 'USD' : state.activeCurrencyCode,
+        }))
+        scheduleCurrencySync()
+      },
+      hydrateCurrencyPreferences: async (userId) => {
+        const revisionAtStart = currencyRevision
+        const remote = await requestJson<CurrencyPreferencesResponse>('/preferences/currencies')
+        if (getAuthenticatedUserId() !== userId) return
+
+        if (currencyRevision !== revisionAtStart || hasPendingCurrencyPreferences(userId)) {
+          await syncCurrencyPreferencesToServer()
+          return
         }
-      }),
+
+        if (!remote.exists) {
+          await syncCurrencyPreferencesToServer()
+          return
+        }
+
+        const currencies = normalizeCurrencies(remote.currencies)
+        const activeCurrencyCode = currencies.some((currency) => currency.code === remote.activeCurrencyCode)
+          ? remote.activeCurrencyCode
+          : 'USD'
+        set({ currencies, activeCurrencyCode })
+      },
+      syncCurrencyPreferences: async () => {
+        await syncCurrencyPreferencesToServer()
+      },
       toggleDashboardWidget: (profileId, widgetId) => set((state) => {
         const current = state.dashboardWidgetsByProfile[profileId] ?? defaultDashboardWidgets
         const next = current.includes(widgetId)
@@ -185,7 +287,10 @@ export const usePreferencesStore = create<PreferencesStore>()(
         dashboardWidgetsByProfile: { ...state.dashboardWidgetsByProfile, [profileId]: [...defaultDashboardWidgets] },
         categoryRulesByProfile: { ...state.categoryRulesByProfile, [profileId]: [] },
       })),
-      resetPreferences: () => set(defaultState),
+      resetPreferences: () => {
+        set(defaultState)
+        scheduleCurrencySync()
+      },
     }),
     {
       name: 'plata-preferences',

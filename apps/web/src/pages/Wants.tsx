@@ -28,9 +28,10 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { usePreferencesStore } from '@/store/preferencesStore'
 import { PlanningHistoryPicker } from '@/components/planning/PlanningHistoryPicker'
 import { PlanningListHistory } from '@/components/planning/PlanningListHistory'
+import { TransactionDateFilter } from '@/components/planning/TransactionDateFilter'
 import { buildPlanningHistorySuggestions, buildReusablePlanningListDrafts } from '@/lib/productivity'
 import { toast } from 'sonner'
-import { getTodayDateKey } from '@/lib/date'
+import { filterAndSortTransactionsByDate, getTodayDateKey, type TransactionDateFilter as TransactionDateFilterValue } from '@/lib/date'
 import { ReceiptOcrPanel } from '@/components/ocr/ReceiptOcrPanel'
 import { useAuthStore } from '@/store/authStore'
 
@@ -202,10 +203,11 @@ export default function Wants() {
   const [isTransferring, setIsTransferring] = useState(false)
   const [isExporting, setIsExporting] = useState(false)
   const [transferOpen, setTransferOpen] = useState(false)
-const [transferAmount, setTransferAmount] = useState('')
+  const [transferAmount, setTransferAmount] = useState('')
   const [transferError, setTransferError] = useState<string | null>(null)
   const [restoringListId, setRestoringListId] = useState<string | null>(null)
-const [customCategoryName, setCustomCategoryName] = useState('')
+  const [customCategoryName, setCustomCategoryName] = useState('')
+  const [dateFilter, setDateFilter] = useState<TransactionDateFilterValue>('all')
   const categoryWasChanged = useRef(false)
   const [form, setForm] = useState<WantFormState>({
     amount: '',
@@ -279,11 +281,15 @@ const [customCategoryName, setCustomCategoryName] = useState('')
     return Array.from(categories)
   })()
 
+  const filteredWantItems = useMemo(
+    () => filterAndSortTransactionsByDate(wantItems, dateFilter),
+    [dateFilter, wantItems],
+  )
+
   const groupedWants = wantCategories.map((key) => {
       const meta = getCategoryMeta(key)
-      const items = wantItems
+      const items = filteredWantItems
         .filter((item) => item.category === key)
-        .sort((a, b) => a.itemName.localeCompare(b.itemName))
 
       const total = items.reduce((sum, item) => sum + item.amount, 0)
       const completed = items.filter((item) => item.status === 'checked').length
@@ -305,9 +311,9 @@ const [customCategoryName, setCustomCategoryName] = useState('')
     [monthlyPlanningHistory, transactions],
   )
 
-  const wantCount = wantItems.length
-  const checkedCount = wantItems.filter((item) => item.status === 'checked').length
-  const pendingCount = wantItems.filter((item) => item.status === 'pending').length
+  const wantCount = filteredWantItems.length
+  const checkedCount = filteredWantItems.filter((item) => item.status === 'checked').length
+  const pendingCount = filteredWantItems.filter((item) => item.status === 'pending').length
   const currentItemAmount = editId ? wantItems.find((item) => item.id === editId)?.amount ?? 0 : 0
   const plannedTotal = getPlannedWantTotal(transactions) - currentItemAmount
   const availableToPlan = Math.max(0, overview.budgetWants - plannedTotal)
@@ -628,18 +634,14 @@ setCustomCategoryName('')
         onReuse={(entry) => void handleReuseList(entry)}
       />
 
-      {wantItems.length === 0 ? (
-        <Card className="border-0 bg-surface shadow-vault">
-          <div className="flex flex-col items-center gap-3 py-16 text-sm text-muted-gray">
-            <Heart className="size-8" />
-            <p>No hay gustos registrados</p>
-            <Button disabled={isWantsDisabled} variant="secondary" onClick={() => handleOpen()} className="bg-surface-container-high text-on-surface hover:bg-surface-container-higher disabled:cursor-not-allowed disabled:opacity-40">
-              Crear tu primera lista
-            </Button>
-          </div>
-        </Card>
-      ) : (
-        <div className="grid gap-4 xl:grid-cols-2 2xl:grid-cols-3">
+      <TransactionDateFilter
+        value={dateFilter}
+        onChange={setDateFilter}
+        resultCount={filteredWantItems.length}
+        itemLabel="gusto"
+      />
+
+      <div className="grid gap-4 xl:grid-cols-2 2xl:grid-cols-3">
           {groupedWants.map(({ key, meta, items, total, completed }) => {
             const Icon = meta.icon
 
@@ -754,8 +756,7 @@ setCustomCategoryName('')
               </Card>
             )
           })}
-        </div>
-      )}
+      </div>
 
       <Dialog open={open} onOpenChange={(nextOpen) => { if (!isSaving) setOpen(nextOpen) }}>
         <DialogContent className="max-h-[88dvh] overflow-y-auto border-graphite bg-surface sm:max-w-4xl">
