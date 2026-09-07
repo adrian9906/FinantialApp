@@ -1,7 +1,27 @@
+/** A configurable income source: a job, a client, a side gig. */
+export interface IncomeSource {
+  id: string
+  name: string
+  /** Recurring sources carry forward to the next month on their own. */
+  recurring: boolean
+  archived?: boolean
+}
+
+/**
+ * One income entry for a month. Kept as `Salary` so existing stored records
+ * stay valid: the new fields are optional and an entry without them behaves
+ * exactly like the single monthly salary the app used to have.
+ */
 export interface Salary {
   id: string
   amount: number
   month: string
+  /** Which income source this belongs to; absent on legacy records. */
+  sourceId?: string
+  /** Free-text label kept alongside the id so history survives a deleted source. */
+  sourceName?: string
+  /** One-off income (bonus, aguinaldo) never carries forward. */
+  kind?: 'recurring' | 'one-off'
 }
 
 export interface Transaction {

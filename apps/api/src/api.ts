@@ -4,6 +4,7 @@ import { parseSyncOperation } from './sync-validation.js'
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import type {
   AppEvent,
+  IncomeSource,
   Debt,
   MonthlyPlanningHistory,
   MonthlyPlanningItem,
@@ -192,11 +193,35 @@ async function saveCurrencyPreferences(userId: string, body: JsonRecord) {
   return { exists: true, currencies, activeCurrencyCode }
 }
 
-function serializeSalary(entry: { id: string; salario: number; fecha: Date }): Salary {
+function serializeSalary(entry: {
+  id: string
+  salario: number
+  fecha: Date
+  fuenteId?: string | null
+  fuenteNombre?: string | null
+  tipo?: string | null
+}): Salary {
   return {
     id: entry.id,
     amount: entry.salario,
     month: toMonthString(entry.fecha),
+    ...(entry.fuenteId ? { sourceId: entry.fuenteId } : {}),
+    ...(entry.fuenteNombre ? { sourceName: entry.fuenteNombre } : {}),
+    ...(entry.tipo === 'one-off' || entry.tipo === 'recurring' ? { kind: entry.tipo } : {}),
+  }
+}
+
+function serializeIncomeSource(entry: {
+  id: string
+  nombre: string
+  recurrente: boolean
+  archivada: boolean
+}): IncomeSource {
+  return {
+    id: entry.id,
+    name: entry.nombre,
+    recurring: entry.recurrente,
+    ...(entry.archivada ? { archived: true } : {}),
   }
 }
 
@@ -499,13 +524,17 @@ async function loadBootstrap(userId: string, prisma: Prisma.TransactionClient, m
   await ensureSubscriptionExpenses(userId, prisma)
   }
 
-  const [salaries, expenses, wants, savings, debts, wishlist, monthlyPlanningHistory, events, projections, savingsGoals, reminders, subscriptions] = await Promise.all([
+  const [salaries, incomeSources, expenses, wants, savings, debts, wishlist, monthlyPlanningHistory, events, projections, savingsGoals, reminders, subscriptions] = await Promise.all([
     prisma.salario.findMany({
       where: { usuarioId: userId },
       orderBy: [
         { fecha: 'desc' },
         { updatedAt: 'desc' },
       ],
+    }),
+    prisma.fuenteIngreso.findMany({
+      where: { usuarioId: userId },
+      orderBy: { createdAt: 'asc' },
     }),
     prisma.gasto.findMany({
       where: { usuarioId: userId },
@@ -550,6 +579,7 @@ async function loadBootstrap(userId: string, prisma: Prisma.TransactionClient, m
 
   return {
     salaries: salaries.map(serializeSalary),
+    incomeSources: incomeSources.map(serializeIncomeSource),
     transactions,
     debts: debts.map(serializeDebt),
     wishlist: wishlist.map(serializeWishlist),
@@ -632,6 +662,7 @@ async function writeSyncRecord(userId: string, operation: SyncOperation, tx: Pri
 
   {
     if (operation.collection === 'salaries') await tx.salario.deleteMany({ where: { usuarioId: userId, id: operation.entityId } })
+    if (operation.collection === 'incomeSources') await tx.fuenteIngreso.deleteMany({ where: { usuarioId: userId, id: operation.entityId } })
     if (operation.collection === 'transactions') await tx.ahorro.deleteMany({ where: { usuarioId: userId, id: operation.entityId } })
     if (operation.collection === 'transactions') await tx.gasto.deleteMany({ where: { usuarioId: userId, id: operation.entityId } })
     if (operation.collection === 'transactions') await tx.gusto.deleteMany({ where: { usuarioId: userId, id: operation.entityId } })
@@ -650,6 +681,21 @@ async function writeSyncRecord(userId: string, operation: SyncOperation, tx: Pri
           id: entry.id,
           salario: Number(entry.amount ?? 0),
           fecha: toMonthDate(String(entry.month ?? toMonthString(new Date()))),
+          fuenteId: entry.sourceId ?? null,
+          fuenteNombre: entry.sourceName ?? null,
+          tipo: entry.kind ?? null,
+          usuarioId: userId,
+        },
+      })
+    }
+
+    for (const entry of payload.incomeSources) {
+      await tx.fuenteIngreso.create({
+        data: {
+          id: entry.id,
+          nombre: entry.name,
+          recurrente: entry.recurring,
+          archivada: entry.archived ?? false,
           usuarioId: userId,
         },
       })

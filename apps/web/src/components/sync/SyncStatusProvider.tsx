@@ -17,6 +17,9 @@ export function SyncStatusProvider() {
   const syncPendingChanges = useFinanceStore((state) => state.syncPendingChanges)
   const [progress, setProgress] = useState<SyncProgress>(getSyncProgress)
   const wasOffline = useRef(!isOnline())
+  // Set when the link drops and cleared only once a sync has actually run, so
+  // the toast handler cannot clear it before the sync effect reads it.
+  const needsVisibleSync = useRef(!isOnline())
 
   useEffect(() => subscribeToSyncProgress(setProgress), [])
 
@@ -25,6 +28,7 @@ export function SyncStatusProvider() {
   useEffect(() => {
     function handleOffline() {
       wasOffline.current = true
+      needsVisibleSync.current = true
       toast.warning('Te quedaste sin internet. Todo lo que registres ahora se guardará en este dispositivo.', {
         id: OFFLINE_TOAST_ID,
         duration: 6000,
@@ -48,28 +52,36 @@ export function SyncStatusProvider() {
   }, [])
 
   // Sync on reconnect, on returning to the app, and periodically while open.
+  // Only the run that follows an actual disconnection is shown to the user;
+  // everything else uploads silently in the background.
   useEffect(() => {
     if (authMode !== 'authenticated') return
 
-    const run = () => {
+    const run = (reason: 'silent' | 'reconnect' = 'silent') => {
       if (!isOnline()) return
-      void syncPendingChanges().catch(() => {})
+      if (reason === 'reconnect') needsVisibleSync.current = false
+      void syncPendingChanges(reason).catch(() => {})
+    }
+
+    function handleReconnect() {
+      run(needsVisibleSync.current ? 'reconnect' : 'silent')
     }
 
     function handleVisibility() {
-      if (document.visibilityState === 'visible') run()
+      if (document.visibilityState === 'visible') handleReconnect()
     }
 
-    window.addEventListener('online', run)
-    window.addEventListener('focus', run)
+    window.addEventListener('online', handleReconnect)
+    window.addEventListener('focus', handleReconnect)
     document.addEventListener('visibilitychange', handleVisibility)
-    const interval = window.setInterval(run, PERIODIC_SYNC_MS)
+    const interval = window.setInterval(() => run('silent'), PERIODIC_SYNC_MS)
 
-    run()
+    // The app may be opening with a queue left from an offline session.
+    run(needsVisibleSync.current ? 'reconnect' : 'silent')
 
     return () => {
-      window.removeEventListener('online', run)
-      window.removeEventListener('focus', run)
+      window.removeEventListener('online', handleReconnect)
+      window.removeEventListener('focus', handleReconnect)
       document.removeEventListener('visibilitychange', handleVisibility)
       window.clearInterval(interval)
     }

@@ -9,7 +9,7 @@ import {
   getWantWithdrawalTotal,
 } from './saving-utils.js'
 import { getEffectiveWantTotal } from './want-utils.js'
-import { getMonthKey, getSalaryForMonth } from './salary-utils.js'
+import { getMonthKey, getSalaryForMonth, getTotalIncomeForMonth } from './salary-utils.js'
 
 export interface MonthlyOverviewOptions {
   periodStart?: string | null
@@ -33,7 +33,12 @@ export function getFinancialPeriodStart(
   return latestReset?.createdAt ?? `${getMonthKey(now)}-01T00:00:00.000Z`
 }
 
-function isInFinancialPeriod(
+/**
+ * A transaction belongs to the active cobro when it lands on or after the last
+ * monthly close. Exported so the planning lists can scope themselves with the
+ * exact same rule the totals use, instead of approximating it by month.
+ */
+export function isInFinancialPeriod(
   entry: { date: string; createdAt?: string },
   periodStart: string,
   strictSameDayBoundary = false,
@@ -59,7 +64,10 @@ export function getMonthlyOverview(
 ) {
   const periodStart = options.periodStart ?? `${getMonthKey()}-01T00:00:00.000Z`
   const salaryMonth = options.salaryMonth ?? getMonthKey()
-  const grossSalary = getSalaryForMonth(salaries, salaryMonth)?.amount ?? 0
+  // Every income registered for the month (all jobs plus any one-off bonus).
+  // Falls back to the last known recurring pay when the month has none.
+  const registered = getTotalIncomeForMonth(salaries, salaryMonth)
+  const grossSalary = registered > 0 ? registered : getSalaryForMonth(salaries, salaryMonth)?.amount ?? 0
   const excludedTransactionIds = new Set(options.excludedTransactionIds)
   const monthlyTransactions = transactions.filter((transaction) => (
     !excludedTransactionIds.has(transaction.id)
@@ -103,6 +111,9 @@ export function getMonthlyOverview(
   const budgetWants = wantsEnabled ? budgetWantsBeforeRollover + savingsRollover : 0
 
   return {
+    // Exposed so the planning lists can show exactly the transactions these
+    // totals are built from.
+    periodStart,
     grossSalary,
     totalSalary,
     totalExpenses,

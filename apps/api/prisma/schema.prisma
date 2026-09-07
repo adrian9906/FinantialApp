@@ -28,6 +28,7 @@ model Usuario {
   suscripciones  Suscripcion[]
   sesiones       Sesion[]
   preferencia    PreferenciaUsuario?
+  fuentesIngreso FuenteIngreso[]
   syncRecords    SyncRecord[]
   syncReceipts   SyncReceipt[]
 
@@ -57,9 +58,25 @@ model SyncReceipt {
   @@map("sync_receipts")
 }
 
+model FuenteIngreso {
+  id        String   @id @default(uuid())
+  nombre    String
+  recurrente Boolean @default(true)
+  archivada Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  usuarioId String
+  usuario   Usuario  @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+
+  @@map("fuentes_ingreso")
+}
+
 model Salario {
   id        String   @id @default(uuid())
   salario   Float
+  fuenteId    String?
+  fuenteNombre String?
+  tipo        String?
   fecha     DateTime @default(now())
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

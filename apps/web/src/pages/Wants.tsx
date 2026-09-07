@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useShallow } from 'zustand/react/shallow'
-import { buildWantTransferSavingDescription, createLearnedCategorizationRule, findCategorizationRule, type ReceiptOCRLineItem, type ReceiptOCRParsedDraft } from '@plata/shared'
+import { buildWantTransferSavingDescription, createLearnedCategorizationRule, findCategorizationRule, isInFinancialPeriod, type ReceiptOCRLineItem, type ReceiptOCRParsedDraft } from '@plata/shared'
 import { Clapperboard, Gamepad2, Heart, LockKeyhole, Pencil, Plus, ShoppingBag, Sparkles, Ticket, Trash2, type LucideIcon } from 'lucide-react'
 import { useFinanceStore } from '@/store/financeStore'
 import { buildWantDescription, createCustomWantCategory, getPlannedWantTotal, getWantCategoryLabel, parseWantDescription, type WantBuiltInCategory, type WantCategory } from '@/lib/want-utils'
@@ -207,7 +207,7 @@ export default function Wants() {
   const [transferError, setTransferError] = useState<string | null>(null)
   const [restoringListId, setRestoringListId] = useState<string | null>(null)
   const [customCategoryName, setCustomCategoryName] = useState('')
-  const [dateFilter, setDateFilter] = useState<TransactionDateFilterValue>('all')
+  const [dateFilter, setDateFilter] = useState<TransactionDateFilterValue>('cycle')
   const categoryWasChanged = useRef(false)
   const [form, setForm] = useState<WantFormState>({
     amount: '',
@@ -260,7 +260,9 @@ export default function Wants() {
 
   const wantItems = useMemo<WantViewItem[]>(() => {
     return transactions
-      .filter((transaction) => transaction.type === 'want')
+      .filter((transaction) => transaction.type === 'want'
+      && !overview.excludedTransactionIds.includes(transaction.id)
+      && isInFinancialPeriod(transaction, overview.periodStart, overview.strictSameDayBoundary))
       .map((transaction) => {
         const parsed = parseWantDescription(transaction.description)
         return {

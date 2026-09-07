@@ -18,7 +18,9 @@ import { exportSalariesReport } from '@/lib/reportExports'
 import { useMonthlyOverview } from '@/lib/useMonthlyOverview'
 import { formatMoney, useCurrencyInput, useMoneyWithCode } from '@/lib/currency'
 import { formatFormulaLabel, usePreferencesStore } from '@/store/preferencesStore'
-import { getMonthKey, getSalaryForMonth, normalizeSalaryHistory } from '@plata/shared'
+import { getActiveIncomeSources, getIncomesForMonth, getMonthKey, getSalaryForMonth, getTotalIncomeForMonth, normalizeSalaryHistory } from '@plata/shared'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { IncomeSourceManager } from '@/components/income/IncomeSourceManager'
 
 const MONTH_LABELS = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic']
 
@@ -38,6 +40,7 @@ function monthValueToDate(value: string) {
 
 export default function Salary() {
   const salaries = useFinanceStore((state) => state.salaries)
+  const incomeSources = useFinanceStore((state) => state.incomeSources)
   const addSalary = useFinanceStore((state) => state.addSalary)
   const updateSalary = useFinanceStore((state) => state.updateSalary)
   const removeSalary = useFinanceStore((state) => state.removeSalary)
@@ -49,11 +52,17 @@ export default function Salary() {
   const [editId, setEditId] = useState<string | null>(null)
   const [amount, setAmount] = useState('')
   const [month, setMonth] = useState('')
+  const [sourceId, setSourceId] = useState('')
   const [calendarYear, setCalendarYear] = useState(new Date().getFullYear())
   const [isSaving, setIsSaving] = useState(false)
   const [isExporting, setIsExporting] = useState(false)
 
+  const availableSources = getActiveIncomeSources(incomeSources)
+  const selectedSource = incomeSources.find((entry) => entry.id === sourceId) ?? null
+
   const currentMonth = getMonthKey()
+  const currentMonthIncomes = getIncomesForMonth(salaries, currentMonth)
+  const currentMonthTotal = getTotalIncomeForMonth(salaries, currentMonth)
   const salaryHistory = normalizeSalaryHistory(salaries)
   const currentSalary = salaryHistory.find((salary) => salary.month === currentMonth) ?? null
   const activeSalary = getSalaryForMonth(salaryHistory, currentMonth)
@@ -66,6 +75,7 @@ export default function Salary() {
   function resetForm() {
     setAmount('')
     setMonth('')
+    setSourceId('')
     setEditId(null)
     setCalendarYear(new Date().getFullYear())
   }
@@ -75,6 +85,7 @@ export default function Salary() {
       setEditId(entry.id)
       setAmount(moneyInput.fromUsd(entry.amount))
       setMonth(entry.month)
+      setSourceId(entry.sourceId ?? '')
       setCalendarYear(monthValueToDate(entry.month).getFullYear())
     } else {
       resetForm()
@@ -98,21 +109,27 @@ export default function Salary() {
   async function handleSave() {
     if (!amount || !month || isSaving) return
 
+    const source = incomeSources.find((entry) => entry.id === sourceId)
     const payload = {
       amount: moneyInput.toUsd(amount),
       month,
+      ...(source
+        ? {
+            sourceId: source.id,
+            sourceName: source.name,
+            kind: (source.recurring ? 'recurring' : 'one-off') as 'recurring' | 'one-off',
+          }
+        : {}),
     }
 
     setIsSaving(true)
 
     try {
-      const salaryForSelectedMonth = salaries.find((entry) => entry.month === payload.month)
-
       if (editId) {
         await updateSalary(editId, payload)
-      } else if (salaryForSelectedMonth) {
-        await updateSalary(salaryForSelectedMonth.id, payload)
       } else {
+        // addSalary replaces the same source in the same month and adds any
+        // other source alongside, so a second job is never overwritten.
         await addSalary(payload)
       }
 
@@ -140,7 +157,7 @@ export default function Salary() {
             Matriz de Ingresos
           </h1>
           <p className="text-sm text-muted-gray max-w-2xl">
-            Cada salario se guarda y alimenta la formula {formatFormulaLabel(formula)} del resto de la app.
+            Cada ingreso se guarda y alimenta la fórmula {formatFormulaLabel(formula)} del resto de la app.
           </p>
         </div>
         <ExportExcelButton loading={isExporting} onClick={handleExport} />
@@ -162,7 +179,7 @@ export default function Salary() {
           {activeSalary ? (
             <>
               <div className="flex flex-col gap-1">
-                <label htmlFor="active-salary" className="text-xs text-medium-gray uppercase tracking-widest">Salario Neto</label>
+                <label htmlFor="active-salary" className="text-xs text-medium-gray uppercase tracking-widest">Ingresos totales</label>
                 <Input id="active-salary" className="bg-abyss border-graphite text-lg font-medium text-on-surface" type="text" value={formatSalary(overview.totalSalary)} readOnly />
                 <p className="text-xs text-muted-gray mt-1">{activeSalary.month}</p>
                 {overview.totalDebtPaid > 0 && (
@@ -207,11 +224,39 @@ export default function Salary() {
           )}
         </section>
 
-        <section className="lg:col-span-7 flex flex-col gap-4 bg-surface rounded-xl p-6 shadow-vault">
+        <section className="lg:col-span-7 flex flex-col gap-4">
+          <Card className="border-graphite bg-surface p-5 shadow-vault">
+            <div className="mb-3 flex flex-wrap items-baseline justify-between gap-2">
+              <h3 className="text-base font-semibold text-on-surface">Ingresos de este mes</h3>
+              <p className="text-lg font-semibold text-on-surface">{formatSalary(currentMonthTotal)}</p>
+            </div>
+            {currentMonthIncomes.length === 0 ? (
+              <p className="text-sm text-muted-gray">
+                Sin ingresos registrados este mes.
+                {activeSalary ? ' Se está usando el último ingreso fijo conocido.' : ''}
+              </p>
+            ) : (
+              <ul className="space-y-2">
+                {currentMonthIncomes.map((entry) => (
+                  <li key={entry.id} className="flex items-center justify-between gap-3 text-sm">
+                    <span className="text-muted-gray">
+                      {entry.sourceName ?? 'Ingreso'}
+                      {entry.kind === 'one-off' ? ' · puntual' : ''}
+                    </span>
+                    <span className="font-medium text-on-surface">{formatSalary(entry.amount)}</span>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </Card>
+
+          <IncomeSourceManager />
+
+        <div className="flex flex-col gap-4 bg-surface rounded-xl p-6 shadow-vault">
           <div className="flex justify-between items-center pb-3 border-b border-graphite">
             <h3 className="text-lg font-semibold text-on-surface flex items-center gap-2">
               <Receipt className="size-8 text-secondary" />
-              Historial de Salarios
+              Historial de ingresos
             </h3>
           </div>
           {salaryHistory.length === 0 ? (
@@ -228,7 +273,11 @@ export default function Salary() {
                     </div>
                     <div>
                       <p className="text-base font-medium text-on-surface">{formatSalary(entry.amount)}</p>
-                      <p className="text-xs text-muted-gray">{entry.month}</p>
+                      <p className="text-xs text-muted-gray">
+                        {entry.month}
+                        {entry.sourceName ? ` · ${entry.sourceName}` : ''}
+                        {entry.kind === 'one-off' ? ' · puntual' : ''}
+                      </p>
                     </div>
                   </div>
                   <div className="flex gap-1 opacity-100 transition-opacity md:opacity-0 md:group-hover:opacity-100">
@@ -243,17 +292,44 @@ export default function Salary() {
               ))}
             </div>
           )}
+        </div>
         </section>
       </div>
 
       <Dialog open={open} onOpenChange={(nextOpen) => { if (!isSaving) setOpen(nextOpen) }}>
         <DialogContent className="border-graphite bg-surface sm:max-w-3xl">
           <DialogHeader>
-            <DialogTitle className="text-on-surface">{editId ? 'Editar Salario' : 'Agregar Salario'}</DialogTitle>
-            <DialogDescription>Ingresa el monto y el mes que debe guardarse en la base de datos.</DialogDescription>
+            <DialogTitle className="text-on-surface">{editId ? 'Editar ingreso' : 'Agregar ingreso'}</DialogTitle>
+            <DialogDescription>Registra cuánto entró, de qué fuente y en qué mes.</DialogDescription>
           </DialogHeader>
           <div className="grid gap-4 lg:grid-cols-[minmax(0,0.92fr)_minmax(0,1.08fr)]">
             <div className="space-y-4">
+              <div className="space-y-2">
+                <Label className="text-medium-gray">Fuente de ingreso</Label>
+                <Select value={sourceId} onValueChange={(value) => setSourceId(value ?? '')}>
+                  <SelectTrigger className="bg-abyss border-graphite">
+                    <SelectValue>
+                      {selectedSource
+                        ? `${selectedSource.name}${selectedSource.recurring ? '' : ' (puntual)'}`
+                        : 'Sin fuente asignada'}
+                    </SelectValue>
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="">Sin fuente asignada</SelectItem>
+                    {availableSources.map((source) => (
+                      <SelectItem key={source.id} value={source.id}>
+                        {source.name}{source.recurring ? '' : ' (puntual)'}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-muted-gray">
+                  {availableSources.length === 0
+                    ? 'Agrega una fuente abajo para separar tus ingresos por trabajo.'
+                    : 'Elige el trabajo o el bonus al que corresponde este monto.'}
+                </p>
+              </div>
+
               <div className="space-y-2">
                 <Label htmlFor="amount" className="text-medium-gray">Monto ({moneyInput.currency.code})</Label>
                 <Input

@@ -10,7 +10,7 @@ import { useAuthStore } from '@/store/authStore'
 import { useFinanceStore } from '@/store/financeStore'
 
 const COLLECTION_LABELS: Record<string, string> = {
-  salaries: 'Salario',
+  salaries: 'Ingreso',
   transactions: 'Movimiento',
   debts: 'Deuda',
   wishlist: 'Lista de deseos',

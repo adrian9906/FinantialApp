@@ -1,7 +1,7 @@
 import { createEmptyBootstrapPayload, type BootstrapPayload } from './contracts.js'
 
 export const SYNC_PROTOCOL = 2
-export const syncCollections = ['salaries', 'transactions', 'debts', 'wishlist', 'monthlyPlanningHistory', 'events', 'projections', 'savingsGoals', 'reminders', 'subscriptions'] as const
+export const syncCollections = ['salaries', 'incomeSources', 'transactions', 'debts', 'wishlist', 'monthlyPlanningHistory', 'events', 'projections', 'savingsGoals', 'reminders', 'subscriptions'] as const
 export type SyncCollection = typeof syncCollections[number]
 export type SyncValue = BootstrapPayload[SyncCollection][number]
 export interface SyncOperation {

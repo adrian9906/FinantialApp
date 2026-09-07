@@ -1,5 +1,6 @@
 import type {
   AppEvent,
+  IncomeSource,
   AuthUser,
   Debt,
   MonthlyPlanningHistory,
@@ -32,6 +33,7 @@ export interface AuthResponse {
 
 export interface BootstrapPayload {
   salaries: Salary[]
+  incomeSources: IncomeSource[]
   transactions: Transaction[]
   debts: Debt[]
   wishlist: WishlistItem[]
@@ -46,6 +48,7 @@ export interface BootstrapPayload {
 export function createEmptyBootstrapPayload(): BootstrapPayload {
   return {
     salaries: [],
+    incomeSources: [],
     transactions: [],
     debts: [],
     wishlist: [],
@@ -61,6 +64,7 @@ export function createEmptyBootstrapPayload(): BootstrapPayload {
 export function normalizeBootstrapPayload(payload?: Partial<BootstrapPayload> | null): BootstrapPayload {
   return {
     salaries: payload?.salaries ?? [],
+    incomeSources: payload?.incomeSources ?? [],
     transactions: payload?.transactions ?? [],
     debts: payload?.debts ?? [],
     wishlist: (payload?.wishlist ?? []).map((item): WishlistItem => ({

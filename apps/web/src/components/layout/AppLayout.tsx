@@ -25,7 +25,7 @@ import { ReceivableDueNotifier } from '@/components/debts/ReceivableDueNotifier'
 
 const navItems = [
   { to: '/', icon: 'dashboard', label: 'Dashboard' },
-  { to: '/salary', icon: 'wallet', label: 'Salario' },
+  { to: '/salary', icon: 'wallet', label: 'Ingresos' },
   { to: '/expenses', icon: 'expenses', label: 'Gastos' },
   { to: '/wants', icon: 'wants', label: 'Gustos' },
   { to: '/savings', icon: 'savings', label: 'Ahorros' },

@@ -82,7 +82,7 @@ export default function Dashboard() {
   const activeDebts = payableDebts.filter((debt) => !debt.isSettled)
   const totalDebt = activeDebts.reduce((sum, debt) => sum + debt.remainingAmount, 0)
   const allocationData = [
-    { bucket: 'Salario', value: convertFromUsd(overview.totalSalary) },
+    { bucket: 'Ingresos', value: convertFromUsd(overview.totalSalary) },
     { bucket: 'Gastos', value: convertFromUsd(overview.totalExpenses) },
     { bucket: 'Gustos', value: convertFromUsd(overview.totalWants) },
     { bucket: 'Ahorros', value: convertFromUsd(overview.totalSavings) },
@@ -93,7 +93,7 @@ export default function Dashboard() {
     { name: 'ahorros', value: convertFromUsd(overview.totalSavings), fill: 'var(--color-ahorros)' },
   ].filter((entry) => entry.value > 0)
   const allocationConfig = {
-    Salario: { label: 'Salario', color: 'var(--color-primary)' },
+    Ingresos: { label: 'Ingresos', color: 'var(--color-primary)' },
     Gastos: { label: 'Gastos', color: 'var(--color-chart-2, #5b8def)' },
     Gustos: { label: 'Gustos', color: 'var(--color-secondary)' },
     Ahorros: { label: 'Ahorros', color: 'var(--color-tertiary-container)' },
@@ -178,7 +178,7 @@ export default function Dashboard() {
   }
   const primaryAlert = dashboardAlerts[0]
   const decisionTitle = overview.totalSalary <= 0
-    ? 'Registra tu salario para calcular el mes'
+    ? 'Registra tus ingresos para calcular el mes'
     : forecast.projectedBalance < 0
       ? 'El cierre previsto necesita un ajuste'
       : forecast.expenses.status === 'over'
@@ -263,7 +263,7 @@ export default function Dashboard() {
             Resumen Mensual
           </h1>
           <p className="text-sm text-muted-gray mt-1">
-            Vista consolidada de salario, gastos, gustos y ahorro.
+            Vista consolidada de ingresos, gastos, gustos y ahorro.
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-3">
@@ -587,7 +587,7 @@ export default function Dashboard() {
             <div>
               <CardTitle className="text-on-surface">Pulso Financiero</CardTitle>
               <CardDescription className="text-muted-gray">
-                Comparativa entre salario y movimientos del mes.
+                Comparativa entre ingresos y movimientos del mes.
               </CardDescription>
             </div>
             <Badge variant="secondary" className="bg-surface-container-high text-on-surface">
@@ -880,11 +880,11 @@ export default function Dashboard() {
           <div className="flex flex-col items-center gap-4 text-center">
             <Wallet className="size-8 text-muted-gray" />
             <p className="text-sm text-muted-gray">
-              Configura tu salario mensual para empezar a registrar datos en la base de datos.
+              Configura tus ingresos del mes para empezar a registrar datos.
             </p>
             <Button onClick={() => navigate('/salary')} className="bg-primary-container text-white hover:bg-primary-container/80 shadow-vault">
               <Plus className="size-4" />
-              Configurar salario
+              Configurar ingresos
             </Button>
           </div>
         </div>

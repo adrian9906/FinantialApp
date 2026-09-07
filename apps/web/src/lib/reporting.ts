@@ -301,7 +301,7 @@ export function buildFinancialTimeline(params: {
       date: startOfMonth,
       dayLabel: formatTimelineDay(startOfMonth),
       kind: 'salary',
-      title: 'Salario activo del ciclo',
+      title: 'Ingresos activos del ciclo',
       description: effectiveSalary.effectiveMonth
         ? `Base mensual vigente desde ${formatMonthLabel(effectiveSalary.effectiveMonth)}.`
         : 'Base mensual del ciclo.',
@@ -396,7 +396,7 @@ export function buildFinancialTimeline(params: {
 
 export function buildMonthComparison(current: ReportMonthSummary | undefined, previous: ReportMonthSummary | undefined) {
   const metrics = [
-    { key: 'salary', label: 'Salario', current: current?.salary ?? 0, previous: previous?.salary ?? 0, budget: 0 },
+    { key: 'salary', label: 'Ingresos', current: current?.salary ?? 0, previous: previous?.salary ?? 0, budget: 0 },
     { key: 'expenses', label: 'Gastos', current: current?.expenses ?? 0, previous: previous?.expenses ?? 0, budget: current?.budgetExpenses ?? 0 },
     { key: 'wants', label: 'Gustos', current: current?.wants ?? 0, previous: previous?.wants ?? 0, budget: current?.budgetWants ?? 0 },
     { key: 'savings', label: 'Ahorros', current: current?.savings ?? 0, previous: previous?.savings ?? 0, budget: current?.budgetSavings ?? 0 },

@@ -10,6 +10,12 @@ export type SyncStage = 'idle' | 'preparing' | 'uploading' | 'downloading' | 'do
 export interface SyncProgress {
   /** Increments once per sync run, so the UI can tell a new run from a repeat. */
   runId: number
+  /**
+   * Whether this run should surface the progress dialog. Routine uploads while
+   * online stay silent; only catching up after losing connection is worth
+   * interrupting the user for.
+   */
+  visible: boolean
   stage: SyncStage
   total: number
   completed: number
@@ -26,6 +32,7 @@ let runCounter = 0
 
 let currentProgress: SyncProgress = {
   runId: 0,
+  visible: false,
   stage: 'idle',
   total: 0,
   completed: 0,
@@ -60,6 +67,7 @@ export function isUpgradeRequiredError(error: unknown) {
 
 let inFlight: Promise<SyncDocument | null> | null = null
 let rerunRequested = false
+let rerunVisible = false
 
 async function exchange(operation?: SyncOperation): Promise<SyncResponse> {
   if (!operation) {
@@ -77,7 +85,7 @@ async function exchange(operation?: SyncOperation): Promise<SyncResponse> {
  * own id, so a retry after a dropped response is acknowledged rather than
  * duplicated. Stops early on a conflict and leaves the remaining work queued.
  */
-async function runSync(userId: string): Promise<SyncDocument | null> {
+async function runSync(userId: string, visible: boolean): Promise<SyncDocument | null> {
   let document = await readSyncDocument(userId)
   const total = document.operations.length
 
@@ -85,6 +93,7 @@ async function runSync(userId: string): Promise<SyncDocument | null> {
 
   emit({
     runId: runCounter,
+    visible,
     stage: 'preparing',
     total,
     completed: 0,
@@ -184,13 +193,23 @@ async function runSync(userId: string): Promise<SyncDocument | null> {
   }
 }
 
-export function syncNow(userId: string): Promise<SyncDocument | null> {
+/**
+ * `reason` decides whether the user sees this run. Saving while online uploads
+ * silently; reconnecting after being offline shows the progress dialog.
+ */
+export function syncNow(
+  userId: string,
+  reason: 'silent' | 'reconnect' = 'silent',
+): Promise<SyncDocument | null> {
   if (inFlight) {
     rerunRequested = true
+    // A visible request wins: if a reconnect lands while a silent upload is
+    // running, the follow-up run still shows its progress.
+    if (reason === 'reconnect') rerunVisible = true
     return inFlight
   }
 
-  inFlight = runSync(userId).finally(() => {
+  inFlight = runSync(userId, reason === 'reconnect').finally(() => {
     inFlight = null
   })
 
@@ -201,7 +220,9 @@ export function syncNow(userId: string): Promise<SyncDocument | null> {
     .then((result) => {
       if (!rerunRequested) return result
       rerunRequested = false
-      return syncNow(userId)
+      const nextReason = rerunVisible ? 'reconnect' : 'silent'
+      rerunVisible = false
+      return syncNow(userId, nextReason)
     })
 
   return started

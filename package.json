@@ -24,7 +24,9 @@
     "db:migrate": "pnpm --dir apps/api db:migrate",
     "db:push": "pnpm --dir apps/api db:push",
     "db:studio": "pnpm --dir apps/api db:studio",
-    "test:sync": "tsx packages/shared/src/sync.test.mts"
+    "test:sync": "tsx packages/shared/src/sync.test.mts",
+    "test:date": "tsx apps/web/src/lib/date.test.mts",
+    "test:income": "tsx packages/shared/src/income.test.mts"
   },
   "devDependencies": {
     "@rolldown/binding-win32-x64-msvc": "1.0.3"

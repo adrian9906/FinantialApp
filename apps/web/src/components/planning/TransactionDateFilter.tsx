@@ -6,9 +6,7 @@ import type { TransactionDateFilter as TransactionDateFilterValue } from '@/lib/
 const FILTER_OPTIONS: Array<{ value: TransactionDateFilterValue; label: string }> = [
   { value: 'today', label: 'Hoy' },
   { value: 'yesterday', label: 'Ayer' },
-  { value: 'current-month', label: 'Este mes' },
-  { value: 'previous-month', label: 'Mes pasado' },
-  { value: 'all', label: 'Todos' },
+  { value: 'cycle', label: 'Todo el cobro' },
 ]
 
 interface TransactionDateFilterProps {

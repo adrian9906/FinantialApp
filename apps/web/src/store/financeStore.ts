@@ -1,6 +1,7 @@
 import { create } from 'zustand'
 import type {
   AppEvent,
+  IncomeSource,
   BootstrapPayload,
   Debt,
   MonthlyPlanningHistory,
@@ -40,11 +41,14 @@ interface FinanceStore extends BootstrapPayload {
   hasLoaded: boolean
   loadedKey: string | null
   hydrate: () => Promise<void>
-  syncPendingChanges: () => Promise<boolean>
+  syncPendingChanges: (reason?: 'silent' | 'reconnect') => Promise<boolean>
   reset: () => void
   addSalary: (salary: Omit<Salary, 'id'>) => Promise<void>
   updateSalary: (id: string, data: Partial<Omit<Salary, 'id'>>) => Promise<void>
   removeSalary: (id: string) => Promise<void>
+  addIncomeSource: (source: Omit<IncomeSource, 'id'>) => Promise<void>
+  updateIncomeSource: (id: string, data: Partial<Omit<IncomeSource, 'id'>>) => Promise<void>
+  removeIncomeSource: (id: string) => Promise<void>
   addTransaction: (t: Omit<Transaction, 'id'>) => Promise<Transaction>
   updateTransaction: (id: string, data: Partial<Omit<Transaction, 'id'>>) => Promise<void>
   removeTransaction: (id: string) => Promise<void>
@@ -257,6 +261,7 @@ function persistGuestSnapshot(snapshot: BootstrapPayload) {
 function buildSnapshotFromState(state: BootstrapPayload, next?: Partial<BootstrapPayload>): BootstrapPayload {
   return {
     salaries: next?.salaries ?? state.salaries,
+    incomeSources: next?.incomeSources ?? state.incomeSources,
     transactions: next?.transactions ?? state.transactions,
     debts: next?.debts ?? state.debts,
     wishlist: next?.wishlist ?? state.wishlist,
@@ -416,12 +421,12 @@ export const useFinanceStore = create<FinanceStore>()((set, get) => ({
       })
     }
   },
-  syncPendingChanges: async () => {
+  syncPendingChanges: async (reason = 'silent') => {
     const userId = getAuthenticatedUserId()
     if (!userId || !isOnline()) return false
 
     try {
-      const synced = await syncNow(userId)
+      const synced = await syncNow(userId, reason)
       if (!synced) return false
 
       const normalized = normalizeBootstrapSnapshot(synced.snapshot)
@@ -446,15 +451,24 @@ export const useFinanceStore = create<FinanceStore>()((set, get) => ({
   },
   addSalary: async (salary) => {
     if (isLocalMutationMode()) {
-      await updateLocalState(set, (state) => ({
-        salaries: normalizeSalaryHistory(
-          state.salaries.some((entry) => entry.month === salary.month)
-            ? state.salaries.map((entry) => (
-                entry.month === salary.month ? { ...entry, amount: salary.amount } : entry
-              ))
-            : [{ ...salary, id: makeId('salary') }, ...state.salaries],
-        ),
-      }))
+      await updateLocalState(set, (state) => {
+        // Replace only the same source in the same month; a different job or a
+        // one-off bonus is added alongside instead of overwriting it.
+        const sourceKey = salary.sourceId ?? 'legacy'
+        const isSameEntry = (entry: Salary) => entry.month === salary.month
+          && (entry.sourceId ?? 'legacy') === sourceKey
+          && entry.kind !== 'one-off'
+
+        const alreadyRegistered = salary.kind !== 'one-off' && state.salaries.some(isSameEntry)
+
+        return {
+          salaries: normalizeSalaryHistory(
+            alreadyRegistered
+              ? state.salaries.map((entry) => (isSameEntry(entry) ? { ...entry, ...salary } : entry))
+              : [{ ...salary, id: makeId('salary') }, ...state.salaries],
+          ),
+        }
+      })
       return
     }
   },
@@ -472,6 +486,36 @@ export const useFinanceStore = create<FinanceStore>()((set, get) => ({
     if (isLocalMutationMode()) {
       await updateLocalState(set, (state) => ({
         salaries: state.salaries.filter((entry) => entry.id !== id),
+      }))
+      return
+    }
+  },
+  addIncomeSource: async (source) => {
+    if (isLocalMutationMode()) {
+      await updateLocalState(set, (state) => ({
+        incomeSources: [...state.incomeSources, { ...source, id: makeId('income-source') }],
+      }))
+      return
+    }
+  },
+  updateIncomeSource: async (id, data) => {
+    if (isLocalMutationMode()) {
+      await updateLocalState(set, (state) => ({
+        incomeSources: state.incomeSources.map((entry) => (entry.id === id ? { ...entry, ...data } : entry)),
+        // Keep the stored label in sync so past months show the current name.
+        salaries: data.name
+          ? state.salaries.map((entry) => (entry.sourceId === id ? { ...entry, sourceName: data.name } : entry))
+          : state.salaries,
+      }))
+      return
+    }
+  },
+  removeIncomeSource: async (id) => {
+    if (isLocalMutationMode()) {
+      await updateLocalState(set, (state) => ({
+        // Past income keeps its recorded name, so history stays readable.
+        incomeSources: state.incomeSources.filter((entry) => entry.id !== id),
+        salaries: state.salaries.filter((entry) => entry.sourceId !== id),
       }))
       return
     }

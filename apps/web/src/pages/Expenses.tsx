@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useShallow } from 'zustand/react/shallow'
-import { buildExpenseTransferSavingDescription, createLearnedCategorizationRule, findCategorizationRule, type ReceiptOCRLineItem, type ReceiptOCRParsedDraft } from '@plata/shared'
+import { buildExpenseTransferSavingDescription, createLearnedCategorizationRule, findCategorizationRule, isInFinancialPeriod, type ReceiptOCRLineItem, type ReceiptOCRParsedDraft } from '@plata/shared'
 import { Check, Dumbbell, HeartPulse, House, Package, Pencil, Plus, ShoppingBasket, Trash2, Wifi, type LucideIcon } from 'lucide-react'
 import { useFinanceStore } from '@/store/financeStore'
 import { buildExpenseDescription, createCustomExpenseCategory, getExpenseCategoryLabel, getPlannedExpenseTotal, parseExpenseDescription, type ExpenseBuiltInCategory, type ExpenseCategory } from '@/lib/expense-utils'
@@ -214,7 +214,7 @@ export default function Expenses() {
   const [transferError, setTransferError] = useState<string | null>(null)
   const [restoringListId, setRestoringListId] = useState<string | null>(null)
   const [customCategoryName, setCustomCategoryName] = useState('')
-  const [dateFilter, setDateFilter] = useState<TransactionDateFilterValue>('all')
+  const [dateFilter, setDateFilter] = useState<TransactionDateFilterValue>('cycle')
   const categoryWasChanged = useRef(false)
   const [form, setForm] = useState<ExpenseFormState>({
     amount: '',
@@ -357,7 +357,9 @@ export default function Expenses() {
   }
 
   const expenseItems: ExpenseViewItem[] = transactions
-    .filter((transaction) => transaction.type === 'expense')
+    .filter((transaction) => transaction.type === 'expense'
+      && !overview.excludedTransactionIds.includes(transaction.id)
+      && isInFinancialPeriod(transaction, overview.periodStart, overview.strictSameDayBoundary))
     .map((transaction) => {
       const parsed = parseExpenseDescription(transaction.description)
       return {

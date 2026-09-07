@@ -98,7 +98,7 @@ export async function exportWishlistReport(wishlist: WishlistItem[]) {
 export async function exportSalariesReport(salaries: Salary[]) {
   await downloadExcelWorkbook(`informe-salarios-${getMonthKey(new Date())}.xlsx`, [
     {
-      name: 'Salarios',
+      name: 'Ingresos',
       columns: ['Mes', 'Monto'],
       rows: salaries.map((salary) => [salary.month, toCurrency(salary.amount)]),
     },
@@ -159,7 +159,7 @@ export async function exportProjectionsReport(projections: Projection[]) {
   await downloadExcelWorkbook(`informe-proyecciones-${getMonthKey(new Date())}.xlsx`, [
     {
       name: 'Proyecciones',
-      columns: ['Salario meta'],
+      columns: ['Ingreso meta'],
       rows: projections.map((projection) => [toCurrency(projection.targetSalary)]),
     },
   ])
@@ -221,7 +221,7 @@ export async function exportMonthlyReport(params: {
       name: 'Resumen',
       columns: ['Indicador', 'Actual', 'Mes anterior', 'Objetivo'],
       rows: [
-        ['Salario', toCurrency(currentOverview.grossSalary), toCurrency(previousOverview.grossSalary), ''],
+        ['Ingresos', toCurrency(currentOverview.grossSalary), toCurrency(previousOverview.grossSalary), ''],
         ['Gastos', toCurrency(currentOverview.totalExpenses), toCurrency(previousOverview.totalExpenses), toCurrency(currentOverview.budgetExpenses)],
         ['Gustos', toCurrency(currentOverview.totalWants), toCurrency(previousOverview.totalWants), toCurrency(currentOverview.budgetWants)],
         ['Ahorros', toCurrency(Math.max(0, currentOverview.totalSavings - reservedForPurchasedWishlist)), toCurrency(previousOverview.totalSavings), toCurrency(currentOverview.budgetSavings)],
@@ -243,7 +243,7 @@ export async function exportMonthlyReport(params: {
     },
     {
       name: 'Tendencias',
-      columns: ['Mes', 'Salario', 'Gastos', 'Gustos', 'Ahorros', 'Deuda pagada', 'Deuda pendiente', 'Saldo libre'],
+      columns: ['Mes', 'Ingresos', 'Gastos', 'Gustos', 'Ahorros', 'Deuda pagada', 'Deuda pendiente', 'Saldo libre'],
       rows: filteredSummaries.map((summary) => [
         summary.label,
         toCurrency(summary.salary),

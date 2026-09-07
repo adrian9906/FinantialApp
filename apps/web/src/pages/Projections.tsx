@@ -72,7 +72,7 @@ export default function Projections() {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         <div className="bg-surface rounded-xl p-5 shadow-vault">
           <div className="flex items-center justify-between mb-2 text-muted-gray">
-            <span className="text-base font-medium">Salario actual</span>
+            <span className="text-base font-medium">Ingresos actuales</span>
             <TrendingUp className="size-5 text-primary" />
           </div>
           <div className="text-[28px] font-semibold text-on-surface">{formatMoney(latestSalary?.amount ?? 0)}</div>
@@ -109,7 +109,7 @@ export default function Projections() {
       ) : (
         <div className="bg-surface rounded-xl shadow-vault overflow-hidden">
           <div className="hidden md:grid grid-cols-[1fr_1fr_1fr_80px] gap-4 p-4 border-b border-graphite bg-surface-container-lowest text-xs text-muted-gray uppercase tracking-wider font-semibold">
-            <span>Salario meta</span>
+            <span>Ingreso meta</span>
             <span>Diferencia</span>
             <span>Estado</span>
             <span className="text-right">Acción</span>
@@ -152,7 +152,7 @@ export default function Projections() {
           </DialogHeader>
           <div className="space-y-4">
             <div className="space-y-2">
-              <Label className="text-medium-gray">Salario meta ({moneyInput.currency.code})</Label>
+              <Label className="text-medium-gray">Ingreso meta ({moneyInput.currency.code})</Label>
               <Input type="number" value={targetSalary} onChange={(e) => setTargetSalary(e.target.value)} className="bg-abyss border-graphite text-on-surface" />
             </div>
             <Card className="border-graphite bg-abyss p-4 shadow-vault-sm">

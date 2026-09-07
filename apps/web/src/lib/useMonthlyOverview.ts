@@ -48,6 +48,9 @@ export function useMonthlyOverview() {
 
     return {
       ...overview,
+      // The same boundary the totals use, so lists and totals never disagree.
+      strictSameDayBoundary: Boolean(latestReset),
+      excludedTransactionIds: latestReset?.savingTransactionIds ?? [],
       actualExpenses: overview.totalExpenses,
       totalSavings,
       accumulatedSavings,

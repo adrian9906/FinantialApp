@@ -9,7 +9,8 @@ const month = z.string().regex(/^\d{4}-(0[1-9]|1[0-2])$/)
 const payment = z.object({ amount, date, createdAt: date.optional() })
 const planning = z.object({ amount, itemName: text, category: text, status: z.enum(['pending', 'checked']), date, unnecessary: z.boolean().optional() })
 const schemas = {
-  salaries: z.object({ id, amount, month }),
+  salaries: z.object({ id, amount, month, sourceId: id.optional(), sourceName: text.optional(), kind: z.enum(['recurring', 'one-off']).optional() }),
+  incomeSources: z.object({ id, name: text, recurring: z.boolean(), archived: z.boolean().optional() }),
   transactions: z.object({ id, amount, type: z.enum(['expense', 'want', 'saving']), description: text.optional(), date, createdAt: date.optional() }),
   debts: z.object({ id, direction: z.enum(['payable', 'receivable']).optional(), counterparty: text.optional(), amount, history: text, startDate: date, endDate: date, interest: amount.optional(), paidAmount: amount, remainingAmount: amount, progress: z.number().finite(), isSettled: z.boolean(), payments: z.array(payment).max(10000).optional() }),
   wishlist: z.object({ id, name: text, price: amount, priority: z.enum(['low', 'medium', 'high']), savedAmount: amount, externalContribution: amount.optional(), isPurchased: z.boolean().optional(), purchasedAt: date.optional(), image: z.string().max(4_000_000).optional(), sourceStore: text.optional(), sourceUrl: text.optional(), sourceCurrency: text.optional() }),

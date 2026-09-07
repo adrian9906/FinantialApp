@@ -131,7 +131,7 @@ export default function Reports() {
 
     const metrics: ReportMetric[] = [
       {
-        label: 'Salario del mes',
+        label: 'Ingresos del mes',
         current: currentSummary?.salary ?? 0,
         previous: previousSummary?.salary ?? 0,
         tone: 'primary',
@@ -863,7 +863,7 @@ export default function Reports() {
                           <div className="flex flex-wrap items-center gap-2">
                             <Badge variant="secondary" className={`border ${getTimelineTone(entry.kind)}`}>
                               {entry.kind === 'salary'
-                                ? 'Salario'
+                                ? 'Ingreso'
                                 : entry.kind === 'expense'
                                   ? 'Gasto'
                                   : entry.kind === 'want'

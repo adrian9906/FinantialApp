@@ -314,7 +314,7 @@ export async function downloadMonthlyPdfReport(input: MonthlyPdfReportInput) {
     input.mode === 'closing' ? 'Informe de cierre mensual' : 'Informe financiero actual',
     `Resumen personal en ${activeCurrency.code} · Actualizado ${generatedAt.toLocaleDateString('es-ES')}`,
   )
-  metricCard(margin, 75, 55, 'Salario del mes', formatMoney(input.overview.totalSalary))
+  metricCard(margin, 75, 55, 'Ingresos del mes', formatMoney(input.overview.totalSalary))
   metricCard(77, 75, 55, 'Score financiero', `${financialScore.score}/100`, meaning.tone)
   metricCard(138, 75, 55, 'Ahorro del mes', formatMoney(input.overview.totalSavings), COLORS[2])
 

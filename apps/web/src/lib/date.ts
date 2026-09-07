@@ -7,7 +7,13 @@ export function getTodayDateKey() {
   return `${year}-${month}-${day}`
 }
 
-export type TransactionDateFilter = 'today' | 'yesterday' | 'current-month' | 'previous-month' | 'all'
+/**
+ * Scoped to the current pay cycle (cobro). The monthly close archives every
+ * expense and want into monthlyPlanningHistory and removes them from the list,
+ * so whatever remains already belongs to the active cobro — regardless of the
+ * calendar month it falls in.
+ */
+export type TransactionDateFilter = 'today' | 'yesterday' | 'cycle'
 
 function getLocalDateKey(date: Date) {
   const year = date.getFullYear()
@@ -22,12 +28,11 @@ export function matchesTransactionDateFilter(
   filter: TransactionDateFilter,
   referenceDate = new Date(),
 ) {
-  if (filter === 'all') return true
-
   const dateKey = value.slice(0, 10)
   if (!/^\d{4}-\d{2}-\d{2}$/.test(dateKey)) return false
 
   const todayKey = getLocalDateKey(referenceDate)
+
   if (filter === 'today') return dateKey === todayKey
 
   if (filter === 'yesterday') {
@@ -35,11 +40,10 @@ export function matchesTransactionDateFilter(
     return dateKey === getLocalDateKey(yesterday)
   }
 
-  const currentMonthKey = todayKey.slice(0, 7)
-  if (filter === 'current-month') return dateKey.startsWith(currentMonthKey)
-
-  const previousMonth = new Date(referenceDate.getFullYear(), referenceDate.getMonth() - 1, 1)
-  return dateKey.startsWith(getLocalDateKey(previousMonth).slice(0, 7))
+  // The close already emptied the list, so everything still here is this
+  // cobro: no date cut-off, or spending made after the close but before the
+  // month rolls over would vanish from the page.
+  return true
 }
 
 export function filterAndSortTransactionsByDate<T extends { date: string; itemName: string }>(
