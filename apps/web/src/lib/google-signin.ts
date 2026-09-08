@@ -25,20 +25,28 @@ interface GoogleCredentialResponse {
   credential?: string
 }
 
+interface GoogleAccountsOauth2 {
+  initTokenClient: (config: Record<string, unknown>) => { requestAccessToken: () => void }
+}
+
 interface GoogleAccountsId {
   initialize: (config: {
     client_id: string
     callback: (response: GoogleCredentialResponse) => void
     auto_select?: boolean
+    use_fedcm_for_prompt?: boolean
+    ux_mode?: string
   }) => void
   renderButton: (parent: HTMLElement, options: Record<string, unknown>) => void
   prompt: () => void
   cancel: () => void
 }
 
-function getGoogleAccounts(): { id: GoogleAccountsId } | null {
-  const google = (window as unknown as { google?: { accounts?: { id?: GoogleAccountsId } } }).google
-  return google?.accounts?.id ? { id: google.accounts.id } : null
+function getGoogleAccounts(): { id: GoogleAccountsId; oauth2?: GoogleAccountsOauth2 } | null {
+  const google = (window as unknown as {
+    google?: { accounts?: { id?: GoogleAccountsId; oauth2?: GoogleAccountsOauth2 } }
+  }).google
+  return google?.accounts?.id ? { id: google.accounts.id, oauth2: google.accounts.oauth2 } : null
 }
 
 let scriptPromise: Promise<boolean> | null = null
@@ -67,33 +75,63 @@ function loadGoogleScript(): Promise<boolean> {
   return scriptPromise
 }
 
-/** Renders Google's own button, which is required by their branding rules. */
-export async function renderGoogleButton(
-  container: HTMLElement,
-  onToken: (idToken: string) => void,
-): Promise<boolean> {
-  if (!isGoogleSignInAvailable()) return false
-  const loaded = await loadGoogleScript()
-  const accounts = getGoogleAccounts()
-  if (!loaded || !accounts) return false
+/**
+ * Opens Google's account chooser and resolves with an ID token.
+ *
+ * Google's own rendered button cannot be restyled, so this drives the same
+ * flow from our button instead: the hidden widget is rendered off-screen and
+ * clicked programmatically, which keeps a real user gesture behind the popup
+ * (Google requires one) while the visible button is entirely ours.
+ */
+export function signInWithGoogleWeb(): Promise<string> {
+  return new Promise((resolve, reject) => {
+    void loadGoogleScript().then((loaded) => {
+      const accounts = getGoogleAccounts()
+      if (!loaded || !accounts) {
+        reject(new Error('No se pudo cargar el acceso con Google.'))
+        return
+      }
 
-  accounts.id.initialize({
-    client_id: getGoogleClientId(),
-    callback: (response) => {
-      if (response.credential) onToken(response.credential)
-    },
+      let settled = false
+
+      accounts.id.initialize({
+        client_id: getGoogleClientId(),
+        ux_mode: 'popup',
+        callback: (response) => {
+          if (settled) return
+          settled = true
+          host.remove()
+          if (response.credential) resolve(response.credential)
+          else reject(new GoogleSignInCancelled('Inicio de sesión cancelado.'))
+        },
+      })
+
+      // Off-screen host for Google's widget: never visible, only clicked.
+      const host = document.createElement('div')
+      host.style.cssText = 'position:fixed;top:-1000px;left:-1000px;opacity:0;pointer-events:none;'
+      document.body.append(host)
+
+      accounts.id.renderButton(host, { type: 'standard', size: 'large' })
+
+      const trigger = host.querySelector<HTMLElement>('div[role="button"]')
+        ?? host.querySelector<HTMLElement>('div')
+      if (!trigger) {
+        host.remove()
+        reject(new Error('No se pudo iniciar el acceso con Google.'))
+        return
+      }
+
+      trigger.click()
+
+      // The popup gives no "closed" event; clean up if nothing comes back.
+      window.setTimeout(() => {
+        if (settled) return
+        settled = true
+        host.remove()
+        reject(new GoogleSignInCancelled('Inicio de sesión cancelado.'))
+      }, 120000)
+    })
   })
-
-  container.replaceChildren()
-  accounts.id.renderButton(container, {
-    theme: 'filled_black',
-    size: 'large',
-    shape: 'pill',
-    text: 'continue_with',
-    width: container.clientWidth || 320,
-  })
-
-  return true
 }
 
 /** Native sign-in for the Capacitor build. */

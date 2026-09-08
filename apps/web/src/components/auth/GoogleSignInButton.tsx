@@ -1,11 +1,12 @@
-import { useEffect, useRef, useState } from 'react'
+import { useState } from 'react'
 
 import { Button } from '@/components/ui/button'
 import {
   isGoogleSignInAvailable,
   isNativePlatform,
-  renderGoogleButton,
   signInWithGoogleNative,
+  signInWithGoogleWeb,
+  GoogleSignInCancelled,
 } from '@/lib/google-signin'
 import { useAuthStore } from '@/store/authStore'
 
@@ -14,79 +15,58 @@ interface GoogleSignInButtonProps {
   onSuccess?: () => void
 }
 
+function GoogleLogo() {
+  return (
+    <svg viewBox="0 0 18 18" className="size-4" aria-hidden="true">
+      <path fill="#4285F4" d="M17.64 9.2c0-.64-.06-1.25-.16-1.84H9v3.48h4.84a4.14 4.14 0 0 1-1.8 2.72v2.26h2.92c1.7-1.57 2.68-3.88 2.68-6.62Z" />
+      <path fill="#34A853" d="M9 18c2.43 0 4.47-.8 5.96-2.18l-2.92-2.26c-.8.54-1.84.86-3.04.86-2.34 0-4.32-1.58-5.03-3.7H.96v2.33A9 9 0 0 0 9 18Z" />
+      <path fill="#FBBC05" d="M3.97 10.72a5.4 5.4 0 0 1 0-3.44V4.95H.96a9 9 0 0 0 0 8.1l3.01-2.33Z" />
+      <path fill="#EA4335" d="M9 3.58c1.32 0 2.5.45 3.44 1.35l2.58-2.58C13.46.9 11.43 0 9 0A9 9 0 0 0 .96 4.95l3.01 2.33C4.68 5.16 6.66 3.58 9 3.58Z" />
+    </svg>
+  )
+}
+
 /**
- * Google sign-in entry point. On the web it renders Google's own button (their
- * branding rules require it); inside the Capacitor app it falls back to the
- * native flow, since Google blocks OAuth in WebViews.
+ * Uses the app's own Button so it matches the rest of the login screen.
+ * Google's rendered widget cannot be restyled, so it is driven off-screen from
+ * here (see signInWithGoogleWeb) instead of being shown directly.
  */
 export function GoogleSignInButton({ onError, onSuccess }: GoogleSignInButtonProps) {
   const loginWithGoogle = useAuthStore((state) => state.loginWithGoogle)
-  const containerRef = useRef<HTMLDivElement>(null)
   const [isWorking, setIsWorking] = useState(false)
-  const [webButtonReady, setWebButtonReady] = useState(false)
 
-  const available = isGoogleSignInAvailable()
-  const native = isNativePlatform()
+  if (!isGoogleSignInAvailable()) return null
 
-  useEffect(() => {
-    if (!available || native) return
-
-    let active = true
-    const container = containerRef.current
-    if (!container) return
-
-    void renderGoogleButton(container, (idToken) => {
-      if (!active) return
-      void loginWithGoogle(idToken)
-        .then(() => onSuccess?.())
-        .catch(() => onError('No se pudo iniciar sesión con Google.'))
-    }).then((ready) => {
-      if (active) setWebButtonReady(ready)
-    })
-
-    return () => {
-      active = false
-    }
-  }, [available, loginWithGoogle, native, onError, onSuccess])
-
-  if (!available) return null
-
-  async function handleNativeSignIn() {
+  async function handleSignIn() {
     setIsWorking(true)
     try {
-      const idToken = await signInWithGoogleNative()
+      const idToken = isNativePlatform()
+        ? await signInWithGoogleNative()
+        : await signInWithGoogleWeb()
+
       await loginWithGoogle(idToken)
       onSuccess?.()
-    } catch {
-      // A cancelled sign-in and a failed one look the same to the user here.
-      onError('No se pudo iniciar sesión con Google.')
+    } catch (error) {
+      // Closing the popup is not a failure worth shouting about.
+      if (error instanceof GoogleSignInCancelled) return
+      onError(error instanceof Error && error.message.includes('cargar')
+        ? error.message
+        : 'No se pudo iniciar sesión con Google.')
     } finally {
       setIsWorking(false)
     }
   }
 
-  if (native) {
-    return (
-      <Button
-        type="button"
-        variant="outline"
-        loading={isWorking}
-        onClick={() => void handleNativeSignIn()}
-        className="w-full border-graphite"
-      >
-        Continuar con Google
-      </Button>
-    )
-  }
-
   return (
-    <div className="w-full">
-      <div ref={containerRef} className="flex w-full justify-center [&>div]:w-full" />
-      {!webButtonReady ? (
-        <p className="text-center text-xs text-muted-gray">
-          No se pudo cargar el acceso con Google.
-        </p>
-      ) : null}
-    </div>
+    <Button
+      type="button"
+      variant="outline"
+      loading={isWorking}
+      onClick={() => void handleSignIn()}
+      className="h-12 w-full gap-3 border-graphite bg-surface text-on-surface hover:bg-surface-container-high"
+    >
+      {isWorking ? null : <GoogleLogo />}
+      Continuar con Google
+    </Button>
   )
 }
