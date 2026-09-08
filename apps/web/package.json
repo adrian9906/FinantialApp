@@ -8,7 +8,7 @@
     "android:sync": "cap sync android && node ../../scripts/fix-capacitor-android-gradle.mjs",
     "android:run": "npm run android:sync && cap run android --no-sync",
     "dev": "vite",
-    "build": "tsc -b && vite build",
+    "build": "pnpm --filter @plata/shared build && tsc -b && vite build",
     "lint": "eslint .",
     "preview": "vite preview"
   },
