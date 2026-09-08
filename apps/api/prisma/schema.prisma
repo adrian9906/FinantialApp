@@ -91,6 +91,9 @@ model Ahorro {
   cantidad    Float
   descripcion String?
   fecha       DateTime @default(now())
+  lugar     String?
+  adjuntos  String[] @default([])
+  esEfectivo Boolean @default(true)
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
   usuarioId   String
@@ -103,6 +106,9 @@ model Gasto {
   id        String   @id @default(uuid())
   cantidad  Float
   fecha     DateTime @default(now())
+  lugar     String?
+  adjuntos  String[] @default([])
+  esEfectivo Boolean @default(true)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
   usuarioId String
@@ -116,6 +122,9 @@ model Gusto {
   id        String   @id @default(uuid())
   cantidad  Float
   fecha     DateTime @default(now())
+  lugar     String?
+  adjuntos  String[] @default([])
+  esEfectivo Boolean @default(true)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
   usuarioId String

@@ -1,5 +1,6 @@
 import type { Debt, Reminder, WishlistItem } from '@plata/shared'
 import { formatMoney } from '@/lib/currency'
+import type { UnnecessarySpendingInsights } from '@/lib/unnecessary-spending'
 
 type OverviewLike = {
   totalSalary: number
@@ -13,7 +14,7 @@ type OverviewLike = {
 }
 
 export type FinancialScoreFactor = {
-  key: 'savings' | 'budget' | 'debt' | 'reminders'
+  key: 'savings' | 'budget' | 'unnecessary' | 'debt' | 'reminders'
   label: string
   current: number
   max: number
@@ -48,13 +49,14 @@ function clamp(value: number, min: number, max: number) {
 
 function ratioToPoints(current: number, target: number, max: number) {
   if (target <= 0) return max
-  return Math.round(clamp(current / target, 0, 1) * max)
+  if (current >= target) return max
+  return Math.min(max - 1, Math.floor(clamp(current / target, 0, 1) * max))
 }
 
 const formatCurrency = formatMoney
 
-function getDateDiffInDays(value: string) {
-  const today = new Date()
+function getDateDiffInDays(value: string, asOf = new Date().toISOString()) {
+  const today = new Date(asOf)
   today.setHours(0, 0, 0, 0)
   const target = new Date(value)
   target.setHours(0, 0, 0, 0)
@@ -65,16 +67,20 @@ export function buildFinancialScore({
   overview,
   debts,
   reminders,
+  unnecessarySpending,
+  asOf,
 }: {
   overview: OverviewLike
   debts: Debt[]
   reminders: Reminder[]
+  unnecessarySpending?: Pick<UnnecessarySpendingInsights, 'checkedExpenseTotal' | 'unnecessaryTotal' | 'unnecessaryCount' | 'unnecessaryShare'>
+  asOf?: string
 }): FinancialScoreSummary {
   const activeDebts = debts.filter((item) => !item.isSettled)
   const pendingReminders = reminders.filter((item) => !item.completed)
-  const overdueReminders = pendingReminders.filter((item) => getDateDiffInDays(item.date) < 0)
+  const overdueReminders = pendingReminders.filter((item) => getDateDiffInDays(item.date, asOf) < 0)
   const dueSoonReminders = pendingReminders.filter((item) => {
-    const diff = getDateDiffInDays(item.date)
+    const diff = getDateDiffInDays(item.date, asOf)
     return diff >= 0 && diff <= 3
   })
 
@@ -85,11 +91,14 @@ export function buildFinancialScore({
   const wantsCompliance = overview.budgetWants > 0
     ? clamp(1 - Math.max(0, overview.totalWants - overview.budgetWants) / overview.budgetWants, 0, 1)
     : 1
-  const budgetPoints = Math.round(((expenseCompliance + wantsCompliance) / 2) * 30)
+  const budgetPoints = Math.round(((expenseCompliance + wantsCompliance) / 2) * 25)
+
+  const unnecessaryShare = clamp(unnecessarySpending?.unnecessaryShare ?? 0, 0, 1)
+  const unnecessaryPoints = Math.round(clamp(1 - unnecessaryShare / 0.35, 0, 1) * 20)
 
   const totalDebtRemaining = activeDebts.reduce((sum, item) => sum + item.remainingAmount, 0)
   const debtRatio = overview.totalSalary > 0 ? totalDebtRemaining / overview.totalSalary : totalDebtRemaining > 0 ? 1 : 0
-  const debtPoints = Math.round(clamp(1 - debtRatio, 0, 1) * 25)
+  const debtPoints = Math.round(clamp(1 - debtRatio, 0, 1) * 15)
 
   const reminderHealth = pendingReminders.length === 0
     ? 1
@@ -98,7 +107,7 @@ export function buildFinancialScore({
       0,
       1,
     )
-  const reminderPoints = Math.round(reminderHealth * 15)
+  const reminderPoints = Math.round(reminderHealth * 10)
 
   const factors: FinancialScoreFactor[] = [
     {
@@ -115,29 +124,39 @@ export function buildFinancialScore({
       key: 'budget',
       label: 'Presupuesto',
       current: budgetPoints,
-      max: 30,
+      max: 25,
       summary: `Gastos en ${formatCurrency(overview.totalExpenses)} y gustos en ${formatCurrency(overview.totalWants)} frente a sus techos actuales.`,
-      tone: budgetPoints >= 22 ? 'good' : budgetPoints >= 12 ? 'warn' : 'danger',
+      tone: budgetPoints >= 19 ? 'good' : budgetPoints >= 10 ? 'warn' : 'danger',
+    },
+    {
+      key: 'unnecessary',
+      label: 'Fugas innecesarias',
+      current: unnecessaryPoints,
+      max: 20,
+      summary: unnecessarySpending && unnecessarySpending.unnecessaryTotal > 0
+        ? `${formatCurrency(unnecessarySpending.unnecessaryTotal)} evitables: ${Math.round(unnecessaryShare * 100)}% de los gastos hechos.`
+        : 'No hay gastos hechos marcados como innecesarios en este ciclo.',
+      tone: unnecessaryPoints >= 15 ? 'good' : unnecessaryPoints >= 8 ? 'warn' : 'danger',
     },
     {
       key: 'debt',
       label: 'Deuda',
       current: debtPoints,
-      max: 25,
+      max: 15,
       summary: activeDebts.length > 0
         ? `${activeDebts.length} deuda(s) activas con ${formatCurrency(totalDebtRemaining)} pendientes.`
         : 'No tienes deudas activas en este momento.',
-      tone: debtPoints >= 18 ? 'good' : debtPoints >= 10 ? 'warn' : 'danger',
+      tone: debtPoints >= 11 ? 'good' : debtPoints >= 6 ? 'warn' : 'danger',
     },
     {
       key: 'reminders',
       label: 'Recordatorios',
       current: reminderPoints,
-      max: 15,
+      max: 10,
       summary: pendingReminders.length > 0
         ? `${overdueReminders.length} vencidos y ${dueSoonReminders.length} por vencer pronto.`
         : 'No hay recordatorios pendientes que te resten orden.',
-      tone: reminderPoints >= 11 ? 'good' : reminderPoints >= 6 ? 'warn' : 'danger',
+      tone: reminderPoints >= 8 ? 'good' : reminderPoints >= 4 ? 'warn' : 'danger',
     },
   ]
 
@@ -145,11 +164,11 @@ export function buildFinancialScore({
   const status = score >= 80 ? 'fuerte' : score >= 60 ? 'estable' : score >= 40 ? 'atencion' : 'critico'
   const headline =
     status === 'fuerte'
-      ? 'Tus decisiones del mes estan sosteniendo bien la salud financiera.'
+      ? 'Tus decisiones del ciclo estan sosteniendo bien la salud financiera.'
       : status === 'estable'
         ? 'Vas bien, pero aún hay margen claro para mejorar equilibrio y disciplina.'
         : status === 'atencion'
-          ? 'El mes necesita ajustes para no tensionar tu liquidez.'
+          ? 'El ciclo necesita ajustes para no tensionar tu liquidez.'
           : 'Tu panorama actual exige acciones rapidas para recuperar control.'
 
   const changes: FinancialScoreSummary['changes'] = []
@@ -157,7 +176,7 @@ export function buildFinancialScore({
   if (overview.budgetSavings > 0 && overview.totalSavings >= overview.budgetSavings) {
     changes.push({
       label: 'El score sube por ahorro cumplido',
-      detail: `Tu ahorro ya cubre la meta mensual y te suma estabilidad.`,
+      detail: `Tu ahorro ya cubre la meta del ciclo y te suma estabilidad.`,
       direction: 'up',
     })
   } else if (overview.budgetSavings > 0) {
@@ -176,8 +195,22 @@ export function buildFinancialScore({
     })
   } else {
     changes.push({
-      label: 'El score sube por disciplina mensual',
+      label: 'El score sube por respetar los topes',
       detail: 'Tus bloques principales siguen dentro de los limites definidos.',
+      direction: 'up',
+    })
+  }
+
+  if (unnecessarySpending && unnecessarySpending.unnecessaryTotal > 0) {
+    changes.push({
+      label: 'Las fugas innecesarias bajan el score',
+      detail: `${formatCurrency(unnecessarySpending.unnecessaryTotal)} marcados como evitables representan ${Math.round(unnecessaryShare * 100)}% de los gastos hechos.`,
+      direction: 'down',
+    })
+  } else {
+    changes.push({
+      label: 'Sin fugas innecesarias detectadas',
+      detail: 'No hay gastos hechos marcados como evitables en este ciclo.',
       direction: 'up',
     })
   }

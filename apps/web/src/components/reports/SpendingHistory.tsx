@@ -8,10 +8,7 @@ import {
   ReceiptText,
   Search,
   ShoppingBag,
-  TrendingDown,
-  TrendingUp,
 } from 'lucide-react'
-import { CartesianGrid, Line, LineChart, XAxis, YAxis } from 'recharts'
 import {
   getExpenseCategoryLabel,
   getSavingsFundingBreakdown,
@@ -26,13 +23,12 @@ import {
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { ChartContainer, ChartTooltip, ChartTooltipContent, type ChartConfig } from '@/components/ui/chart'
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { formatMoney } from '@/lib/currency'
 
 type HistoryKind = 'expense' | 'want' | 'saving'
-type DateFilterPreset = 'today' | 'month' | 'custom'
+type DateFilterPreset = 'today' | 'cycle' | 'custom'
 
 type HistoryRow = {
   id: string
@@ -41,6 +37,7 @@ type HistoryRow = {
   amount: number
   date: string
   borrowedAmount?: number
+  closedAt?: string
 }
 
 const expenseCategoryLabels: Record<string, string> = {
@@ -65,32 +62,27 @@ const historyMeta = {
     label: 'Gastos',
     singular: 'gasto',
     totalLabel: 'Total gastado',
-    color: 'var(--color-primary)',
     badgeClass: 'border-rose-500/20 bg-rose-500/10 text-rose-200',
   },
   want: {
     label: 'Gustos',
     singular: 'gusto',
     totalLabel: 'Total en gustos',
-    color: 'var(--color-secondary)',
     badgeClass: 'border-secondary/20 bg-secondary/10 text-secondary',
   },
   saving: {
     label: 'Ahorros',
     singular: 'compra con ahorros',
     totalLabel: 'Total usado de ahorros',
-    color: 'var(--color-tertiary-container)',
     badgeClass: 'border-emerald-500/20 bg-emerald-500/10 text-emerald-200',
   },
 } satisfies Record<HistoryKind, {
   label: string
   singular: string
   totalLabel: string
-  color: string
   badgeClass: string
 }>
 
-const monthFormatter = new Intl.DateTimeFormat('es-ES', { month: 'short', year: '2-digit' })
 const longDateFormatter = new Intl.DateTimeFormat('es-ES', { day: '2-digit', month: 'short', year: 'numeric' })
 const amountFormatter = new Intl.NumberFormat('es-ES', { minimumFractionDigits: 0, maximumFractionDigits: 2 })
 
@@ -116,18 +108,21 @@ function getPreviousMonthKey(monthKey: string) {
 }
 
 function matchesDateFilter(
-  rowDate: string,
+  row: HistoryRow,
   preset: DateFilterPreset,
   todayKey: string,
-  currentMonthKey: string,
+  periodStart: string,
   customFrom: string,
   customTo: string,
 ) {
-  const normalizedDate = normalizeDateKey(rowDate)
+  const normalizedDate = normalizeDateKey(row.date)
   if (!normalizedDate) return false
 
   if (preset === 'today') return normalizedDate === todayKey
-  if (preset === 'month') return normalizedDate.startsWith(currentMonthKey)
+  if (preset === 'cycle') {
+    if (row.closedAt && Date.parse(row.closedAt) <= Date.parse(periodStart)) return false
+    return normalizedDate >= periodStart.slice(0, 10) && normalizedDate <= todayKey
+  }
 
   if (customFrom && normalizedDate < customFrom) return false
   if (customTo && normalizedDate > customTo) return false
@@ -146,22 +141,23 @@ function buildSearchIndex(row: HistoryRow) {
   ].join(' ').toLowerCase()
 }
 
-function buildMonthComparison(rows: HistoryRow[], currentMonthKey: string) {
-  const previousMonthKey = getPreviousMonthKey(currentMonthKey)
+function buildCycleComparison(rows: HistoryRow[], periodStart: string, previousPeriodStart: string) {
+  const currentStartKey = periodStart.slice(0, 10)
+  const previousStartKey = previousPeriodStart.slice(0, 10)
   let currentMonthTotal = 0
   let previousMonthTotal = 0
   let currentMonthCount = 0
   let previousMonthCount = 0
 
   rows.forEach((row) => {
-    const monthKey = row.date.slice(0, 7)
-    if (monthKey === currentMonthKey) {
+    const dateKey = row.date.slice(0, 10)
+    if (dateKey >= currentStartKey) {
       currentMonthTotal += row.amount
       currentMonthCount += 1
       return
     }
 
-    if (monthKey === previousMonthKey) {
+    if (dateKey >= previousStartKey && dateKey < currentStartKey) {
       previousMonthTotal += row.amount
       previousMonthCount += 1
     }
@@ -175,8 +171,8 @@ function buildMonthComparison(rows: HistoryRow[], currentMonthKey: string) {
       : 0
 
   return {
-    currentMonthKey,
-    previousMonthKey,
+    currentMonthKey: currentStartKey,
+    previousMonthKey: previousStartKey,
     currentMonthTotal,
     previousMonthTotal,
     currentMonthCount,
@@ -231,6 +227,7 @@ function buildSnapshotRows(history: MonthlyPlanningHistory[], kind: 'expense' | 
           : getWantLabel(entry.category as ReturnType<typeof parseWantDescription>['category']),
         amount: Math.max(0, entry.amount),
         date: entry.date,
+        closedAt: snapshot.createdAt,
       }]
     })
   })
@@ -247,46 +244,16 @@ function buildSavingRows(transactions: Transaction[], wishlist: WishlistItem[]):
   }))
 }
 
-function buildMonthlySeries(rows: HistoryRow[]) {
-  const totals = new Map<string, number>()
-
-  rows.forEach((row) => {
-    if (!/^\d{4}-\d{2}/.test(row.date)) return
-    const month = row.date.slice(0, 7)
-    totals.set(month, (totals.get(month) ?? 0) + row.amount)
-  })
-
-  const recordedMonths = [...totals.keys()].sort()
-  if (recordedMonths.length === 0) return []
-
-  const [startYear, startMonth] = recordedMonths[0].split('-').map(Number)
-  const [endYear, endMonth] = recordedMonths.at(-1)!.split('-').map(Number)
-  const cursor = new Date(startYear, startMonth - 1, 1)
-  const end = new Date(endYear, endMonth - 1, 1)
-  const series: Array<{ month: string; label: string; total: number }> = []
-
-  while (cursor <= end && series.length < 240) {
-    const month = `${cursor.getFullYear()}-${String(cursor.getMonth() + 1).padStart(2, '0')}`
-    series.push({
-      month,
-      label: monthFormatter.format(cursor).replace('.', ''),
-      total: totals.get(month) ?? 0,
-    })
-    cursor.setMonth(cursor.getMonth() + 1)
-  }
-
-  return series
-}
-
 interface SpendingHistoryProps {
   transactions: Transaction[]
   monthlyPlanningHistory: MonthlyPlanningHistory[]
   wishlist: WishlistItem[]
+  periodStart: string
 }
 
-export function SpendingHistory({ transactions, monthlyPlanningHistory, wishlist }: SpendingHistoryProps) {
+export function SpendingHistory({ transactions, monthlyPlanningHistory, wishlist, periodStart }: SpendingHistoryProps) {
   const [kind, setKind] = useState<HistoryKind>('expense')
-  const [dateFilter, setDateFilter] = useState<DateFilterPreset>('month')
+  const [dateFilter, setDateFilter] = useState<DateFilterPreset>('cycle')
   const [searchText, setSearchText] = useState('')
   const [customFrom, setCustomFrom] = useState('')
   const [customTo, setCustomTo] = useState('')
@@ -296,7 +263,12 @@ export function SpendingHistory({ transactions, monthlyPlanningHistory, wishlist
 
   const today = useMemo(() => new Date(), [])
   const todayKey = formatDateInputValue(today)
-  const currentMonthKey = todayKey.slice(0, 7)
+  const previousPeriodStart = useMemo(() => {
+    const previousReset = [...monthlyPlanningHistory]
+      .filter((entry) => Date.parse(entry.createdAt) < Date.parse(periodStart))
+      .sort((left, right) => Date.parse(right.createdAt) - Date.parse(left.createdAt))[0]
+    return previousReset?.createdAt ?? `${getPreviousMonthKey(periodStart.slice(0, 7))}-01T00:00:00.000Z`
+  }, [monthlyPlanningHistory, periodStart])
 
   const histories = useMemo(() => ({
     expense: [
@@ -317,35 +289,22 @@ export function SpendingHistory({ transactions, monthlyPlanningHistory, wishlist
   const searchQuery = deferredSearchText.trim().toLowerCase()
   const filteredRows = useMemo(
     () => rows.filter((row) => {
-      if (!matchesDateFilter(row.date, dateFilter, todayKey, currentMonthKey, customFrom, customTo)) return false
+      if (!matchesDateFilter(row, dateFilter, todayKey, periodStart, customFrom, customTo)) return false
       if (!searchQuery) return true
       return buildSearchIndex(row).includes(searchQuery)
     }),
-    [currentMonthKey, customFrom, customTo, dateFilter, rows, searchQuery, todayKey],
+    [customFrom, customTo, dateFilter, periodStart, rows, searchQuery, todayKey],
   )
-  const monthlySeries = useMemo(() => buildMonthlySeries(filteredRows), [filteredRows])
   const total = filteredRows.reduce((sum, row) => sum + row.amount, 0)
   const totalBorrowedUsed = filteredRows.reduce((sum, row) => sum + (row.borrowedAmount ?? 0), 0)
   const meta = historyMeta[kind]
-  const highestMonth = monthlySeries.reduce<(typeof monthlySeries)[number] | null>(
-    (highest, month) => !highest || month.total > highest.total ? month : highest,
-    null,
-  )
-  const lowestMonth = monthlySeries.reduce<(typeof monthlySeries)[number] | null>(
-    (lowest, month) => !lowest || month.total < lowest.total ? month : lowest,
-    null,
-  )
   const monthComparison = useMemo(
-    () => buildMonthComparison(rows, currentMonthKey),
-    [currentMonthKey, rows],
+    () => buildCycleComparison(rows, periodStart, previousPeriodStart),
+    [periodStart, previousPeriodStart, rows],
   )
   const perPageNumber = Number(perPage)
   const totalPages = Math.max(1, Math.ceil(filteredRows.length / perPageNumber))
   const paginatedRows = filteredRows.slice((page - 1) * perPageNumber, page * perPageNumber)
-  const chartConfig = {
-    total: { label: meta.totalLabel, color: meta.color },
-  } satisfies ChartConfig
-
   useEffect(() => {
     setPage(1)
   }, [kind, dateFilter, customFrom, customTo, searchQuery, perPage])
@@ -392,7 +351,7 @@ export function SpendingHistory({ transactions, monthlyPlanningHistory, wishlist
               <div className="flex flex-wrap items-center gap-2">
                 {([
                   { id: 'today', label: 'Hoy' },
-                  { id: 'month', label: 'Este mes' },
+                  { id: 'cycle', label: 'Este ciclo' },
                   { id: 'custom', label: 'Fecha personalizada' },
                 ] as const).map((option) => (
                   <Button
@@ -456,14 +415,14 @@ export function SpendingHistory({ transactions, monthlyPlanningHistory, wishlist
 
               <div className="grid gap-3 lg:grid-cols-3">
                 <div className="rounded-2xl border border-graphite/80 bg-surface px-4 py-3">
-                  <p className="text-[10px] uppercase tracking-[0.16em] text-medium-gray">Este mes</p>
+                  <p className="text-[10px] uppercase tracking-[0.16em] text-medium-gray">Ciclo actual</p>
                   <p className="mt-1 text-lg font-semibold tabular-nums text-on-surface">{formatCurrency(monthComparison.currentMonthTotal)}</p>
-                  <p className="mt-1 text-xs text-muted-gray">{monthComparison.currentMonthCount} movimientos en {monthComparison.currentMonthKey}</p>
+                  <p className="mt-1 text-xs text-muted-gray">{monthComparison.currentMonthCount} movimientos desde {monthComparison.currentMonthKey}</p>
                 </div>
                 <div className="rounded-2xl border border-graphite/80 bg-surface px-4 py-3">
-                  <p className="text-[10px] uppercase tracking-[0.16em] text-medium-gray">Mes anterior</p>
+                  <p className="text-[10px] uppercase tracking-[0.16em] text-medium-gray">Ciclo anterior</p>
                   <p className="mt-1 text-lg font-semibold tabular-nums text-on-surface">{formatCurrency(monthComparison.previousMonthTotal)}</p>
-                  <p className="mt-1 text-xs text-muted-gray">{monthComparison.previousMonthCount} movimientos en {monthComparison.previousMonthKey}</p>
+                  <p className="mt-1 text-xs text-muted-gray">{monthComparison.previousMonthCount} movimientos desde {monthComparison.previousMonthKey}</p>
                 </div>
                 <div className="rounded-2xl border border-graphite/80 bg-surface px-4 py-3">
                   <p className="text-[10px] uppercase tracking-[0.16em] text-medium-gray">Comparación mensual</p>
@@ -472,7 +431,7 @@ export function SpendingHistory({ transactions, monthlyPlanningHistory, wishlist
                   </p>
                   <p className="mt-1 text-xs text-muted-gray">
                     {monthComparison.previousMonthTotal > 0
-                      ? `${monthComparison.percentChange > 0 ? '+' : ''}${monthComparison.percentChange.toFixed(1)}% frente al mes anterior`
+                      ? `${monthComparison.percentChange > 0 ? '+' : ''}${monthComparison.percentChange.toFixed(1)}% frente al ciclo anterior`
                       : monthComparison.currentMonthTotal > 0
                         ? 'Sin base previa: este es el primer mes con movimientos'
                         : 'Aún no hay movimientos en ninguno de los dos meses'}
@@ -590,58 +549,6 @@ export function SpendingHistory({ transactions, monthlyPlanningHistory, wishlist
         </CardContent>
       </Card>
 
-      <Card className="border-graphite bg-surface shadow-vault">
-        <CardHeader className="gap-4 lg:flex-row lg:items-start lg:justify-between">
-          <div>
-            <CardTitle className="text-on-surface">Gasto mes por mes</CardTitle>
-            <CardDescription className="mt-2 text-muted-gray">
-              Evolución mensual de {meta.label.toLowerCase()} para detectar en qué meses utilizaste más y menos dinero.
-            </CardDescription>
-          </div>
-          {highestMonth && lowestMonth ? (
-            <div className="grid gap-2 sm:grid-cols-2">
-              <div className="rounded-2xl border border-rose-500/20 bg-rose-500/8 px-4 py-3">
-                <div className="flex items-center gap-2 text-rose-200">
-                  <TrendingUp className="size-3.5" />
-                  <span className="text-[10px] uppercase tracking-[0.18em]">Mayor gasto</span>
-                </div>
-                <p className="mt-1 text-sm font-semibold text-on-surface">{highestMonth.label} · {formatCurrency(highestMonth.total)}</p>
-              </div>
-              <div className="rounded-2xl border border-emerald-500/20 bg-emerald-500/8 px-4 py-3">
-                <div className="flex items-center gap-2 text-emerald-200">
-                  <TrendingDown className="size-3.5" />
-                  <span className="text-[10px] uppercase tracking-[0.18em]">Menor gasto</span>
-                </div>
-                <p className="mt-1 text-sm font-semibold text-on-surface">{lowestMonth.label} · {formatCurrency(lowestMonth.total)}</p>
-              </div>
-            </div>
-          ) : null}
-        </CardHeader>
-        <CardContent>
-          {monthlySeries.length === 0 ? (
-            <div className="rounded-2xl border border-dashed border-graphite bg-abyss/60 p-8 text-center text-sm text-muted-gray">
-              El gráfico aparecerá cuando existan compras con una fecha registrada.
-            </div>
-          ) : (
-            <ChartContainer config={chartConfig} className="h-[320px] w-full">
-              <LineChart data={monthlySeries} margin={{ top: 18, right: 14, left: -18, bottom: 0 }}>
-                <CartesianGrid vertical={false} strokeDasharray="3 3" />
-                <XAxis dataKey="label" tickLine={false} axisLine={false} minTickGap={22} />
-                <YAxis tickLine={false} axisLine={false} tickFormatter={(value) => formatCurrency(Number(value))} width={74} />
-                <ChartTooltip content={<ChartTooltipContent indicator="line" />} />
-                <Line
-                  type="monotone"
-                  dataKey="total"
-                  stroke="var(--color-total)"
-                  strokeWidth={3}
-                  dot={{ r: 4, fill: 'var(--color-total)', strokeWidth: 0 }}
-                  activeDot={{ r: 6, fill: 'var(--color-total)', stroke: 'var(--color-surface)', strokeWidth: 3 }}
-                />
-              </LineChart>
-            </ChartContainer>
-          )}
-        </CardContent>
-      </Card>
     </section>
   )
 }

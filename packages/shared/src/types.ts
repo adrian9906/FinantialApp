@@ -27,6 +27,15 @@ export interface Salary {
 export interface Transaction {
   id: string
   amount: number
+  /** Where the purchase happened. Optional, free text. */
+  place?: string
+  /** Receipt or purchase photos as validated image data URLs. Optional. */
+  attachments?: string[]
+  /**
+   * How it was paid: true is cash, false is a transfer. Absent on existing
+   * records, which are treated as cash.
+   */
+  isCash?: boolean
   type: 'expense' | 'want' | 'saving'
   description?: string
   date: string

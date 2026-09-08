@@ -1,6 +1,7 @@
 import { createHash, randomUUID } from 'node:crypto'
 import { createEmptyBootstrapPayload, SYNC_PROTOCOL, canonicalJson, syncCollections, syncKey, getSyncValue, type SyncOperation, type SyncResponse } from '@plata/shared'
 import { parseSyncOperation } from './sync-validation.js'
+import { sanitizeAttachments, sanitizePlace } from '@plata/shared'
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import type {
   AppEvent,
@@ -225,11 +226,30 @@ function serializeIncomeSource(entry: {
   }
 }
 
+/** Optional place/photos, re-validated on the way out. */
+function serializeAttachmentFields(entry: {
+  lugar?: string | null
+  adjuntos?: string[] | null
+  esEfectivo?: boolean | null
+}) {
+  const place = sanitizePlace(entry.lugar ?? undefined)
+  const attachments = sanitizeAttachments(entry.adjuntos ?? [])
+  return {
+    ...(place ? { place } : {}),
+    ...(attachments.length > 0 ? { attachments } : {}),
+    // Absent means cash, matching the column default.
+    isCash: entry.esEfectivo ?? true,
+  }
+}
+
 function serializeExpense(entry: {
   id: string
   cantidad: number
   fecha: Date
   createdAt: Date
+  lugar?: string | null
+  adjuntos?: string[] | null
+  esEfectivo?: boolean | null
   items: Array<{ nombre: string; innecesario: boolean }>
 }): Transaction {
   const item = entry.items[0]
@@ -247,6 +267,7 @@ function serializeExpense(entry: {
     ),
     date: toDateString(entry.fecha),
     createdAt: entry.createdAt.toISOString(),
+    ...serializeAttachmentFields(entry),
   }
 }
 
@@ -255,6 +276,9 @@ function serializeWant(entry: {
   cantidad: number
   fecha: Date
   createdAt: Date
+  lugar?: string | null
+  adjuntos?: string[] | null
+  esEfectivo?: boolean | null
   items: Array<{ nombre: string }>
 }): Transaction {
   return {
@@ -264,10 +288,11 @@ function serializeWant(entry: {
     description: entry.items[0]?.nombre ?? 'Gusto',
     date: toDateString(entry.fecha),
     createdAt: entry.createdAt.toISOString(),
+    ...serializeAttachmentFields(entry),
   }
 }
 
-function serializeSaving(entry: { id: string; cantidad: number; descripcion: string | null; fecha: Date; createdAt: Date }): Transaction {
+function serializeSaving(entry: { id: string; cantidad: number; descripcion: string | null; fecha: Date; createdAt: Date; lugar?: string | null; adjuntos?: string[] | null; esEfectivo?: boolean | null }): Transaction {
   return {
     id: entry.id,
     amount: entry.cantidad,
@@ -275,6 +300,7 @@ function serializeSaving(entry: { id: string; cantidad: number; descripcion: str
     description: entry.descripcion ?? '',
     date: toDateString(entry.fecha),
     createdAt: entry.createdAt.toISOString(),
+    ...serializeAttachmentFields(entry),
   }
 }
 
@@ -709,6 +735,9 @@ async function writeSyncRecord(userId: string, operation: SyncOperation, tx: Pri
           cantidad: Number(entry.amount ?? 0),
           fecha: entry.date ? new Date(entry.date) : new Date(),
           ...(entry.createdAt && Number.isFinite(Date.parse(entry.createdAt)) ? { createdAt: new Date(entry.createdAt) } : {}),
+          lugar: sanitizePlace(entry.place) ?? null,
+          adjuntos: sanitizeAttachments(entry.attachments),
+          esEfectivo: entry.isCash !== false,
           usuarioId: userId,
           items: {
             create: {
@@ -730,6 +759,9 @@ async function writeSyncRecord(userId: string, operation: SyncOperation, tx: Pri
           cantidad: Number(entry.amount ?? 0),
           fecha: entry.date ? new Date(entry.date) : new Date(),
           ...(entry.createdAt && Number.isFinite(Date.parse(entry.createdAt)) ? { createdAt: new Date(entry.createdAt) } : {}),
+          lugar: sanitizePlace(entry.place) ?? null,
+          adjuntos: sanitizeAttachments(entry.attachments),
+          esEfectivo: entry.isCash !== false,
           usuarioId: userId,
           items: {
             create: {
@@ -751,6 +783,9 @@ async function writeSyncRecord(userId: string, operation: SyncOperation, tx: Pri
           descripcion: String(entry.description ?? '') || null,
           fecha: entry.date ? new Date(entry.date) : new Date(),
           ...(entry.createdAt && Number.isFinite(Date.parse(entry.createdAt)) ? { createdAt: new Date(entry.createdAt) } : {}),
+          lugar: sanitizePlace(entry.place) ?? null,
+          adjuntos: sanitizeAttachments(entry.attachments),
+          esEfectivo: entry.isCash !== false,
           usuarioId: userId,
         },
       })

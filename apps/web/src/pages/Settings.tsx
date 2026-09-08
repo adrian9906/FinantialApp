@@ -797,6 +797,8 @@ function MonthlyResetCard() {
   const authMode = useAuthStore((state) => state.authMode)
   const user = useAuthStore((state) => state.user)
   const transactions = useFinanceStore((state) => state.transactions)
+  const salaries = useFinanceStore((state) => state.salaries)
+  const events = useFinanceStore((state) => state.events)
   const debts = useFinanceStore((state) => state.debts)
   const wishlist = useFinanceStore((state) => state.wishlist)
   const reminders = useFinanceStore((state) => state.reminders)
@@ -841,6 +843,9 @@ function MonthlyResetCard() {
         wishlist,
         debts,
         reminders,
+        salaries,
+        events,
+        monthlyPlanningHistory,
         periodStart: getFinancialPeriodStart(monthlyPlanningHistory),
         userName: authMode === 'guest' ? 'Invitado local' : user?.name ?? 'Usuario',
         mode: 'closing',

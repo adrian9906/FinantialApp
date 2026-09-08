@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useShallow } from 'zustand/react/shallow'
-import { buildExpenseTransferSavingDescription, createLearnedCategorizationRule, findCategorizationRule, isInFinancialPeriod, type ReceiptOCRLineItem, type ReceiptOCRParsedDraft } from '@plata/shared'
-import { Check, Dumbbell, HeartPulse, House, Package, Pencil, Plus, ShoppingBasket, Trash2, Wifi, type LucideIcon } from 'lucide-react'
+import { buildExpenseTransferSavingDescription, createLearnedCategorizationRule, findCategorizationRule, isCashPayment, isInFinancialPeriod, MAX_PLACE_LENGTH, sanitizeAttachments, sanitizePlace, type ReceiptOCRLineItem, type ReceiptOCRParsedDraft } from '@plata/shared'
+import { ArrowLeftRight, Banknote, Check, Dumbbell, HeartPulse, House, Package, Pencil, Plus, ScanLine, ShoppingBasket, Trash2, Wifi, type LucideIcon } from 'lucide-react'
 import { useFinanceStore } from '@/store/financeStore'
 import { buildExpenseDescription, createCustomExpenseCategory, getExpenseCategoryLabel, getPlannedExpenseTotal, parseExpenseDescription, type ExpenseBuiltInCategory, type ExpenseCategory } from '@/lib/expense-utils'
 import { useMonthlyOverview } from '@/lib/useMonthlyOverview'
@@ -32,6 +32,9 @@ import { buildPlanningHistorySuggestions, buildReusablePlanningListDrafts } from
 import { toast } from 'sonner'
 import { filterAndSortTransactionsByDate, getTodayDateKey, type TransactionDateFilter as TransactionDateFilterValue } from '@/lib/date'
 import { ReceiptOcrPanel } from '@/components/ocr/ReceiptOcrPanel'
+import { PurchasePhotosField } from '@/components/expenses/PurchasePhotosField'
+import { Switch } from '@/components/ui/switch'
+import { ReceiptItemsReviewDialog, type ReceiptReviewResult } from '@/components/ocr/ReceiptItemsReviewDialog'
 import { useAuthStore } from '@/store/authStore'
 import { usePreferencesStore } from '@/store/preferencesStore'
 
@@ -40,6 +43,12 @@ interface ExpenseFormState {
   itemName: string
   category: ExpenseCategory
   date: string
+  /** Optional: where the purchase happened. */
+  place: string
+  /** Optional: receipt or purchase photos, validated before being accepted. */
+  attachments: string[]
+  /** True for cash, false for a transfer. Defaults to cash. */
+  isCash: boolean
 }
 
 interface ExpenseViewItem {
@@ -50,6 +59,8 @@ interface ExpenseViewItem {
   category: ExpenseCategory
   status: 'pending' | 'checked'
   unnecessary: boolean
+  /** True for cash, false for a transfer. */
+  isCash: boolean
 }
 
 type ExpenseCategoryMeta = { label: string; hint: string; icon: LucideIcon; accent: string; badge: string; stroke: string }
@@ -215,12 +226,21 @@ export default function Expenses() {
   const [restoringListId, setRestoringListId] = useState<string | null>(null)
   const [customCategoryName, setCustomCategoryName] = useState('')
   const [dateFilter, setDateFilter] = useState<TransactionDateFilterValue>('cycle')
+  const [receiptItems, setReceiptItems] = useState<ReceiptOCRLineItem[]>([])
+  const [receiptDate, setReceiptDate] = useState<string | undefined>(undefined)
+  const [receiptReviewOpen, setReceiptReviewOpen] = useState(false)
+  const [receiptScanOpen, setReceiptScanOpen] = useState(false)
+  // Bumped per scan so the review dialog remounts with fresh rows.
+  const [receiptScanId, setReceiptScanId] = useState(0)
   const categoryWasChanged = useRef(false)
   const [form, setForm] = useState<ExpenseFormState>({
     amount: '',
     itemName: '',
     category: 'food',
     date: getTodayDateKey(),
+    place: '',
+    attachments: [],
+    isCash: true,
   })
 
   function resetForm() {
@@ -229,6 +249,9 @@ export default function Expenses() {
       itemName: '',
       category: 'food',
       date: getTodayDateKey(),
+      place: '',
+      attachments: [],
+      isCash: true,
     })
     setEditId(null)
     setFormError(null)
@@ -247,6 +270,9 @@ export default function Expenses() {
         itemName: parsed.itemName,
         category: parsed.category,
         date: entry.date,
+        place: entry.place ?? '',
+        attachments: entry.attachments ?? [],
+        isCash: isCashPayment(entry),
       })
     } else {
       resetForm()
@@ -256,6 +282,11 @@ export default function Expenses() {
 
   function applyReceiptDraft(draft: ReceiptOCRParsedDraft) {
     setFormError(null)
+    // The scanner lives in its own dialog now, so hand the detected totals to
+    // the product form and show it; otherwise the fields would fill in behind
+    // a closed dialog and nothing would appear to happen.
+    setReceiptScanOpen(false)
+    setOpen(true)
     setForm((current) => ({
       ...current,
       amount: draft.amount !== undefined ? String(draft.amount) : current.amount,
@@ -267,36 +298,40 @@ export default function Expenses() {
     }))
   }
 
-  async function handleAddReceiptItems(items: ReceiptOCRLineItem[], date?: string) {
-    if (items.length === 0 || isSaving) return
-    const total = items.reduce((sum, item) => sum + moneyInput.toUsd(item.price), 0)
+  // The scan opens a review step: prices, categories and currency can all be
+  // corrected before anything is written.
+  function handleAddReceiptItems(items: ReceiptOCRLineItem[], date?: string) {
+    setReceiptItems(items)
+    setReceiptDate(date)
+    setReceiptScanId((current) => current + 1)
+    // Hand over to the review step instead of stacking both dialogs.
+    setReceiptScanOpen(false)
+    setReceiptReviewOpen(true)
+    return Promise.resolve()
+  }
+
+  async function handleConfirmReceiptItems(reviewed: ReceiptReviewResult[]) {
+    const total = reviewed.reduce((sum, item) => sum + item.amount, 0)
     if (total > availableToPlan) {
       toast.error(`Los productos suman ${formatMoney(total)} y solo tienes ${formatMoney(availableToPlan)} disponibles para planificar.`)
-      return
+      throw new Error('over-budget')
     }
     if (plannedTotal + total > overview.budgetExpenses) {
       toast.error(`No puedes agregarlos porque la lista subiria a ${formatMoney(plannedTotal + total)} y tu limite es ${formatMoney(overview.budgetExpenses)}.`)
-      return
+      throw new Error('over-budget')
     }
-    setIsSaving(true)
-    try {
-      const targetDate = date ?? getTodayDateKey()
-      for (const item of items) {
-        const rule = findCategorizationRule(item.name, userRules)
-        const category = rule && rule.transactionType === 'expense'
-          ? (rule.category as ExpenseCategory)
-          : (item.category as ExpenseCategory | undefined) ?? 'essentials'
-        await addTransaction({
-          amount: moneyInput.toUsd(item.price),
-          type: 'expense',
-          description: buildExpenseDescription(category, item.name.trim(), 'pending'),
-          date: targetDate,
-        })
-      }
-      toast.success(`Se agregaron ${items.length} producto${items.length === 1 ? '' : 's'} del recibo.`)
-    } finally {
-      setIsSaving(false)
+
+    const targetDate = receiptDate ?? getTodayDateKey()
+    for (const item of reviewed) {
+      await addTransaction({
+        amount: item.amount,
+        type: 'expense',
+        // Bought items arrive already marked as checked.
+        description: buildExpenseDescription(item.category as ExpenseCategory, item.name, 'checked'),
+        date: targetDate,
+      })
     }
+    toast.success(`Se agregaron ${reviewed.length} producto${reviewed.length === 1 ? '' : 's'} del recibo.`)
   }
 
   async function handleSave() {
@@ -325,11 +360,18 @@ export default function Expenses() {
       ? expenseItems.find((item) => item.id === editId)?.unnecessary ?? false
       : false
 
+    const place = sanitizePlace(form.place)
+    const attachments = sanitizeAttachments(form.attachments)
+
     const data = {
       amount: nextAmount,
       type: 'expense' as const,
       description: buildExpenseDescription(form.category, form.itemName, currentStatus, currentUnnecessary),
       date: form.date || new Date().toISOString().slice(0, 10),
+      // Optional extras; omitted entirely when empty.
+      ...(place ? { place } : {}),
+      ...(attachments.length > 0 ? { attachments } : {}),
+      isCash: form.isCash,
     }
 
     setIsSaving(true)
@@ -370,6 +412,7 @@ export default function Expenses() {
         category: parsed.category,
         status: parsed.status,
         unnecessary: parsed.unnecessary,
+        isCash: isCashPayment(transaction),
       }
     })
   const historySuggestions = useMemo(
@@ -542,6 +585,13 @@ export default function Expenses() {
         </div>
         <div className="flex flex-col gap-3 sm:flex-row lg:w-auto">
           <ExportExcelButton loading={isExporting} onClick={handleExport} className="w-full sm:w-auto" />
+          <Button
+            variant="secondary"
+            onClick={() => setReceiptScanOpen(true)}
+            className="w-full sm:w-auto"
+          >
+            <ScanLine className="size-4" /> Agregar por recibo
+          </Button>
           <Button onClick={() => handleOpen()} className="w-full bg-primary-container text-white shadow-vault hover:bg-primary-container/80 sm:w-auto">
             <Plus className="size-4" /> Agregar producto
           </Button>
@@ -698,7 +748,21 @@ export default function Expenses() {
                                     <p className={`text-sm font-medium ${isChecked ? 'text-muted-gray line-through' : 'text-on-surface'}`}>
                                       {item.itemName}
                                     </p>
-                                    <p className="mt-1 text-xs text-muted-gray">{item.date}</p>
+                                    <div className="mt-1 flex flex-wrap items-center gap-2">
+                                      <p className="text-xs text-muted-gray">{item.date}</p>
+                                      <span
+                                        className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-medium ${
+                                          item.isCash
+                                            ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-300'
+                                            : 'border-sky-500/30 bg-sky-500/10 text-sky-300'
+                                        }`}
+                                      >
+                                        {item.isCash
+                                          ? <Banknote className="size-3.5" aria-hidden="true" />
+                                          : <ArrowLeftRight className="size-3.5" aria-hidden="true" />}
+                                        {item.isCash ? 'Efectivo' : 'Transferencia'}
+                                      </span>
+                                    </div>
                                   </div>
                                   <span className={`text-sm font-semibold ${isChecked ? 'text-muted-gray' : 'text-error'} sm:text-right`}>
                                     {formatMoney(item.amount)}
@@ -830,6 +894,9 @@ export default function Expenses() {
                     itemName: suggestion.itemName,
                     category: suggestion.category as ExpenseCategory,
                     date: getTodayDateKey(),
+                    place: '',
+                    attachments: [],
+                    isCash: true,
                   })
                 }}
               />
@@ -842,7 +909,42 @@ export default function Expenses() {
               description="Ubica el día en que este producto entra en tu lista o se compra."
             />
 
-            <ReceiptOcrPanel transactionType="expense" userRules={userRules} onApply={applyReceiptDraft} onAddItems={handleAddReceiptItems} />
+            <div className="space-y-2">
+              <Label className="text-medium-gray">Forma de pago</Label>
+              <div className="flex items-center justify-between rounded-xl border border-graphite bg-abyss px-3 py-2.5">
+                <span className={`inline-flex items-center gap-2 text-sm ${form.isCash ? 'text-emerald-300' : 'text-muted-gray'}`}>
+                  <Banknote className="size-4" aria-hidden="true" />
+                  Efectivo
+                </span>
+                <Switch
+                  // Checked means transfer, so cash stays the default.
+                  checked={!form.isCash}
+                  onCheckedChange={(checked) => setForm((current) => ({ ...current, isCash: !checked }))}
+                  aria-label={form.isCash ? 'Pagado en efectivo' : 'Pagado por transferencia'}
+                />
+                <span className={`inline-flex items-center gap-2 text-sm ${form.isCash ? 'text-muted-gray' : 'text-sky-300'}`}>
+                  <ArrowLeftRight className="size-4" aria-hidden="true" />
+                  Transferencia
+                </span>
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <Label className="text-medium-gray">Lugar (opcional)</Label>
+              <Input
+                value={form.place}
+                maxLength={MAX_PLACE_LENGTH}
+                placeholder="Supermercado, farmacia, tienda..."
+                onChange={(event) => setForm((current) => ({ ...current, place: event.target.value }))}
+                className="bg-abyss border-graphite text-on-surface"
+              />
+            </div>
+
+            <PurchasePhotosField
+              value={form.attachments}
+              onChange={(attachments) => setForm((current) => ({ ...current, attachments }))}
+            />
+
 
             <Card className="border-graphite bg-abyss p-4 shadow-vault-sm">
               <p className="text-xs uppercase tracking-[0.22em] text-medium-gray">Vista previa</p>
@@ -934,6 +1036,41 @@ export default function Expenses() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <Dialog open={receiptScanOpen} onOpenChange={setReceiptScanOpen}>
+        <DialogContent className="border-graphite bg-surface sm:max-w-2xl">
+          <DialogHeader>
+            <DialogTitle className="text-on-surface">Agregar por recibo</DialogTitle>
+            <DialogDescription>
+              Sube o toma una foto del recibo. Después podrás revisar precios y categorías antes de guardar.
+            </DialogDescription>
+          </DialogHeader>
+
+          <ReceiptOcrPanel
+            transactionType="expense"
+            userRules={userRules}
+            onApply={applyReceiptDraft}
+            onAddItems={handleAddReceiptItems}
+          />
+        </DialogContent>
+      </Dialog>
+
+      {receiptReviewOpen ? (
+      <ReceiptItemsReviewDialog
+        key={receiptScanId}
+        open={receiptReviewOpen}
+        onOpenChange={setReceiptReviewOpen}
+        items={receiptItems}
+        categories={expenseCategories.map((key) => ({ value: key, label: getCategoryMeta(key).label }))}
+        defaultCategory="essentials"
+        suggestCategory={(name) => {
+          // Reuse what the app already learned from previous receipts.
+          const rule = findCategorizationRule(name, userRules)
+          return rule && rule.transactionType === 'expense' ? rule.category : undefined
+        }}
+        onConfirm={handleConfirmReceiptItems}
+      />
+      ) : null}
     </div>
   )
 }

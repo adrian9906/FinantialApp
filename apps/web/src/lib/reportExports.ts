@@ -1,5 +1,7 @@
 import {
   getMonthlyOverview,
+  getFinancialPeriodStart,
+  isInFinancialPeriod,
   getWishlistExternalContribution,
   getWishlistReservedAmount,
   isWishlistPurchased,
@@ -17,6 +19,7 @@ import { parseExpenseDescription } from '@/lib/expense-utils'
 import { downloadExcelWorkbook, type ExcelSheetDefinition } from '@/lib/excel'
 import {
   buildMonthComparison,
+  buildSnapshotTransactions,
   buildMonthlyRankings,
   buildMonthlySummaries,
   getMonthKey,
@@ -176,15 +179,27 @@ export async function exportMonthlyReport(params: {
 }) {
   const { salaries, transactions, debts, wishlist, events, monthlyPlanningHistory, formula } = params
   const currentMonthKey = getMonthKey(new Date())
+  const currentPeriodEnd = new Date().toISOString().slice(0, 10)
   const previousMonthKey = getPreviousMonthKey(currentMonthKey)
+  const currentPeriodStart = getFinancialPeriodStart(monthlyPlanningHistory)
+  const closedCycles = [...monthlyPlanningHistory]
+    .filter((entry) => Number.isFinite(Date.parse(entry.createdAt)) && Date.parse(entry.createdAt) <= Date.now())
+    .sort((left, right) => Date.parse(right.createdAt) - Date.parse(left.createdAt))
+  const latestClosedCycle = closedCycles[0]
+  const previousPeriodStart = closedCycles[1]?.createdAt ?? `${latestClosedCycle?.month ?? previousMonthKey}-01T00:00:00.000Z`
+  const currentTransactions = transactions.filter((transaction) => isInFinancialPeriod(transaction, currentPeriodStart, true) && transaction.date.slice(0, 10) <= currentPeriodEnd)
+  const previousTransactions = buildSnapshotTransactions(latestClosedCycle)
 
-  const currentSalaries = salaries.filter((salary) => salary.month === currentMonthKey)
-  const previousSalaries = salaries.filter((salary) => salary.month === previousMonthKey)
-  const currentTransactions = transactions.filter((transaction) => transaction.date.slice(0, 7) === currentMonthKey)
-  const previousTransactions = transactions.filter((transaction) => transaction.date.slice(0, 7) === previousMonthKey)
-
-  const currentOverview = getMonthlyOverview(currentSalaries, currentTransactions, [], formula)
-  const previousOverview = getMonthlyOverview(previousSalaries, previousTransactions, [], formula)
+  const currentOverview = getMonthlyOverview(salaries, transactions, debts, formula, {
+    periodStart: currentPeriodStart,
+    periodEnd: currentPeriodEnd,
+    salaryMonth: currentMonthKey,
+    strictSameDayBoundary: true,
+  })
+  const previousOverview = getMonthlyOverview(salaries, previousTransactions, [], formula, {
+    periodStart: previousPeriodStart,
+    salaryMonth: latestClosedCycle?.month ?? previousMonthKey,
+  })
   const monthlySummaries = buildMonthlySummaries({
     salaries,
     transactions,
@@ -192,25 +207,17 @@ export async function exportMonthlyReport(params: {
     monthlyPlanningHistory,
     formula,
   })
-  const currentSummary = monthlySummaries.find((entry) => entry.month === currentMonthKey)
-  const previousSummary = monthlySummaries.find((entry) => entry.month === previousMonthKey)
-  const filteredSummaries = monthlySummaries.filter(
-    (entry) => entry.month === currentMonthKey || entry.month === previousMonthKey,
-  )
+  const currentSummaryBase = monthlySummaries.find((entry) => entry.month === currentMonthKey)
+  const previousSummaryBase = monthlySummaries.find((entry) => entry.month === (latestClosedCycle?.month ?? previousMonthKey))
+  const currentSummary = currentSummaryBase ? { ...currentSummaryBase, salary: currentOverview.totalSalary, expenses: currentOverview.totalExpenses, wants: currentOverview.totalWants, savings: currentOverview.totalSavings, debtPaid: currentOverview.totalDebtPaid, freeBalance: Math.max(0, currentOverview.totalSalary - currentOverview.totalExpenses - currentOverview.totalWants - currentOverview.totalSavings) } : undefined
+  const previousSummary = previousSummaryBase ? { ...previousSummaryBase, salary: previousOverview.totalSalary, expenses: previousOverview.totalExpenses, wants: previousOverview.totalWants, savings: previousOverview.totalSavings, freeBalance: Math.max(0, previousOverview.totalSalary - previousOverview.totalExpenses - previousOverview.totalWants - previousOverview.totalSavings) } : undefined
+  const filteredSummaries = [previousSummary, currentSummary].filter((entry): entry is NonNullable<typeof entry> => Boolean(entry))
   const comparisonRows = buildMonthComparison(currentSummary, previousSummary)
-  const currentRankings = buildMonthlyRankings(transactions, currentMonthKey)
-  const previousRankings = buildMonthlyRankings(transactions, previousMonthKey)
-  const filteredTransactions = transactions.filter((transaction) => {
-    const monthKey = transaction.date.slice(0, 7)
-    return monthKey === currentMonthKey || monthKey === previousMonthKey
-  })
-  const filteredEvents = events.filter((event) => {
-    const monthKey = event.date.slice(0, 7)
-    return monthKey === currentMonthKey || monthKey === previousMonthKey
-  })
-  const filteredHistory = monthlyPlanningHistory.filter(
-    (entry) => entry.month === currentMonthKey || entry.month === previousMonthKey,
-  )
+  const currentRankings = buildMonthlyRankings(transactions, currentMonthKey, currentPeriodStart, currentPeriodEnd)
+  const previousRankings = buildMonthlyRankings(previousTransactions, latestClosedCycle?.month ?? previousMonthKey)
+  const filteredTransactions = [...previousTransactions, ...currentTransactions]
+  const filteredEvents = events.filter((event) => event.date >= previousPeriodStart.slice(0, 10))
+  const filteredHistory = closedCycles.slice(0, 2)
   const reservedForPurchasedWishlist = wishlist.reduce(
     (sum, item) => sum + (isWishlistPurchased(item) ? getWishlistReservedAmount(item) : 0),
     0,
@@ -219,7 +226,7 @@ export async function exportMonthlyReport(params: {
   const sheets: ExcelSheetDefinition[] = [
     {
       name: 'Resumen',
-      columns: ['Indicador', 'Actual', 'Mes anterior', 'Objetivo'],
+      columns: ['Indicador', 'Ciclo actual', 'Ciclo anterior', 'Objetivo'],
       rows: [
         ['Ingresos', toCurrency(currentOverview.grossSalary), toCurrency(previousOverview.grossSalary), ''],
         ['Gastos', toCurrency(currentOverview.totalExpenses), toCurrency(previousOverview.totalExpenses), toCurrency(currentOverview.budgetExpenses)],
@@ -230,8 +237,8 @@ export async function exportMonthlyReport(params: {
       ],
     },
     {
-      name: 'Comparador mensual',
-      columns: ['Indicador', 'Mes actual', 'Mes anterior', 'Variacion', 'Variacion %', 'Meta'],
+      name: 'Comparador por ciclo',
+      columns: ['Indicador', 'Ciclo actual', 'Ciclo anterior', 'Variacion', 'Variacion %', 'Meta'],
       rows: comparisonRows.map((row) => [
         row.label,
         toCurrency(row.current),
@@ -243,7 +250,7 @@ export async function exportMonthlyReport(params: {
     },
     {
       name: 'Tendencias',
-      columns: ['Mes', 'Ingresos', 'Gastos', 'Gustos', 'Ahorros', 'Deuda pagada', 'Deuda pendiente', 'Saldo libre'],
+      columns: ['Ciclo', 'Ingresos', 'Gastos', 'Gustos', 'Ahorros', 'Deuda pagada', 'Deuda pendiente', 'Saldo libre'],
       rows: filteredSummaries.map((summary) => [
         summary.label,
         toCurrency(summary.salary),
@@ -293,5 +300,5 @@ export async function exportMonthlyReport(params: {
     },
   ]
 
-  await downloadExcelWorkbook(`reporte-mensual-${currentMonthKey}.xlsx`, sheets)
+  await downloadExcelWorkbook(`reporte-ciclo-${currentPeriodStart.slice(0, 10)}.xlsx`, sheets)
 }

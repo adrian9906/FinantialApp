@@ -1,7 +1,6 @@
 import { useState } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import {
-  dashboardWidgetCatalog,
   defaultCategorizationRules,
   type CategorizationRule,
   type CategorizationTarget,
@@ -15,7 +14,6 @@ import { Input } from '@/components/ui/input'
 import { AppIcon } from '@/components/icons/AppIcon'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { Checkbox } from '@/components/ui/checkbox'
 import { useAuthStore } from '@/store/authStore'
 import { usePreferencesStore } from '@/store/preferencesStore'
 
@@ -45,14 +43,10 @@ function ruleTargetLabel(rule: CategorizationRule) {
 export function AutomationSettings() {
   const userId = useAuthStore((state) => state.user?.id)
   const profileId = userId ?? 'guest'
-  const storedWidgets = usePreferencesStore((state) => state.dashboardWidgetsByProfile[profileId])
   const userRules = usePreferencesStore(useShallow((state) => state.categoryRulesByProfile[profileId] ?? []))
-  const toggleWidget = usePreferencesStore((state) => state.toggleDashboardWidget)
-  const moveWidget = usePreferencesStore((state) => state.moveDashboardWidget)
   const saveRule = usePreferencesStore((state) => state.saveCategoryRule)
   const removeRule = usePreferencesStore((state) => state.removeCategoryRule)
   const resetAutomation = usePreferencesStore((state) => state.resetAutomationPreferences)
-  const activeWidgets = storedWidgets ?? ['decision-today', 'safe-available', 'daily-margin', 'financial-score', 'expenses-by-category', 'upcoming-payments', 'debts']
   const [pattern, setPattern] = useState('')
   const [transactionType, setTransactionType] = useState<'expense' | 'want'>('expense')
   const [category, setCategory] = useState('services')
@@ -81,41 +75,7 @@ export function AutomationSettings() {
   }
 
   return (
-    <section className="grid gap-4 2xl:grid-cols-2">
-      <Card className="border-graphite bg-surface p-6 shadow-vault">
-        <div className="flex items-start justify-between gap-4">
-          <div>
-            <p className="text-xs uppercase tracking-[0.22em] text-medium-gray">Tu tablero de decisiones</p>
-            <h2 className="mt-2 text-2xl font-semibold text-on-surface">Panel personalizable</h2>
-            <p className="mt-2 max-w-xl text-sm leading-6 text-muted-gray">Activa solo lo que necesitas y ordena los bloques con controles simples.</p>
-          </div>
-          <div className="flex size-11 items-center justify-center rounded-2xl bg-primary/10 text-primary"><AppIcon name="dashboard" className="size-5" /></div>
-        </div>
-
-        <div className="mt-6 space-y-2">
-          {dashboardWidgetCatalog.map((widget) => {
-            const enabled = activeWidgets.includes(widget.id)
-            const position = activeWidgets.indexOf(widget.id)
-            return (
-              <div key={widget.id} className={`flex items-center gap-3 rounded-2xl border p-3 ${enabled ? 'border-primary/25 bg-primary/5' : 'border-graphite bg-abyss/70'}`}>
-                <AppIcon name="grip" className="size-4 shrink-0 text-medium-gray" />
-                <div className="min-w-0 flex-1">
-                  <p className="text-sm font-semibold text-on-surface">{widget.label}</p>
-                  <p className="truncate text-xs text-muted-gray">{widget.description}</p>
-                </div>
-                {enabled ? (
-                  <div className="flex items-center gap-1">
-                    <Button variant="ghost" size="icon" aria-label={`Subir ${widget.label}`} disabled={position === 0} onClick={() => moveWidget(profileId, widget.id, -1)} className="size-8"><AppIcon name="arrow-up" className="size-3.5" /></Button>
-                    <Button variant="ghost" size="icon" aria-label={`Bajar ${widget.label}`} disabled={position === activeWidgets.length - 1} onClick={() => moveWidget(profileId, widget.id, 1)} className="size-8"><AppIcon name="arrow-down" className="size-3.5" /></Button>
-                  </div>
-                ) : null}
-                <Checkbox checked={enabled} onCheckedChange={() => toggleWidget(profileId, widget.id)} aria-label={`${enabled ? 'Ocultar' : 'Mostrar'} ${widget.label}`} />
-              </div>
-            )
-          })}
-        </div>
-      </Card>
-
+    <section>
       <Card className="border-graphite bg-surface p-6 shadow-vault">
         <div className="flex items-start justify-between gap-4">
           <div>
@@ -143,7 +103,7 @@ export function AutomationSettings() {
           ))}
         </div>
 
-        <Button variant="ghost" size="sm" onClick={() => { resetAutomation(profileId); toast.success('Panel y reglas aprendidas restaurados.') }} className="mt-4 text-muted-gray"><AppIcon name="rotate" className="size-4" /> Restaurar automatizaciones</Button>
+        <Button variant="ghost" size="sm" onClick={() => { resetAutomation(profileId); toast.success('Reglas aprendidas restauradas.') }} className="mt-4 text-muted-gray"><AppIcon name="rotate" className="size-4" /> Restaurar reglas aprendidas</Button>
       </Card>
     </section>
   )

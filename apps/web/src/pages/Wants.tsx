@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useShallow } from 'zustand/react/shallow'
-import { buildWantTransferSavingDescription, createLearnedCategorizationRule, findCategorizationRule, isInFinancialPeriod, type ReceiptOCRLineItem, type ReceiptOCRParsedDraft } from '@plata/shared'
-import { Clapperboard, Gamepad2, Heart, LockKeyhole, Pencil, Plus, ShoppingBag, Sparkles, Ticket, Trash2, type LucideIcon } from 'lucide-react'
+import { buildWantTransferSavingDescription, createLearnedCategorizationRule, findCategorizationRule, isCashPayment, isInFinancialPeriod, type ReceiptOCRLineItem, type ReceiptOCRParsedDraft } from '@plata/shared'
+import { ArrowLeftRight, Banknote, Clapperboard, Gamepad2, Heart, LockKeyhole, Pencil, Plus, ShoppingBag, Sparkles, Ticket, Trash2, type LucideIcon } from 'lucide-react'
 import { useFinanceStore } from '@/store/financeStore'
 import { buildWantDescription, createCustomWantCategory, getPlannedWantTotal, getWantCategoryLabel, parseWantDescription, type WantBuiltInCategory, type WantCategory } from '@/lib/want-utils'
 import { useMonthlyOverview } from '@/lib/useMonthlyOverview'
@@ -12,6 +12,7 @@ import { Card } from '@/components/ui/card'
 import { ExportExcelButton } from '@/components/reports/ExportExcelButton'
 import { Checkbox } from '@/components/ui/checkbox'
 import { DatePickerField } from '@/components/ui/date-picker-field'
+import { Switch } from '@/components/ui/switch'
 import {
   Dialog,
   DialogContent,
@@ -40,6 +41,8 @@ interface WantFormState {
   itemName: string
   category: WantCategory
   date: string
+  /** True for cash, false for a transfer. Defaults to cash. */
+  isCash: boolean
 }
 
 interface WantViewItem {
@@ -49,6 +52,8 @@ interface WantViewItem {
   itemName: string
   category: WantCategory
   status: 'pending' | 'checked'
+  /** True for cash, false for a transfer. */
+  isCash: boolean
 }
 
 type WantCategoryMeta = { label: string; hint: string; icon: LucideIcon; accent: string; badge: string; stroke: string }
@@ -212,6 +217,7 @@ export default function Wants() {
   const [form, setForm] = useState<WantFormState>({
     amount: '',
     itemName: '',
+    isCash: true,
     category: 'outings',
     date: getTodayDateKey(),
   })
@@ -233,6 +239,7 @@ export default function Wants() {
       itemName: '',
       category: 'outings',
       date: getTodayDateKey(),
+      isCash: true,
     })
     setEditId(null)
     setFormError(null)
@@ -251,6 +258,7 @@ export default function Wants() {
         itemName: parsed.itemName,
         category: parsed.category,
         date: entry.date,
+        isCash: isCashPayment(entry),
       })
     } else {
       resetForm()
@@ -272,6 +280,7 @@ export default function Wants() {
           itemName: parsed.itemName,
           category: parsed.category,
           status: parsed.status,
+          isCash: isCashPayment(transaction),
         }
       })
   }, [transactions])
@@ -426,6 +435,7 @@ setCustomCategoryName('')
       type: 'want' as const,
       description: buildWantDescription(form.category, form.itemName, currentStatus),
       date: form.date || new Date().toISOString().slice(0, 10),
+      isCash: form.isCash,
     }
 
     setIsSaving(true)
@@ -715,7 +725,21 @@ setCustomCategoryName('')
                                     <p className={`text-sm font-medium ${isChecked ? 'text-muted-gray line-through' : 'text-on-surface'}`}>
                                       {item.itemName}
                                     </p>
-                                    <p className="mt-1 text-xs text-muted-gray">{item.date}</p>
+                                    <div className="mt-1 flex flex-wrap items-center gap-2">
+                                      <p className="text-xs text-muted-gray">{item.date}</p>
+                                      <span
+                                        className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-medium ${
+                                          item.isCash
+                                            ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-300'
+                                            : 'border-sky-500/30 bg-sky-500/10 text-sky-300'
+                                        }`}
+                                      >
+                                        {item.isCash
+                                          ? <Banknote className="size-3.5" aria-hidden="true" />
+                                          : <ArrowLeftRight className="size-3.5" aria-hidden="true" />}
+                                        {item.isCash ? 'Efectivo' : 'Transferencia'}
+                                      </span>
+                                    </div>
                                   </div>
                                   <span className={`text-sm font-semibold ${isChecked ? 'text-muted-gray' : 'text-secondary'} sm:text-right`}>
                                     {formatMoney(item.amount)}
@@ -836,6 +860,7 @@ setCustomCategoryName('')
                   setForm({
                     amount: moneyInput.fromUsd(suggestion.amount),
                     itemName: suggestion.itemName,
+                    isCash: true,
                     category: suggestion.category as WantCategory,
                     date: getTodayDateKey(),
                   })
@@ -849,6 +874,26 @@ setCustomCategoryName('')
               onChange={(value) => { setFormError(null); setForm((current) => ({ ...current, date: value })) }}
               description="Marca el día en que planeas comprar o disfrutar este gusto."
             />
+
+            <div className="space-y-2">
+              <Label className="text-medium-gray">Forma de pago</Label>
+              <div className="flex items-center justify-between rounded-xl border border-graphite bg-abyss px-3 py-2.5">
+                <span className={`inline-flex items-center gap-2 text-sm ${form.isCash ? 'text-emerald-300' : 'text-muted-gray'}`}>
+                  <Banknote className="size-4" aria-hidden="true" />
+                  Efectivo
+                </span>
+                <Switch
+                  // Checked means transfer, so cash stays the default.
+                  checked={!form.isCash}
+                  onCheckedChange={(checked) => setForm((current) => ({ ...current, isCash: !checked }))}
+                  aria-label={form.isCash ? 'Pagado en efectivo' : 'Pagado por transferencia'}
+                />
+                <span className={`inline-flex items-center gap-2 text-sm ${form.isCash ? 'text-muted-gray' : 'text-sky-300'}`}>
+                  <ArrowLeftRight className="size-4" aria-hidden="true" />
+                  Transferencia
+                </span>
+              </div>
+            </div>
 
             <ReceiptOcrPanel transactionType="want" userRules={userRules} onApply={applyReceiptDraft} onAddItems={handleAddReceiptItems} />
 

@@ -1,4 +1,5 @@
 export * from './types.js'
+export * from './attachments.js'
 export * from './sync.js'
 export * from './contracts.js'
 export * from './preferences.js'

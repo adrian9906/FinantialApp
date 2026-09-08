@@ -1,5 +1,7 @@
 import {
+  buildExpenseDescription,
   getMonthlyOverview,
+  isInFinancialPeriod,
   type AppEvent,
   type AllocationFormula,
   type Debt,
@@ -60,6 +62,28 @@ export type FinancialTimelineEntry = {
   amount: number
   signedAmount: number
   balanceAfter: number | null
+}
+
+export function buildSnapshotTransactions(snapshot?: MonthlyPlanningHistory): Transaction[] {
+  if (!snapshot) return []
+  return [
+    ...snapshot.expenses.map((entry, index): Transaction => ({
+      id: `${snapshot.id}:expense:${index}`,
+      type: 'expense',
+      amount: entry.amount,
+      date: entry.date,
+      createdAt: snapshot.createdAt,
+      description: buildExpenseDescription(entry.category as Parameters<typeof buildExpenseDescription>[0], entry.itemName, entry.status, entry.unnecessary),
+    })),
+    ...snapshot.wants.map((entry, index): Transaction => ({
+      id: `${snapshot.id}:want:${index}`,
+      type: 'want',
+      amount: entry.amount,
+      date: entry.date,
+      createdAt: snapshot.createdAt,
+      description: `${entry.category}::${entry.status}::${entry.itemName}`,
+    })),
+  ]
 }
 
 function getMonthKeyFromDate(value: Date | string) {
@@ -271,20 +295,28 @@ export function buildMonthlySummaries(params: {
 
 export function buildFinancialTimeline(params: {
   monthKey: string
+  periodStart?: string
+  periodEnd?: string
   salaries: Salary[]
   transactions: Transaction[]
   debts: Debt[]
   events: AppEvent[]
 }) {
-  const { monthKey, salaries, transactions, debts, events } = params
+  const { monthKey, periodStart, periodEnd, salaries, transactions, debts, events } = params
   const salaryMap = getMonthSalaryMap(salaries)
   const effectiveSalary = getEffectiveSalaryForMonth(monthKey, salaryMap)
-  const startOfMonth = getMonthStart(monthKey).toISOString()
-  const monthTransactions = transactions.filter((transaction) => transaction.date.slice(0, 7) === monthKey)
-  const monthEvents = events.filter((event) => event.date.slice(0, 7) === monthKey)
+  const startOfMonth = periodStart ?? getMonthStart(monthKey).toISOString()
+  const monthTransactions = transactions.filter((transaction) => periodStart
+    ? isInFinancialPeriod(transaction, periodStart, true) && (!periodEnd || transaction.date.slice(0, 10) <= periodEnd)
+    : transaction.date.slice(0, 7) === monthKey)
+  const monthEvents = events.filter((event) => periodStart
+    ? event.date >= periodStart.slice(0, 10) && (!periodEnd || event.date.slice(0, 10) <= periodEnd)
+    : event.date.slice(0, 7) === monthKey)
   const monthDebtPayments = debts.flatMap((debt) =>
     (debt.payments ?? [])
-      .filter((payment) => payment.date.slice(0, 7) === monthKey)
+      .filter((payment) => periodStart
+        ? isInFinancialPeriod(payment, periodStart, true) && (!periodEnd || payment.date.slice(0, 10) <= periodEnd)
+        : payment.date.slice(0, 7) === monthKey)
       .map((payment, index) => ({
         id: `${debt.id}:payment:${payment.date}:${index}`,
         date: payment.date,
@@ -416,9 +448,13 @@ export function buildMonthComparison(current: ReportMonthSummary | undefined, pr
   })
 }
 
-export function buildMonthlyRankings(transactions: Transaction[], monthKey: string) {
+export function buildMonthlyRankings(transactions: Transaction[], monthKey: string, periodStart?: string, periodEnd?: string) {
   const monthTransactions = transactions.filter(
-    (transaction) => transaction.date.slice(0, 7) === monthKey && (transaction.type === 'expense' || transaction.type === 'want'),
+    (transaction) => (periodStart
+      ? isInFinancialPeriod(transaction, periodStart, true)
+      : transaction.date.slice(0, 7) === monthKey)
+      && (!periodEnd || transaction.date.slice(0, 10) <= periodEnd)
+      && (transaction.type === 'expense' || transaction.type === 'want'),
   )
 
   const categories = new Map<string, RankedCategory>()

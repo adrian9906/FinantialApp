@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { syncCollections, type SyncOperation } from '@plata/shared'
+import { isValidImageDataUrl, MAX_ATTACHMENTS_PER_TRANSACTION, MAX_PLACE_LENGTH, syncCollections, type SyncOperation } from '@plata/shared'
 
 const id = z.string().min(1).max(200)
 const text = z.string().max(10000)
@@ -7,11 +7,16 @@ const amount = z.number().finite().nonnegative()
 const date = z.string().refine((value) => Number.isFinite(Date.parse(value)), 'Fecha inválida')
 const month = z.string().regex(/^\d{4}-(0[1-9]|1[0-2])$/)
 const payment = z.object({ amount, date, createdAt: date.optional() })
+// Optional, but never a free pass: the bytes must really be a raster image, so
+// a renamed script or document cannot be stored as a "photo".
+const place = z.string().max(MAX_PLACE_LENGTH)
+const attachment = z.string().refine(isValidImageDataUrl, 'Solo se permiten imágenes JPG, PNG, WEBP o GIF.')
+const attachments = z.array(attachment).max(MAX_ATTACHMENTS_PER_TRANSACTION)
 const planning = z.object({ amount, itemName: text, category: text, status: z.enum(['pending', 'checked']), date, unnecessary: z.boolean().optional() })
 const schemas = {
   salaries: z.object({ id, amount, month, sourceId: id.optional(), sourceName: text.optional(), kind: z.enum(['recurring', 'one-off']).optional() }),
   incomeSources: z.object({ id, name: text, recurring: z.boolean(), archived: z.boolean().optional() }),
-  transactions: z.object({ id, amount, type: z.enum(['expense', 'want', 'saving']), description: text.optional(), date, createdAt: date.optional() }),
+  transactions: z.object({ id, amount, type: z.enum(['expense', 'want', 'saving']), description: text.optional(), date, createdAt: date.optional(), place: place.optional(), attachments: attachments.optional(), isCash: z.boolean().optional() }),
   debts: z.object({ id, direction: z.enum(['payable', 'receivable']).optional(), counterparty: text.optional(), amount, history: text, startDate: date, endDate: date, interest: amount.optional(), paidAmount: amount, remainingAmount: amount, progress: z.number().finite(), isSettled: z.boolean(), payments: z.array(payment).max(10000).optional() }),
   wishlist: z.object({ id, name: text, price: amount, priority: z.enum(['low', 'medium', 'high']), savedAmount: amount, externalContribution: amount.optional(), isPurchased: z.boolean().optional(), purchasedAt: date.optional(), image: z.string().max(4_000_000).optional(), sourceStore: text.optional(), sourceUrl: text.optional(), sourceCurrency: text.optional() }),
   monthlyPlanningHistory: z.object({ id, month, label: text, createdAt: date, expenses: z.array(planning), wants: z.array(planning), savingTransactionIds: z.array(id).optional() }),

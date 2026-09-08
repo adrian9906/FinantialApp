@@ -3,6 +3,7 @@ import { CalendarDays, History, ListRestart } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
 import { formatMoney } from '@/lib/currency'
+import { getCanonicalPlanningHistory } from '@/lib/planningHistory'
 
 type PlanningListHistoryProps = {
   history: MonthlyPlanningHistory[]
@@ -30,9 +31,9 @@ export function PlanningListHistory({
   disabled = false,
   onReuse,
 }: PlanningListHistoryProps) {
-  const availableLists = history
+  const availableLists = getCanonicalPlanningHistory(history)
     .filter((entry) => (type === 'expense' ? entry.expenses : entry.wants).length > 0)
-    .sort((a, b) => b.month.localeCompare(a.month))
+    .sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt))
     .slice(0, 6)
 
   if (availableLists.length === 0) return null
@@ -61,7 +62,8 @@ export function PlanningListHistory({
       <div className="grid gap-3 p-4 md:grid-cols-2 xl:grid-cols-3">
         {availableLists.map((entry) => {
           const items = type === 'expense' ? entry.expenses : entry.wants
-          const total = items.reduce((sum, item) => sum + item.amount, 0)
+          const spentItems = items.filter((item) => item.status === 'checked')
+          const total = spentItems.reduce((sum, item) => sum + Math.max(0, item.amount), 0)
           const preview = items.slice(0, 3).map((item) => item.itemName).join(' · ')
           const remainingCount = Math.max(0, items.length - 3)
           const isRestoring = restoringId === entry.id
@@ -77,12 +79,13 @@ export function PlanningListHistory({
                     <CalendarDays className="size-3.5" />
                     <span className="truncate capitalize">{formatMonth(entry.month)}</span>
                   </div>
+                  <p className="mt-2 text-[10px] uppercase tracking-[0.16em] text-medium-gray">Total realmente usado</p>
                   <p className="mt-3 text-xl font-semibold text-on-surface">
                     {formatMoney(total)}
                   </p>
                 </div>
                 <span className="rounded-full bg-surface-container-high px-2.5 py-1 text-xs font-semibold text-on-surface">
-                  {items.length} {items.length === 1 ? 'artículo' : 'artículos'}
+                  {spentItems.length}/{items.length} gastados
                 </span>
               </div>
 

@@ -19,10 +19,11 @@ type MonthlyForecastInput = {
   totalSavings: number
   budgetSavings: number
   now?: Date
+  periodStart?: string
 }
 
 function roundMoney(value: number) {
-  return Math.round(Math.max(0, value) * 100) / 100
+  return Math.round(value * 100) / 100
 }
 
 function buildBucketForecast(current: number, planned: number, budget: number, elapsedDays: number, daysInMonth: number): BudgetForecast {
@@ -43,8 +44,14 @@ function buildBucketForecast(current: number, planned: number, budget: number, e
 
 export function buildMonthlyForecast(input: MonthlyForecastInput) {
   const now = input.now ?? new Date()
-  const daysInMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate()
-  const elapsedDays = Math.max(1, Math.min(now.getDate(), daysInMonth))
+  const start = input.periodStart ? new Date(input.periodStart) : new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1))
+  const nextMonth = new Date(Date.UTC(start.getUTCFullYear(), start.getUTCMonth() + 1, 1))
+  const lastDay = new Date(Date.UTC(nextMonth.getUTCFullYear(), nextMonth.getUTCMonth() + 1, 0)).getUTCDate()
+  const cycleEnd = new Date(Date.UTC(nextMonth.getUTCFullYear(), nextMonth.getUTCMonth(), Math.min(start.getUTCDate(), lastDay)))
+  const startDay = Date.UTC(start.getUTCFullYear(), start.getUTCMonth(), start.getUTCDate())
+  const today = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate())
+  const daysInMonth = Math.max(1, Math.round((cycleEnd.getTime() - startDay) / 86_400_000))
+  const elapsedDays = Math.max(1, Math.min(Math.floor((today - startDay) / 86_400_000) + 1, daysInMonth))
   const remainingDays = Math.max(0, daysInMonth - elapsedDays)
   const expenses = buildBucketForecast(
     input.currentExpenses,
@@ -77,5 +84,7 @@ export function buildMonthlyForecast(input: MonthlyForecastInput) {
     projectedBalance,
     safeRemaining,
     safePerDay,
+    periodStart: start.toISOString(),
+    cycleEndsAt: cycleEnd.toISOString(),
   }
 }

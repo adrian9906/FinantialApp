@@ -21,9 +21,11 @@ export function useMonthlyOverview() {
 
   return useMemo(() => {
     const periodStart = getFinancialPeriodStart(monthlyPlanningHistory)
+    const periodEnd = new Date().toISOString().slice(0, 10)
     const latestReset = monthlyPlanningHistory.find((entry) => entry.createdAt === periodStart)
     const overview = getMonthlyOverview(salaries, transactions, debts, formula, {
       periodStart,
+      periodEnd,
       strictSameDayBoundary: Boolean(latestReset),
       excludedTransactionIds: latestReset?.savingTransactionIds,
     })

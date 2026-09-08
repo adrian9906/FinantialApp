@@ -1,4 +1,4 @@
-import { getExpenseCategoryLabel, parseExpenseDescription, type ExpenseCategory, type Transaction } from '@plata/shared'
+import { getExpenseCategoryLabel, isInFinancialPeriod, parseExpenseDescription, type ExpenseCategory, type Transaction } from '@plata/shared'
 
 type RankedLeak = {
   label: string
@@ -37,10 +37,13 @@ function toCategoryLabel(category: string) {
 export function buildUnnecessarySpendingInsights(
   transactions: Transaction[],
   monthKey = new Date().toISOString().slice(0, 7),
+  periodStart = `${monthKey}-01T00:00:00.000Z`,
+  periodEnd = new Date().toISOString().slice(0, 10),
 ): UnnecessarySpendingInsights {
   const checkedExpenses = transactions.filter((transaction) => {
     if (transaction.type !== 'expense') return false
-    if (!transaction.date.startsWith(monthKey)) return false
+    if (!isInFinancialPeriod(transaction, periodStart, true)) return false
+    if (transaction.date.slice(0, 10) > periodEnd.slice(0, 10)) return false
     return parseExpenseDescription(transaction.description).status === 'checked'
   })
 
@@ -107,7 +110,7 @@ export function buildUnnecessarySpendingAlerts(insights: UnnecessarySpendingInsi
     return [{
       id: 'unnecessary-clear',
       tone: 'success',
-      title: 'No has marcado fugas innecesarias este mes',
+      title: 'No has marcado fugas innecesarias en este ciclo',
       description: 'Sigue así o empieza a marcar los gastos evitables para medir cuánto dinero podrías rescatar.',
     }]
   }
@@ -119,14 +122,14 @@ export function buildUnnecessarySpendingAlerts(insights: UnnecessarySpendingInsi
       id: 'unnecessary-critical-share',
       tone: 'critical',
       title: 'Una parte fuerte de tus gastos ya se fue en cosas evitables',
-      description: `${Math.round(insights.unnecessaryShare * 100)}% de tus gastos hechos este mes salió de compras que marcaste como innecesarias.`,
+      description: `${Math.round(insights.unnecessaryShare * 100)}% de tus gastos hechos en este ciclo salió de compras que marcaste como innecesarias.`,
     })
   } else if (insights.unnecessaryShare >= 0.15) {
     alerts.push({
       id: 'unnecessary-warning-share',
       tone: 'warning',
       title: 'Tus fugas innecesarias ya pesan en el presupuesto',
-      description: `${Math.round(insights.unnecessaryShare * 100)}% de lo que gastaste este mes podría haberse quedado disponible o pasar a ahorro.`,
+      description: `${Math.round(insights.unnecessaryShare * 100)}% de lo que gastaste en este ciclo podría haberse quedado disponible o pasar a ahorro.`,
     })
   }
 
@@ -145,7 +148,7 @@ export function buildUnnecessarySpendingAlerts(insights: UnnecessarySpendingInsi
       id: 'unnecessary-frequency',
       tone: 'warning',
       title: 'La fuga no es solo dinero, también es repetición',
-      description: `Ya marcaste ${insights.unnecessaryCount} gasto(s) evitables este mes. Frenar la frecuencia suele liberar más dinero que recortar una sola compra.`,
+      description: `Ya marcaste ${insights.unnecessaryCount} gasto(s) evitables en este ciclo. Frenar la frecuencia suele liberar más dinero que recortar una sola compra.`,
     })
   }
 

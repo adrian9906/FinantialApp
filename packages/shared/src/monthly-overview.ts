@@ -13,6 +13,7 @@ import { getMonthKey, getSalaryForMonth, getTotalIncomeForMonth } from './salary
 
 export interface MonthlyOverviewOptions {
   periodStart?: string | null
+  periodEnd?: string
   salaryMonth?: string
   strictSameDayBoundary?: boolean
   excludedTransactionIds?: string[]
@@ -31,6 +32,18 @@ export function getFinancialPeriodStart(
   }, null)
 
   return latestReset?.createdAt ?? `${getMonthKey(now)}-01T00:00:00.000Z`
+}
+
+/** The next expected reset date, one calendar month after the last reset. */
+export function getFinancialPeriodEnd(periodStart: string) {
+  const start = new Date(periodStart)
+  const nextMonth = new Date(Date.UTC(start.getUTCFullYear(), start.getUTCMonth() + 1, 1))
+  const lastDay = new Date(Date.UTC(nextMonth.getUTCFullYear(), nextMonth.getUTCMonth() + 1, 0)).getUTCDate()
+  return new Date(Date.UTC(
+    nextMonth.getUTCFullYear(),
+    nextMonth.getUTCMonth(),
+    Math.min(start.getUTCDate(), lastDay),
+  ))
 }
 
 /**
@@ -63,6 +76,7 @@ export function getMonthlyOverview(
   options: MonthlyOverviewOptions = {},
 ) {
   const periodStart = options.periodStart ?? `${getMonthKey()}-01T00:00:00.000Z`
+  const periodEnd = options.periodEnd
   const salaryMonth = options.salaryMonth ?? getMonthKey()
   // Every income registered for the month (all jobs plus any one-off bonus).
   // Falls back to the last known recurring pay when the month has none.
@@ -72,6 +86,7 @@ export function getMonthlyOverview(
   const monthlyTransactions = transactions.filter((transaction) => (
     !excludedTransactionIds.has(transaction.id)
     && isInFinancialPeriod(transaction, periodStart, options.strictSameDayBoundary)
+    && (!periodEnd || transaction.date.slice(0, 10) <= periodEnd.slice(0, 10))
   ))
   const totalExpenses = getEffectiveExpenseTotal(monthlyTransactions)
   const totalWants = getEffectiveWantTotal(monthlyTransactions)
@@ -93,6 +108,7 @@ export function getMonthlyOverview(
   const totalDebtPaid = debts.filter((debt) => debt.direction !== 'receivable').reduce(
     (sum, debt) => sum + (debt.payments ?? [])
         .filter((payment) => isInFinancialPeriod(payment, periodStart, options.strictSameDayBoundary))
+        .filter((payment) => !periodEnd || payment.date.slice(0, 10) <= periodEnd.slice(0, 10))
         .reduce((paymentSum, payment) => paymentSum + payment.amount, 0),
     0,
   )

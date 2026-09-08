@@ -6,20 +6,26 @@ import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { ChartContainer, ChartLegend, ChartLegendContent, ChartTooltip, ChartTooltipContent, type ChartConfig } from '@/components/ui/chart'
 import { useNavigate } from 'react-router-dom'
-import { AlertTriangle, ArrowRight, Bell, Building2, Calendar, CheckCircle2, ChevronRight, Coffee, FileDown, Landmark, PiggyBank, Plus, RotateCcw, ShieldAlert, Sparkles, TrendingDown, TrendingUp, Wallet } from 'lucide-react'
+import { AlertTriangle, ArrowRight, Bell, Building2, Calendar, CheckCircle2, ChevronRight, Coffee, FileDown, Landmark, PiggyBank, Plus, ShieldAlert, Sparkles, TrendingDown, TrendingUp, Wallet } from 'lucide-react'
 import { buildFinancialScore, buildSmartAlerts } from '@/lib/financialInsights'
 import { useMonthlyOverview } from '@/lib/useMonthlyOverview'
-import { buildRecurringPlanningSuggestions, buildRepeatPlanDrafts } from '@/lib/productivity'
 import { formatFormulaLabel, usePreferencesStore } from '@/store/preferencesStore'
-import { Bar, BarChart, CartesianGrid, Pie, PieChart, XAxis, YAxis } from 'recharts'
-import { buildReceivableReminder, defaultDashboardWidgets, getFinancialPeriodStart, getPlannedExpenseTotal, getPlannedWantTotal, isReceivable } from '@plata/shared'
+import { Bar, BarChart, CartesianGrid, LabelList, Line, LineChart, Pie, PieChart, XAxis, YAxis } from 'recharts'
+import { buildReceivableReminder, getFinancialPeriodEnd, getFinancialPeriodStart, getPlannedExpenseTotal, getPlannedWantTotal, isInFinancialPeriod, isReceivable } from '@plata/shared'
 import { QuickExpenseEntry } from '@/components/dashboard/QuickExpenseEntry'
-import { DashboardWidgetPanel } from '@/components/dashboard/DashboardWidgetPanel'
+
+import { SpendingTrendCard } from '@/components/dashboard/SpendingTrendCard'
 import { buildMonthlyForecast, type BudgetForecast } from '@/lib/monthlyForecast'
 import { convertFromUsd, formatMoney } from '@/lib/currency'
 import { downloadMonthlyPdfReport } from '@/lib/monthlyPdfReport'
 import { buildUnnecessarySpendingAlerts, buildUnnecessarySpendingInsights } from '@/lib/unnecessary-spending'
 import { useAuthStore } from '@/store/authStore'
+import { buildFinancialScoreHistory } from '@/lib/financialScoreHistory'
+
+const cycleDateFormatter = new Intl.DateTimeFormat('es-ES', { day: '2-digit', month: 'short' })
+const scoreHistoryConfig = {
+  score: { label: 'Score', color: 'var(--color-primary)' },
+} satisfies ChartConfig
 
 function getScoreToneClasses(status: ReturnType<typeof buildFinancialScore>['status']) {
   if (status === 'fuerte') return 'border-emerald-500/30 bg-emerald-500/10 text-emerald-200'
@@ -53,20 +59,16 @@ export default function Dashboard() {
   const overview = useMonthlyOverview()
   const authMode = useAuthStore((state) => state.authMode)
   const user = useAuthStore((state) => state.user)
+  const salaries = useFinanceStore((state) => state.salaries)
   const transactions = useFinanceStore((state) => state.transactions)
   const reminders = useFinanceStore((state) => state.reminders)
   const events = useFinanceStore((state) => state.events)
   const debts = useFinanceStore((state) => state.debts)
   const wishlist = useFinanceStore((state) => state.wishlist)
-  const savingsGoals = useFinanceStore((state) => state.savingsGoals)
   const monthlyPlanningHistory = useFinanceStore((state) => state.monthlyPlanningHistory)
-  const addTransaction = useFinanceStore((state) => state.addTransaction)
-  const restoreMonthlyPlan = useFinanceStore((state) => state.restoreMonthlyPlan)
   const formula = usePreferencesStore((state) => state.formula)
-  const profileId = user?.id ?? 'guest'
-  const dashboardWidgets = usePreferencesStore((state) => state.dashboardWidgetsByProfile[profileId] ?? defaultDashboardWidgets)
-  const [isRepeatingRecurring, setIsRepeatingRecurring] = useState(false)
-  const [restoringScope, setRestoringScope] = useState<'expenses' | 'wants' | 'all' | null>(null)
+
+
   const [isDownloadingPdf, setIsDownloadingPdf] = useState(false)
 
   const payableDebts = useMemo(() => debts.filter((debt) => !isReceivable(debt)), [debts])
@@ -82,16 +84,19 @@ export default function Dashboard() {
   const activeDebts = payableDebts.filter((debt) => !debt.isSettled)
   const totalDebt = activeDebts.reduce((sum, debt) => sum + debt.remainingAmount, 0)
   const allocationData = [
-    { bucket: 'Ingresos', value: convertFromUsd(overview.totalSalary) },
-    { bucket: 'Gastos', value: convertFromUsd(overview.totalExpenses) },
-    { bucket: 'Gustos', value: convertFromUsd(overview.totalWants) },
-    { bucket: 'Ahorros', value: convertFromUsd(overview.totalSavings) },
+    { bucket: 'Ingresos', amount: overview.totalSalary, value: convertFromUsd(overview.totalSalary) },
+    { bucket: 'Gastos', amount: overview.totalExpenses, value: convertFromUsd(overview.totalExpenses) },
+    { bucket: 'Gustos', amount: overview.totalWants, value: convertFromUsd(overview.totalWants) },
+    { bucket: 'Ahorros', amount: overview.totalSavings, value: convertFromUsd(overview.totalSavings) },
   ]
-  const compositionData = [
-    { name: 'gastos', value: convertFromUsd(overview.totalExpenses), fill: 'var(--color-gastos)' },
-    { name: 'gustos', value: convertFromUsd(overview.totalWants), fill: 'var(--color-gustos)' },
-    { name: 'ahorros', value: convertFromUsd(overview.totalSavings), fill: 'var(--color-ahorros)' },
-  ].filter((entry) => entry.value > 0)
+  const compositionBreakdown = [
+    { name: 'gastos', label: 'Gastos', amount: overview.totalExpenses, fill: 'var(--color-gastos)' },
+    { name: 'gustos', label: 'Gustos', amount: overview.totalWants, fill: 'var(--color-gustos)' },
+    { name: 'ahorros', label: 'Ahorros', amount: overview.totalSavings, fill: 'var(--color-ahorros)' },
+  ]
+  const compositionData = compositionBreakdown
+    .map((entry) => ({ ...entry, value: convertFromUsd(entry.amount) }))
+    .filter((entry) => entry.value > 0)
   const allocationConfig = {
     Ingresos: { label: 'Ingresos', color: 'var(--color-primary)' },
     Gastos: { label: 'Gastos', color: 'var(--color-chart-2, #5b8def)' },
@@ -103,22 +108,38 @@ export default function Dashboard() {
     gustos: { label: 'Gustos', color: 'var(--color-secondary)' },
     ahorros: { label: 'Ahorros', color: 'var(--color-tertiary-container)' },
   } satisfies ChartConfig
-  const smartPlanning = useMemo(
-    () => buildRecurringPlanningSuggestions(monthlyPlanningHistory),
-    [monthlyPlanningHistory],
-  )
-  const financialScore = useMemo(
-    () => buildFinancialScore({ overview, debts: payableDebts, reminders: effectiveReminders }),
-    [effectiveReminders, overview, payableDebts],
-  )
   const smartAlerts = useMemo(
     () => buildSmartAlerts({ overview, debts: payableDebts, reminders: effectiveReminders, wishlist }),
     [effectiveReminders, overview, payableDebts, wishlist],
   )
   const currentMonthKey = new Date().toISOString().slice(0, 7)
+  const currentPeriodStart = overview.periodStart
+  const currentPeriodEnd = new Date().toISOString().slice(0, 10)
   const unnecessaryInsights = useMemo(
-    () => buildUnnecessarySpendingInsights(transactions, currentMonthKey),
-    [currentMonthKey, transactions],
+    () => buildUnnecessarySpendingInsights(transactions, currentMonthKey, currentPeriodStart, currentPeriodEnd),
+    [currentMonthKey, currentPeriodEnd, currentPeriodStart, transactions],
+  )
+  const financialScore = useMemo(
+    () => buildFinancialScore({
+      overview,
+      debts: payableDebts,
+      reminders: effectiveReminders,
+      unnecessarySpending: unnecessaryInsights,
+    }),
+    [effectiveReminders, overview, payableDebts, unnecessaryInsights],
+  )
+  const financialScoreHistory = useMemo(
+    () => buildFinancialScoreHistory({
+      history: monthlyPlanningHistory,
+      salaries,
+      transactions,
+      debts: payableDebts,
+      reminders: effectiveReminders,
+      formula,
+      currentScore: financialScore,
+      currentPeriodEnd,
+    }),
+    [currentPeriodEnd, effectiveReminders, financialScore, formula, monthlyPlanningHistory, payableDebts, salaries, transactions],
   )
   const unnecessaryAlerts = useMemo(
     () => buildUnnecessarySpendingAlerts(unnecessaryInsights).map((alert) => ({
@@ -135,11 +156,12 @@ export default function Dashboard() {
     () => [...unnecessaryAlerts, ...smartAlerts].slice(0, 5),
     [smartAlerts, unnecessaryAlerts],
   )
-  const recurringPreview = smartPlanning.recurringItems.slice(0, 6)
-  const latestHistory = smartPlanning.latestHistory
   const forecast = useMemo(() => {
-    const periodStart = getFinancialPeriodStart(monthlyPlanningHistory).slice(0, 10)
-    const periodTransactions = transactions.filter((transaction) => transaction.date >= periodStart)
+    const nextReset = getFinancialPeriodEnd(currentPeriodStart).toISOString().slice(0, 10)
+    const periodTransactions = transactions.filter((transaction) => (
+      isInFinancialPeriod(transaction, currentPeriodStart, overview.strictSameDayBoundary)
+      && transaction.date.slice(0, 10) < nextReset
+    ))
 
     return buildMonthlyForecast({
       currentExpenses: overview.totalExpenses,
@@ -152,8 +174,9 @@ export default function Dashboard() {
       totalDebtPaid: overview.totalDebtPaid,
       totalSavings: overview.totalSavings,
       budgetSavings: overview.budgetSavings,
+      periodStart: currentPeriodStart,
     })
-  }, [monthlyPlanningHistory, overview, transactions])
+  }, [currentPeriodStart, overview, transactions])
 
   async function handleDownloadCurrentReport() {
     if (isDownloadingPdf) return
@@ -165,6 +188,9 @@ export default function Dashboard() {
         wishlist,
         debts: payableDebts,
         reminders: effectiveReminders,
+        salaries,
+        events,
+        monthlyPlanningHistory,
         periodStart: getFinancialPeriodStart(monthlyPlanningHistory),
         userName: authMode === 'guest' ? 'Invitado local' : user?.name ?? 'Usuario',
         mode: 'current',
@@ -191,69 +217,6 @@ export default function Dashboard() {
     : forecast.projectedBalance < 0
       ? `Al ritmo actual cerrarías con un déficit de ${formatMoney(Math.abs(forecast.projectedBalance))}.`
       : `Puedes usar hasta ${formatMoney(forecast.safePerDay)} por día durante los ${forecast.remainingDays} días restantes sin tocar el ahorro protegido.`
-
-  async function handleRepeatRecurring(type: 'expenses' | 'wants' | 'all') {
-    if (isRepeatingRecurring) return
-
-    const selectedSuggestions = smartPlanning.recurringItems.filter((item) =>
-      type === 'all' ? true : type === 'expenses' ? item.type === 'expense' : item.type === 'want',
-    )
-
-    if (selectedSuggestions.length === 0) {
-      toast.info('Todavia no hay suficientes meses para detectar elementos recurrentes.')
-      return
-    }
-
-    const currentKeys = new Set(
-      transactions
-        .filter((transaction) => transaction.type === 'expense' || transaction.type === 'want')
-        .map((transaction) => `${transaction.type}:${transaction.description}`),
-    )
-
-    const drafts = buildRepeatPlanDrafts(selectedSuggestions).filter(
-      (draft) => !currentKeys.has(`${draft.type}:${draft.description}`),
-    )
-
-    if (drafts.length === 0) {
-      toast.info('Las listas activas ya incluyen esos elementos recurrentes.')
-      return
-    }
-
-    setIsRepeatingRecurring(true)
-
-    try {
-      for (const draft of drafts) {
-        await addTransaction(draft)
-      }
-
-      toast.success(`Se agregaron ${drafts.length} elemento(s) recurrentes a tu plan actual.`)
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : 'No se pudo repetir la lista recurrente.')
-    } finally {
-      setIsRepeatingRecurring(false)
-    }
-  }
-
-  async function handleRestoreLatest(scope: 'expenses' | 'wants' | 'all') {
-    if (!latestHistory || restoringScope) return
-
-    setRestoringScope(scope)
-
-    try {
-      await restoreMonthlyPlan(latestHistory.id, scope)
-      toast.success(
-        scope === 'all'
-          ? 'Se restauró la última lista del mes anterior.'
-          : scope === 'expenses'
-            ? 'Se restauraron los gastos del último cierre.'
-            : 'Se restauraron los gustos del último cierre.',
-      )
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : 'No se pudo restaurar la última lista.')
-    } finally {
-      setRestoringScope(null)
-    }
-  }
 
   return (
     <div className="space-y-6 animate-in fade-in duration-500 mx-auto mt-10">
@@ -286,20 +249,15 @@ export default function Dashboard() {
         </div>
       </header>
 
-      <DashboardWidgetPanel
-        widgets={dashboardWidgets}
-        overview={overview}
-        forecast={forecast}
-        financialScore={financialScore}
+      <SpendingTrendCard
+        history={monthlyPlanningHistory}
         transactions={transactions}
-        debts={debts}
-        reminders={effectiveReminders}
         wishlist={wishlist}
-        savingsGoals={savingsGoals}
-        decisionTitle={decisionTitle}
-        decisionDescription={decisionDescription}
-        onNavigate={navigate}
+        currentPeriodStart={currentPeriodStart}
+        strictSameDayBoundary={overview.strictSameDayBoundary}
       />
+
+
 
       <section className="grid gap-4 xl:grid-cols-[minmax(0,1.25fr)_minmax(320px,0.75fr)]">
         <Card className="relative overflow-hidden border-primary/15 bg-surface shadow-vault">
@@ -383,9 +341,11 @@ export default function Dashboard() {
             <div className="flex items-start justify-between gap-3">
               <div>
                 <CardTitle className="text-on-surface">Cierre previsto</CardTitle>
-                <CardDescription className="mt-1 text-muted-gray">Ritmo actual y partidas planificadas.</CardDescription>
+                <CardDescription className="mt-1 text-muted-gray">
+                  Ciclo del {cycleDateFormatter.format(new Date(forecast.periodStart))} al {cycleDateFormatter.format(new Date(forecast.cycleEndsAt))}.
+                </CardDescription>
               </div>
-              <Badge variant="secondary" className="bg-surface-container-high text-on-surface">Dia {forecast.elapsedDays}/{forecast.daysInMonth}</Badge>
+              <Badge variant="secondary" className="bg-surface-container-high text-on-surface">Día {forecast.elapsedDays}/{forecast.daysInMonth} del ciclo</Badge>
             </div>
           </CardHeader>
           <CardContent className="space-y-5">
@@ -441,7 +401,7 @@ export default function Dashboard() {
               <div>
                 <CardTitle className="text-on-surface">Score financiero personal</CardTitle>
                 <CardDescription className="text-muted-gray">
-                  Un puntaje de 0 a 100 basado en ahorro, presupuesto, deuda y recordatorios.
+                  Un puntaje de 0 a 100 basado en ahorro, presupuesto, fugas innecesarias, deuda y recordatorios.
                 </CardDescription>
               </div>
               <Badge variant="secondary" className={getScoreToneClasses(financialScore.status)}>
@@ -470,7 +430,7 @@ export default function Dashboard() {
                 <div>
                   <p className="text-sm font-semibold text-on-surface">{financialScore.headline}</p>
                   <p className="mt-1 text-sm text-muted-gray">
-                    El score cambia cuando ahorras mejor, respetas el plan, bajas deuda o mantienes tus recordatorios bajo control.
+                    El score cambia cuando ahorras mejor, respetas el plan, reduces fugas, bajas deuda o mantienes tus recordatorios bajo control.
                   </p>
                 </div>
 
@@ -518,6 +478,51 @@ export default function Dashboard() {
                     ))}
                   </div>
                 </div>
+              </div>
+            </div>
+
+            <div className="rounded-2xl border border-graphite bg-abyss/70 p-4 sm:p-5">
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+                <div>
+                  <p className="text-sm font-semibold text-on-surface">Historial del score por ciclo</p>
+                  <p className="mt-1 text-xs text-muted-gray">
+                    Compara el ciclo actual con los últimos cierres guardados, recalculados con la fórmula vigente.
+                  </p>
+                </div>
+                <Badge variant="secondary" className="w-fit bg-primary/10 text-primary">
+                  {financialScoreHistory.length} ciclo(s)
+                </Badge>
+              </div>
+
+              <ChartContainer config={scoreHistoryConfig} className="mt-4 h-[190px] w-full">
+                <LineChart data={financialScoreHistory} margin={{ top: 10, right: 12, left: -24, bottom: 0 }}>
+                  <CartesianGrid vertical={false} strokeDasharray="3 3" />
+                  <XAxis dataKey="shortLabel" tickLine={false} axisLine={false} />
+                  <YAxis domain={[0, 100]} ticks={[0, 25, 50, 75, 100]} tickLine={false} axisLine={false} />
+                  <ChartTooltip content={<ChartTooltipContent />} />
+                  <Line
+                    type="monotone"
+                    dataKey="score"
+                    stroke="var(--color-score)"
+                    strokeWidth={3}
+                    dot={{ r: 4, fill: 'var(--color-score)' }}
+                    activeDot={{ r: 6 }}
+                  />
+                </LineChart>
+              </ChartContainer>
+
+              <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+                {financialScoreHistory.slice(-3).reverse().map((point) => (
+                  <div key={point.id} className="flex items-center justify-between gap-3 rounded-xl border border-graphite bg-surface-container-low px-3 py-2.5">
+                    <div className="min-w-0">
+                      <p className="truncate text-xs font-medium text-on-surface">{point.label}</p>
+                      <p className="text-[11px] text-muted-gray">{point.isCurrent ? 'En curso' : 'Ciclo cerrado'}</p>
+                    </div>
+                    <Badge variant="secondary" className={getScoreToneClasses(point.status)}>
+                      {point.score}
+                    </Badge>
+                  </div>
+                ))}
               </div>
             </div>
           </CardContent>
@@ -601,7 +606,15 @@ export default function Dashboard() {
                 <XAxis dataKey="bucket" tickLine={false} axisLine={false} />
                 <YAxis tickLine={false} axisLine={false} />
                 <ChartTooltip content={<ChartTooltipContent />} />
-                <Bar dataKey="value" radius={10} fill="var(--color-primary)" />
+                <Bar dataKey="value" radius={10} fill="var(--color-primary)">
+                  <LabelList
+                    dataKey="amount"
+                    position="insideTop"
+                    formatter={(value) => formatMoney(Number(value ?? 0))}
+                    className="fill-white font-semibold"
+                    fontSize={11}
+                  />
+                </Bar>
               </BarChart>
             </ChartContainer>
           </CardContent>
@@ -615,10 +628,18 @@ export default function Dashboard() {
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <ChartContainer config={compositionConfig} className="mx-auto h-[280px] max-w-[320px]">
+            <ChartContainer config={compositionConfig} className="mx-auto h-[280px] max-w-[360px]">
               <PieChart>
                 <ChartTooltip content={<ChartTooltipContent hideLabel nameKey="name" />} />
-                <Pie data={compositionData} dataKey="value" nameKey="name" innerRadius={64} outerRadius={96} paddingAngle={4} />
+                <Pie data={compositionData} dataKey="value" nameKey="name" innerRadius={60} outerRadius={112} paddingAngle={4}>
+                  <LabelList
+                    dataKey="amount"
+                    formatter={(value) => formatMoney(Number(value ?? 0))}
+                    className="fill-white font-semibold"
+                    fontSize={11}
+                    stroke="none"
+                  />
+                </Pie>
                 <ChartLegend content={<ChartLegendContent nameKey="name" />} />
               </PieChart>
             </ChartContainer>
@@ -626,7 +647,7 @@ export default function Dashboard() {
         </Card>
       </section>
 
-      <section className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1.05fr)_minmax(0,0.95fr)]">
+      <section>
         <Card className="border-graphite bg-surface shadow-vault">
           <CardHeader className="gap-4">
             <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
@@ -711,103 +732,6 @@ export default function Dashboard() {
                 Entra directo a informes, comparativas y exportaciones del mes actual y anterior.
               </p>
             </button>
-          </CardContent>
-        </Card>
-
-        <Card className="border-graphite bg-surface shadow-vault">
-          <CardHeader className="gap-4">
-            <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-              <div>
-                <CardTitle className="text-on-surface">Reutilizacion inteligente</CardTitle>
-                <CardDescription className="text-muted-gray">
-                  Detecta productos repetidos entre meses y recupera listas utiles sin rehacer todo.
-                </CardDescription>
-              </div>
-              <Badge variant="secondary" className="w-fit bg-secondary/12 text-secondary">
-                Historial mensual
-              </Badge>
-            </div>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="grid gap-3 sm:grid-cols-3">
-              <div className="rounded-2xl border border-graphite bg-surface-container-low p-4">
-                <p className="text-xs uppercase tracking-[0.2em] text-medium-gray">Último cierre</p>
-                <p className="mt-2 text-sm font-semibold text-on-surface">{latestHistory?.label ?? 'Sin historial'}</p>
-              </div>
-              <div className="rounded-2xl border border-graphite bg-surface-container-low p-4">
-                <p className="text-xs uppercase tracking-[0.2em] text-medium-gray">Recurrentes</p>
-                <p className="mt-2 text-2xl font-semibold text-on-surface">{smartPlanning.recurringItems.length}</p>
-              </div>
-              <div className="rounded-2xl border border-graphite bg-surface-container-low p-4">
-                <p className="text-xs uppercase tracking-[0.2em] text-medium-gray">Meses detectados</p>
-                <p className="mt-2 text-2xl font-semibold text-on-surface">
-                  {smartPlanning.recurringItems[0]?.streak ?? 0}x
-                </p>
-              </div>
-            </div>
-
-            <div className="flex flex-wrap gap-2">
-              <Button
-                onClick={() => void handleRepeatRecurring('all')}
-                disabled={isRepeatingRecurring || smartPlanning.recurringItems.length === 0}
-                loading={isRepeatingRecurring}
-                className="bg-primary-container text-white hover:brightness-110"
-              >
-                <RotateCcw className="size-4" />
-                Repetir solo lo recurrente
-              </Button>
-              <Button
-                variant="outline"
-                onClick={() => void handleRestoreLatest('expenses')}
-                disabled={!latestHistory || restoringScope !== null}
-                loading={restoringScope === 'expenses'}
-                className="border-graphite bg-abyss text-on-surface hover:bg-surface-container"
-              >
-                Restaurar gastos previos
-              </Button>
-              <Button
-                variant="outline"
-                onClick={() => void handleRestoreLatest('wants')}
-                disabled={!latestHistory || restoringScope !== null}
-                loading={restoringScope === 'wants'}
-                className="border-graphite bg-abyss text-on-surface hover:bg-surface-container"
-              >
-                Restaurar gustos previos
-              </Button>
-            </div>
-
-            {recurringPreview.length === 0 ? (
-              <div className="rounded-2xl border border-dashed border-graphite bg-surface-container-low p-5 text-sm text-muted-gray">
-                Cuando cierres varios meses, aquí verás productos que se repiten y podrás reconstruir la lista más rápido.
-              </div>
-            ) : (
-              <div className="grid gap-3">
-                {recurringPreview.map((item) => (
-                  <div
-                    key={item.key}
-                    className="flex flex-col gap-3 rounded-2xl border border-graphite bg-surface-container-low p-4 sm:flex-row sm:items-center sm:justify-between"
-                  >
-                    <div className="min-w-0">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <p className="text-sm font-semibold text-on-surface">{item.itemName}</p>
-                        <Badge variant="secondary" className="bg-primary/10 text-primary">
-                          {item.type === 'expense' ? 'Gasto' : 'Gusto'}
-                        </Badge>
-                        <Badge variant="secondary" className="bg-surface-container-high text-on-surface">
-                          {item.streak} mes(es) seguidos
-                        </Badge>
-                      </div>
-                      <p className="mt-1 text-xs text-muted-gray">
-                        Categoría {item.category} · {item.months.map((month) => month.slice(5, 7)).join(' / ')}
-                      </p>
-                    </div>
-                    <div className="text-sm font-semibold text-on-surface">
-                      {formatMoney(item.amount)}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
           </CardContent>
         </Card>
       </section>
