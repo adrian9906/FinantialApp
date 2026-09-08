@@ -66,6 +66,19 @@ const capacitorAndroidDir = path.dirname(capacitorAndroidPackageJson);
 
 await patchGradleFile(path.join(capacitorAndroidDir, 'capacitor', 'build.gradle'), '@capacitor/android');
 
+try {
+  const localNotificationsPackageJson = require.resolve('@capacitor/local-notifications/package.json', {
+    paths: [webAppDir, rootDir],
+  });
+  const localNotificationsDir = path.dirname(localNotificationsPackageJson);
+  await patchGradleFile(
+    path.join(localNotificationsDir, 'android', 'build.gradle'),
+    '@capacitor/local-notifications',
+  );
+} catch {
+  console.warn('[fix-capacitor-android-gradle] No se pudo parchear @capacitor/local-notifications todavía.');
+}
+
 const cordovaPluginsGradle = path.join(
   rootDir,
   'apps',

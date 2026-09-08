@@ -14,6 +14,7 @@ interface AuthStore {
   hasChecked: boolean
   checkSession: () => Promise<void>
   login: (payload: AuthCredentials) => Promise<void>
+  loginWithGoogle: (idToken: string, rememberMe?: boolean) => Promise<void>
   register: (payload: RegisterPayload) => Promise<void>
   continueAsGuest: () => void
   logout: () => Promise<void>
@@ -104,6 +105,16 @@ export const useAuthStore = create<AuthStore>()((set) => ({
       isChecking: false,
       hasChecked: true,
     })
+  },
+  loginWithGoogle: async (idToken: string, rememberMe = true) => {
+    // The token is only a claim until the API verifies it against Google.
+    const response = await requestJson<{ user: AuthUser; sessionToken: string }>('/auth/google', {
+      method: 'POST',
+      body: JSON.stringify({ idToken, rememberMe }),
+    })
+
+    setStoredToken(response.sessionToken)
+    setAuthenticatedUser(set, response.user)
   },
   login: async (payload) => {
     const response = await requestJson<{ user: AuthUser; sessionToken: string }>('/auth/login', {

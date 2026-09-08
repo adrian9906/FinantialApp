@@ -239,7 +239,7 @@ function buildMonthlyTrend(
       .sort(([left], [right]) => left.localeCompare(right))
       .map(([month, point]) => ({ ...point, label: cycleMonthLabel(month, showYear) })),
     {
-      label: 'Actual',
+      label: cycleMonthLabel(new Date().toISOString().slice(0, 7), showYear),
       period: `Desde ${fullDateFormatter.format(new Date(`${currentPeriodStart.slice(0, 10)}T00:00:00.000Z`))}`,
       gastos: currentExpenses,
       gustos: currentWants,
@@ -667,7 +667,7 @@ export default function Reports() {
   }
 
   return (
-    <div className="space-y-6 animate-in fade-in duration-500">
+    <div className="min-w-0 space-y-6 animate-in fade-in duration-500">
       <header className="relative overflow-hidden rounded-[28px] border border-primary/10 bg-surface px-4 py-5 shadow-vault sm:px-6 md:px-8">
         <div className="absolute inset-y-0 right-0 w-1/2 bg-[radial-gradient(circle_at_top_right,rgba(79,70,229,0.18),transparent_52%)]" />
         <div className="relative z-10 flex flex-col gap-5 xl:flex-row xl:items-end xl:justify-between">
@@ -686,7 +686,7 @@ export default function Reports() {
             </div>
           </div>
 
-          <div className="grid gap-3 sm:grid-cols-2 xl:min-w-[21rem]">
+          <div className="grid min-w-0 gap-3 sm:grid-cols-2 xl:min-w-[21rem]">
             <div className="rounded-2xl border border-graphite bg-abyss/80 px-4 py-4 shadow-vault-sm">
               <p className="text-[11px] uppercase tracking-[0.22em] text-medium-gray">Ciclo analizado</p>
               <p className="mt-2 text-lg font-semibold text-on-surface">{report.currentLabel}</p>
@@ -844,37 +844,39 @@ export default function Reports() {
       />
 
       <section>
-        <Card className="border-graphite bg-surface shadow-vault">
-          <CardHeader className="flex flex-row items-start justify-between gap-4">
-            <div>
+        <Card className="min-w-0 overflow-hidden border-graphite bg-surface shadow-vault">
+          <CardHeader className="flex flex-col items-start justify-between gap-4 sm:flex-row">
+            <div className="min-w-0">
               <CardTitle className="text-on-surface">Comparador entre ciclos</CardTitle>
               <CardDescription className="text-muted-gray">
                 Cruce visual del ciclo actual contra el anterior para salario, gasto, gusto, ahorro y saldo libre.
               </CardDescription>
             </div>
-            <Badge variant="secondary" className="bg-surface-container-high text-on-surface">
+            <Badge variant="secondary" className="max-w-full shrink-0 bg-surface-container-high text-on-surface">
               <CalendarDays className="size-3.5" />
               {report.currentMonthKey} vs {report.previousMonthKey}
             </Badge>
           </CardHeader>
-          <CardContent>
-            <ChartContainer config={comparisonConfig} className="h-[310px] w-full">
-              <BarChart data={report.comparisonData} margin={{ top: 8, right: 10, left: -22, bottom: 0 }}>
-                <CartesianGrid vertical={false} strokeDasharray="3 3" />
-                <XAxis dataKey="label" tickLine={false} axisLine={false} />
-                <YAxis tickLine={false} axisLine={false} />
-                <ChartTooltip content={<ChartTooltipContent />} />
-                <Bar dataKey="actual" radius={10} fill="var(--color-primary)" />
-                <Bar dataKey="previous" radius={10} fill="var(--color-secondary)" />
-              </BarChart>
-            </ChartContainer>
+          <CardContent className="min-w-0">
+            <div className="overflow-x-auto overscroll-x-contain pb-2">
+              <ChartContainer config={comparisonConfig} className="h-[300px] w-full min-w-[520px] lg:min-w-0">
+                <BarChart data={report.comparisonData} margin={{ top: 8, right: 10, left: -22, bottom: 0 }}>
+                  <CartesianGrid vertical={false} strokeDasharray="3 3" />
+                  <XAxis dataKey="label" tickLine={false} axisLine={false} />
+                  <YAxis tickLine={false} axisLine={false} />
+                  <ChartTooltip content={<ChartTooltipContent />} />
+                  <Bar dataKey="actual" radius={10} fill="var(--color-primary)" />
+                  <Bar dataKey="previous" radius={10} fill="var(--color-secondary)" />
+                </BarChart>
+              </ChartContainer>
+            </div>
           </CardContent>
         </Card>
 
       </section>
 
       <section className="grid gap-4">
-        <Card className="border-graphite bg-surface shadow-vault">
+        <Card className="min-w-0 overflow-hidden border-graphite bg-surface shadow-vault">
           <CardHeader className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
             <div>
               <CardTitle className="text-on-surface">Línea temporal: Gastos vs Gustos</CardTitle>
@@ -915,7 +917,7 @@ export default function Reports() {
               </TabsList>
             </Tabs>
 
-            <div className="flex flex-wrap gap-3" aria-label="Series visibles">
+            <div className="grid gap-2 sm:flex sm:flex-wrap sm:gap-3" aria-label="Series visibles">
               {report.spendingTrendSignals.map((signal) => (
                 <Button
                   key={signal.key}
@@ -923,7 +925,7 @@ export default function Reports() {
                   variant="outline"
                   aria-pressed={visibleSpendingTrendCategories[signal.key]}
                   onClick={() => toggleSpendingTrendCategory(signal.key)}
-                  className={`h-auto border-graphite bg-abyss/40 px-3 py-2 text-left hover:bg-surface-container-high ${visibleSpendingTrendCategories[signal.key] ? '' : 'opacity-45'}`}
+                  className={`h-auto w-full justify-start border-graphite bg-abyss/40 px-3 py-2 text-left hover:bg-surface-container-high sm:w-auto ${visibleSpendingTrendCategories[signal.key] ? '' : 'opacity-45'}`}
                 >
                   <span className="size-3 rounded-full" style={{ backgroundColor: signal.color }} />
                   <div className="flex flex-col gap-0.5">
@@ -942,7 +944,8 @@ export default function Reports() {
               </div>
             ) : (
               <>
-                <ChartContainer config={spendingTrendConfig} className="h-[400px] w-full">
+                <div className="overflow-x-auto overscroll-x-contain pb-2">
+                  <ChartContainer config={spendingTrendConfig} className="h-[360px] w-full min-w-[620px] lg:h-[400px] lg:min-w-0">
                   <LineChart data={report.spendingTrendSeries} margin={{ top: 20, right: 16, left: -12, bottom: 8 }}>
                     <CartesianGrid
                       vertical={false}
@@ -1039,7 +1042,8 @@ export default function Reports() {
                       )
                     ))}
                   </LineChart>
-                </ChartContainer>
+                  </ChartContainer>
+                </div>
 
                 <div className="grid gap-3 rounded-lg border border-graphite/50 bg-abyss/40 p-4 sm:grid-cols-2 xl:grid-cols-3">
                   {spendingTrendCategories.map((category) => {
@@ -1288,9 +1292,9 @@ export default function Reports() {
           </CardContent>
         </Card>
 
-        <Card className="border-graphite bg-surface shadow-vault">
-          <CardHeader className="flex flex-row items-start justify-between gap-4">
-            <div>
+        <Card className="min-w-0 overflow-hidden border-graphite bg-surface shadow-vault">
+          <CardHeader className="flex flex-col items-start justify-between gap-4 sm:flex-row">
+            <div className="min-w-0">
               <CardTitle className="text-on-surface">Hallazgos clave</CardTitle>
               <CardDescription className="text-muted-gray">
                 Resumen interpretado para leer el mes sin tener que revisar pantalla por pantalla.

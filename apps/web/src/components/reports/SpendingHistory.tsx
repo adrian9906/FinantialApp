@@ -346,9 +346,9 @@ export function SpendingHistory({ transactions, monthlyPlanningHistory, wishlist
         </CardHeader>
 
         <CardContent className="p-0">
-          <div className="border-b border-graphite/80 bg-abyss/35 px-5 py-4 sm:px-6">
+          <div className="border-b border-graphite/80 bg-abyss/35 px-4 py-4 sm:px-6">
             <div className="flex flex-col gap-4">
-              <div className="flex flex-wrap items-center gap-2">
+              <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap">
                 {([
                   { id: 'today', label: 'Hoy' },
                   { id: 'cycle', label: 'Este ciclo' },
@@ -359,9 +359,9 @@ export function SpendingHistory({ transactions, monthlyPlanningHistory, wishlist
                     type="button"
                     variant={dateFilter === option.id ? 'secondary' : 'outline'}
                     size="sm"
-                    className={dateFilter === option.id
+                    className={`${option.id === 'custom' ? 'col-span-2 sm:col-span-1' : ''} ${dateFilter === option.id
                       ? 'border-secondary/30 bg-secondary/15 text-secondary'
-                      : 'border-graphite bg-surface text-muted-gray hover:bg-surface-container-low hover:text-on-surface'}
+                      : 'border-graphite bg-surface text-muted-gray hover:bg-surface-container-low hover:text-on-surface'}`}
                     onClick={() => setDateFilter(option.id)}
                   >
                     {option.label}
@@ -476,7 +476,29 @@ export function SpendingHistory({ transactions, monthlyPlanningHistory, wishlist
             </div>
           ) : (
             <>
-              <div className="overflow-x-auto">
+              <div className="divide-y divide-graphite/70 sm:hidden">
+                {paginatedRows.map((row) => (
+                  <article key={`mobile-${row.id}`} className="space-y-3 px-4 py-4">
+                    <div className="flex min-w-0 items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <p className="break-words text-sm font-semibold text-on-surface">{row.name}</p>
+                        <p className="mt-1 text-xs text-muted-gray">{row.category}</p>
+                      </div>
+                      <p className="shrink-0 text-sm font-semibold tabular-nums text-on-surface">{formatCurrency(row.amount)}</p>
+                    </div>
+                    <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-muted-gray">
+                      <span>{formatDate(row.date)}</span>
+                      {kind === 'saving' ? (
+                        <span className={(row.borrowedAmount ?? 0) > 0 ? 'font-semibold text-amber-200' : 'text-medium-gray'}>
+                          {(row.borrowedAmount ?? 0) > 0 ? `Deuda usada: ${formatCurrency(row.borrowedAmount ?? 0)}` : 'Ahorro propio'}
+                        </span>
+                      ) : null}
+                    </div>
+                  </article>
+                ))}
+              </div>
+
+              <div className="hidden overflow-x-auto sm:block">
                 <table className="min-w-full text-sm">
                   <thead className="bg-abyss/55">
                     <tr className="text-left text-[11px] uppercase tracking-[0.18em] text-medium-gray">
@@ -516,7 +538,7 @@ export function SpendingHistory({ transactions, monthlyPlanningHistory, wishlist
                   Mostrando {Math.min(filteredRows.length, (page - 1) * perPageNumber + 1)}-
                   {Math.min(filteredRows.length, page * perPageNumber)} de {filteredRows.length} movimientos
                 </p>
-                <div className="flex items-center gap-2 self-end sm:self-auto">
+                <div className="grid w-full grid-cols-[1fr_auto_1fr] items-center gap-2 sm:flex sm:w-auto">
                   <Button
                     type="button"
                     variant="outline"
@@ -526,7 +548,7 @@ export function SpendingHistory({ transactions, monthlyPlanningHistory, wishlist
                     disabled={page === 1}
                   >
                     <ChevronLeft className="size-4" />
-                    Anterior
+                    <span className="hidden sm:inline">Anterior</span>
                   </Button>
                   <div className="min-w-[88px] text-center text-xs uppercase tracking-[0.16em] text-medium-gray">
                     Página {page} / {totalPages}
@@ -539,7 +561,7 @@ export function SpendingHistory({ transactions, monthlyPlanningHistory, wishlist
                     onClick={() => setPage((current) => Math.min(totalPages, current + 1))}
                     disabled={page === totalPages}
                   >
-                    Siguiente
+                    <span className="hidden sm:inline">Siguiente</span>
                     <ChevronRight className="size-4" />
                   </Button>
                 </div>

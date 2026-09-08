@@ -17,7 +17,7 @@ export function CurrencySwitcher() {
     <Select value={activeCurrencyCode} onValueChange={(value) => setActiveCurrency(value ?? 'USD')}>
       <SelectTrigger
         aria-label="Moneda de visualización"
-        className="h-11 w-[150px] shrink-0 border-graphite bg-surface/90 text-on-surface shadow-vault-sm sm:w-[190px]"
+        className="h-11 w-full min-w-0 border-graphite bg-surface/90 text-on-surface shadow-vault-sm sm:w-[190px] sm:shrink-0"
       >
         <Coins className="mr-2 size-4 shrink-0 text-primary" />
         <SelectValue>

@@ -30,6 +30,7 @@ import { parseWantDescription } from '@/lib/want-utils'
 import { useFinanceStore } from '@/store/financeStore'
 import { useAuthStore } from '@/store/authStore'
 import { AutomationSettings } from '@/components/settings/AutomationSettings'
+import { NotificationSettings } from '@/components/settings/NotificationSettings'
 import {
   defaultFormula,
   type AllocationFormula,
@@ -1309,6 +1310,8 @@ export default function Settings() {
           <CurrencySettingsCard />
 
           <AutomationSettings />
+
+          <NotificationSettings />
 
           <MonthlyResetCard />
         </div>

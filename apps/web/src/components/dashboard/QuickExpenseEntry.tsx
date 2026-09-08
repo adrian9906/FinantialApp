@@ -22,10 +22,10 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { useFinanceStore } from '@/store/financeStore'
-import { formatMoney, useCurrencyInput } from '@/lib/currency'
+import { formatMoney, formatMoneyInput, useCurrencyInput } from '@/lib/currency'
 import { getTodayDateKey } from '@/lib/date'
 import { useAuthStore } from '@/store/authStore'
-import { usePreferencesStore } from '@/store/preferencesStore'
+import { USD_CURRENCY, usePreferencesStore } from '@/store/preferencesStore'
 
 const targets: Array<{ value: string; label: string; target: CategorizationTarget }> = [
   { value: 'expense:food', label: 'Alimentación · Gasto', target: { transactionType: 'expense', category: 'food' } },
@@ -91,6 +91,7 @@ export function QuickExpenseEntry() {
   const [targetWasChanged, setTargetWasChanged] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
   const parsed = useMemo(() => parseQuickEntry(entry), [entry])
+  const parsedAmountInUsd = moneyInput.toUsd(parsed.amount)
   const suggestion = useMemo(
     () => suggestCategory(parsed.itemName, recentTransactions, userRules),
     [parsed.itemName, recentTransactions, userRules],
@@ -121,7 +122,10 @@ export function QuickExpenseEntry() {
         const learnedRule = createLearnedCategorizationRule(parsed.itemName, activeTarget)
         if (learnedRule) saveCategoryRule(profileId, learnedRule)
       }
-      toast.success(`${parsed.itemName} registrado por ${formatMoney(amountInUsd)}.`)
+      const savedAmountLabel = moneyInput.currency.code === 'USD'
+        ? formatMoney(amountInUsd)
+        : `${moneyInput.formatInput(parsed.amount)} (${formatMoneyInput(amountInUsd, USD_CURRENCY)})`
+      toast.success(`${parsed.itemName} registrado por ${savedAmountLabel}.`)
       setEntry('')
       setSelectedTargetKey('expense:essentials')
       setTargetWasChanged(false)
@@ -194,7 +198,9 @@ export function QuickExpenseEntry() {
           <span>Escribe concepto y monto; Enter confirma.</span>
           {parsed.amount > 0 ? (
             <Badge variant="secondary" className="bg-primary/10 text-primary">
-              {formatMoney(parsed.amount)} · {activeCategoryLabel}
+              {moneyInput.formatInput(parsed.amount)}
+              {moneyInput.currency.code !== 'USD' ? ` ≈ ${formatMoneyInput(parsedAmountInUsd, USD_CURRENCY)}` : ''}
+              {' · '}{activeCategoryLabel}
             </Badge>
           ) : null}
           {parsed.itemName && suggestion.rule ? (

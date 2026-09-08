@@ -32,6 +32,9 @@ interface PreferencesStore {
   activeCurrencyCode: string
   dashboardWidgetsByProfile: Record<string, DashboardWidgetId[]>
   categoryRulesByProfile: Record<string, CategorizationRule[]>
+  systemNotificationsEnabled: boolean
+  connectionNotificationsEnabled: boolean
+  syncNotificationsEnabled: boolean
   setAppearance: (appearance: AppAppearance) => void
   setTheme: (theme: AppTheme) => void
   setBackground: (background: AppBackground) => void
@@ -50,6 +53,9 @@ interface PreferencesStore {
   saveCategoryRule: (profileId: string, rule: CategorizationRule) => void
   removeCategoryRule: (profileId: string, ruleId: string) => void
   resetAutomationPreferences: (profileId: string) => void
+  setSystemNotificationsEnabled: (enabled: boolean) => void
+  setConnectionNotificationsEnabled: (enabled: boolean) => void
+  setSyncNotificationsEnabled: (enabled: boolean) => void
   resetPreferences: () => void
 }
 
@@ -173,6 +179,9 @@ const defaultState = {
   activeCurrencyCode: 'USD',
   dashboardWidgetsByProfile: {},
   categoryRulesByProfile: {},
+  systemNotificationsEnabled: false,
+  connectionNotificationsEnabled: true,
+  syncNotificationsEnabled: true,
 }
 
 export const usePreferencesStore = create<PreferencesStore>()(
@@ -287,6 +296,9 @@ export const usePreferencesStore = create<PreferencesStore>()(
         dashboardWidgetsByProfile: { ...state.dashboardWidgetsByProfile, [profileId]: [...defaultDashboardWidgets] },
         categoryRulesByProfile: { ...state.categoryRulesByProfile, [profileId]: [] },
       })),
+      setSystemNotificationsEnabled: (enabled) => set({ systemNotificationsEnabled: enabled }),
+      setConnectionNotificationsEnabled: (enabled) => set({ connectionNotificationsEnabled: enabled }),
+      setSyncNotificationsEnabled: (enabled) => set({ syncNotificationsEnabled: enabled }),
       resetPreferences: () => {
         set(defaultState)
         scheduleCurrencySync()

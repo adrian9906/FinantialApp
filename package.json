@@ -29,7 +29,8 @@
     "test:income": "tsx packages/shared/src/income.test.mts",
     "test:receipt": "tsx apps/web/src/lib/receipt-review.test.mts",
     "test:attachments": "tsx packages/shared/src/attachments.test.mts",
-    "test:payment": "tsx packages/shared/src/payment-method.test.mts"
+    "test:payment": "tsx packages/shared/src/payment-method.test.mts",
+    "test:google": "tsx apps/api/src/google-auth.test.mts"
   },
   "devDependencies": {
     "@rolldown/binding-win32-x64-msvc": "1.0.3"

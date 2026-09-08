@@ -1,6 +1,7 @@
 import { createHash, randomUUID } from 'node:crypto'
 import { createEmptyBootstrapPayload, SYNC_PROTOCOL, canonicalJson, syncCollections, syncKey, getSyncValue, type SyncOperation, type SyncResponse } from '@plata/shared'
 import { parseSyncOperation } from './sync-validation.js'
+import { isGoogleAuthConfigured, verifyGoogleIdToken } from './google-auth.js'
 import { sanitizeAttachments, sanitizePlace } from '@plata/shared'
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import type {
@@ -1704,6 +1705,75 @@ export async function handleApiRequest(req: IncomingMessage, res: ServerResponse
       if (!user || !verifyPassword(password, user.contrasena)) {
         sendJson(res, 401, { error: 'Correo o contraseña incorrectos.' })
         return true
+      }
+
+      const sessionToken = await createSession(res, user.id, rememberMe)
+      sendJson(res, 200, {
+        user: {
+          id: user.id,
+          name: user.nombre,
+          email: user.correo,
+        },
+        sessionToken,
+      })
+      return true
+    }
+
+    if (pathname === '/api/auth/google' && method === 'POST') {
+      if (!isGoogleAuthConfigured()) {
+        sendJson(res, 503, { error: 'El acceso con Google no está configurado.' })
+        return true
+      }
+
+      const body = await readJsonBody(req)
+      const identity = await verifyGoogleIdToken(body.idToken)
+
+      // A token that fails any check (signature, audience, issuer, expiry) is
+      // never trusted; the client learns nothing about why.
+      if (!identity) {
+        sendJson(res, 401, { error: 'No se pudo validar tu cuenta de Google.' })
+        return true
+      }
+
+      const prisma = await getPrisma()
+      const rememberMe = Boolean(body.rememberMe)
+
+      let user = await prisma.usuario.findUnique({ where: { googleId: identity.googleId } })
+
+      if (!user) {
+        const byEmail = await prisma.usuario.findUnique({ where: { correo: identity.email } })
+
+        if (byEmail) {
+          // Linking by address is only safe once Google states the address is
+          // verified; otherwise an unverified account could claim someone's
+          // existing data.
+          if (!identity.emailVerified) {
+            sendJson(res, 409, {
+              error: 'Ese correo ya tiene una cuenta. Inicia sesión con tu contraseña.',
+            })
+            return true
+          }
+
+          user = await prisma.usuario.update({
+            where: { id: byEmail.id },
+            data: { googleId: identity.googleId },
+          })
+        } else {
+          if (!identity.emailVerified) {
+            sendJson(res, 401, { error: 'Tu correo de Google no está verificado.' })
+            return true
+          }
+
+          user = await prisma.usuario.create({
+            data: {
+              nombre: identity.name,
+              correo: identity.email,
+              // No password: this account signs in through Google only.
+              contrasena: null,
+              googleId: identity.googleId,
+            },
+          })
+        }
       }
 
       const sessionToken = await createSession(res, user.id, rememberMe)

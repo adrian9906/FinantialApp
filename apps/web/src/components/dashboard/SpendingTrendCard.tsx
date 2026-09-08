@@ -1,5 +1,5 @@
 import { useMemo, useState, type ComponentProps } from 'react'
-import { Bar, BarChart, CartesianGrid, Line, LineChart, XAxis, YAxis } from 'recharts'
+import { CartesianGrid, Line, LineChart, XAxis, YAxis } from 'recharts'
 import {
   getWishlistReservedAmount,
   isInFinancialPeriod,
@@ -45,6 +45,7 @@ const trendConfig = {
 } satisfies ChartConfig
 
 const cycleDateFormatter = new Intl.DateTimeFormat('es-ES', { day: '2-digit', month: 'short' })
+const monthFormatter = new Intl.DateTimeFormat('es-ES', { month: 'long', timeZone: 'UTC' })
 
 function dayNumber(value: string) {
   const [year, month, day] = value.slice(0, 10).split('-').map(Number)
@@ -65,6 +66,71 @@ function previousMonthDate(value: string) {
 
 function sumCategory(entries: SpendingEntry[], category: CategoryKey) {
   return entries.reduce((sum, entry) => entry.category === category ? sum + entry.amount : sum, 0)
+}
+
+function nextMonthKey(monthKey: string) {
+  const [year, month] = monthKey.split('-').map(Number)
+  const next = new Date(Date.UTC(year, month, 1))
+  return `${next.getUTCFullYear()}-${String(next.getUTCMonth() + 1).padStart(2, '0')}`
+}
+
+function formatMonth(monthKey: string, showYear: boolean) {
+  const [year, month] = monthKey.split('-').map(Number)
+  const name = monthFormatter.format(new Date(Date.UTC(year, month - 1, 1)))
+  const label = name.charAt(0).toUpperCase() + name.slice(1)
+  return showYear ? `${label} ${year}` : label
+}
+
+function buildMonthlySeries(
+  closedCycles: MonthlyPlanningHistory[],
+  currentTotals: Record<CategoryKey, number>,
+  wishlist: WishlistItem[],
+  currentPeriodStart: string,
+  currentEnd: string,
+) {
+  const totals = new Map<string, Record<CategoryKey, number>>()
+  const ensureMonth = (monthKey: string) => {
+    const current = totals.get(monthKey) ?? { gastos: 0, gustos: 0, ahorroUsado: 0 }
+    totals.set(monthKey, current)
+    return current
+  }
+  closedCycles.forEach((cycle) => {
+    const month = ensureMonth(cycle.month)
+    month.gastos += cycle.expenses.reduce(
+      (sum, entry) => entry.status === 'checked' ? sum + Math.max(0, entry.amount) : sum,
+      0,
+    )
+    month.gustos += cycle.wants.reduce(
+      (sum, entry) => entry.status === 'checked' ? sum + Math.max(0, entry.amount) : sum,
+      0,
+    )
+  })
+
+  wishlist.forEach((item) => {
+    if (!isWishlistPurchased(item) || !item.purchasedAt) return
+    if (Date.parse(item.purchasedAt) >= Date.parse(currentPeriodStart)) return
+    const monthKey = item.purchasedAt.slice(0, 7)
+    const month = totals.get(monthKey)
+    if (month) month.ahorroUsado += getWishlistReservedAmount(item)
+  })
+
+  const currentMonth = currentEnd.slice(0, 7)
+  const current = ensureMonth(currentMonth)
+  current.gastos += currentTotals.gastos
+  current.gustos += currentTotals.gustos
+  current.ahorroUsado += currentTotals.ahorroUsado
+  const populatedMonths = [...totals.keys()].filter((monthKey) => monthKey <= currentMonth).sort()
+  const firstMonth = populatedMonths[0] ?? currentMonth
+  const monthKeys: string[] = []
+  for (let monthKey = firstMonth; monthKey <= currentMonth; monthKey = nextMonthKey(monthKey)) {
+    monthKeys.push(monthKey)
+  }
+  const showYear = new Set(monthKeys.map((monthKey) => monthKey.slice(0, 4))).size > 1
+
+  return monthKeys.map((monthKey) => ({
+    label: formatMonth(monthKey, showYear),
+    ...ensureMonth(monthKey),
+  }))
 }
 
 function convertSeriesValues<T extends Record<string, string | number | null>>(rows: T[], exchangeRate: number) {
@@ -189,21 +255,7 @@ export function SpendingTrendCard({
     })
 
     const currentTotals = Object.fromEntries(categories.map(({ key }) => [key, sumCategory(currentEntries, key)])) as Record<CategoryKey, number>
-    const previousTotals = Object.fromEntries(categories.map(({ key }) => [key, sumCategory(previousEntries, key)])) as Record<CategoryKey, number>
-    const monthlySeries = [
-      {
-        label: previousCycle?.label ?? 'Ciclo anterior',
-        gastos: previousTotals.gastos,
-        gustos: previousTotals.gustos,
-        ahorroUsado: previousTotals.ahorroUsado,
-      },
-      {
-        label: 'Ciclo actual',
-        gastos: currentTotals.gastos,
-        gustos: currentTotals.gustos,
-        ahorroUsado: currentTotals.ahorroUsado,
-      },
-    ]
+    const monthlySeries = buildMonthlySeries(closedCycles, currentTotals, wishlist, currentPeriodStart, currentEnd)
 
     return {
       currentStart,
@@ -255,29 +307,35 @@ export function SpendingTrendCard({
   }
 
   return (
-    <Card className="border-graphite bg-surface shadow-vault">
+    <Card className="min-w-0 overflow-hidden border-graphite bg-surface shadow-vault">
       <CardHeader className="gap-4">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
           <div>
             <CardTitle className="text-on-surface">Evolución de gastos, gustos y ahorro usado</CardTitle>
             <CardDescription className="text-muted-gray">
-              Compara el ciclo actual con el anterior. El ahorro usado solo cuenta el dinero reservado que se gastó al comprar deseos.
+              {granularity === 'monthly'
+                ? 'Muestra la evolución cronológica por meses. El ahorro usado solo cuenta el dinero reservado que se gastó al comprar deseos.'
+                : 'Compara el ciclo actual con el anterior. El ahorro usado solo cuenta el dinero reservado que se gastó al comprar deseos.'}
             </CardDescription>
           </div>
           <div className="flex flex-wrap items-center gap-2">
             <Badge variant="secondary" className="bg-surface-container-high text-on-surface">
-              Desde {cycleDateFormatter.format(new Date(`${analysis.currentStart}T12:00:00Z`)).replace('.', '')}
+              {granularity === 'monthly'
+                ? `${analysis.monthlySeries.length} mes(es)`
+                : `Desde ${cycleDateFormatter.format(new Date(`${analysis.currentStart}T12:00:00Z`)).replace('.', '')}`}
             </Badge>
-            <Button
-              type="button"
-              size="sm"
-              variant={showPrevious ? 'secondary' : 'outline'}
-              aria-pressed={showPrevious}
-              disabled={!analysis.hasPreviousCycle}
-              onClick={() => setShowPrevious((current) => !current)}
-            >
-              {analysis.hasPreviousCycle ? (showPrevious ? 'Comparando anterior' : 'Comparar anterior') : 'Sin ciclo anterior'}
-            </Button>
+            {granularity !== 'monthly' ? (
+              <Button
+                type="button"
+                size="sm"
+                variant={showPrevious ? 'secondary' : 'outline'}
+                aria-pressed={showPrevious}
+                disabled={!analysis.hasPreviousCycle}
+                onClick={() => setShowPrevious((current) => !current)}
+              >
+                {analysis.hasPreviousCycle ? (showPrevious ? 'Comparando anterior' : 'Comparar anterior') : 'Sin ciclo anterior'}
+              </Button>
+            ) : null}
           </div>
         </div>
 
@@ -313,17 +371,28 @@ export function SpendingTrendCard({
         </div>
 
         {granularity === 'monthly' ? (
-          <ChartContainer config={trendConfig} className="h-[320px] w-full">
-            <BarChart accessibilityLayer data={showPrevious ? convertedMonthlySeries : convertedMonthlySeries.slice(-1)} margin={{ top: 18, right: 16, left: -12, bottom: 4 }}>
-              <CartesianGrid vertical={false} strokeDasharray="3 3" />
-              <XAxis dataKey="label" tickLine={false} axisLine={false} />
-              <YAxis tickLine={false} axisLine={false} width={112} tickFormatter={(value) => formatMoneyInput(Number(value), currency)} />
-              <ChartTooltip content={<ChartTooltipContent formatter={tooltipFormatter} />} />
-              {visibleCategories.gastos && <Bar dataKey="gastos" fill="var(--color-gastos)" radius={6} />}
-              {visibleCategories.gustos && <Bar dataKey="gustos" fill="var(--color-gustos)" radius={6} />}
-              {visibleCategories.ahorroUsado && <Bar dataKey="ahorroUsado" fill="var(--color-ahorroUsado)" radius={6} />}
-            </BarChart>
-          </ChartContainer>
+          <div className="overflow-x-auto overscroll-x-contain pb-2">
+            <ChartContainer config={trendConfig} className="h-[320px] w-full min-w-[640px] lg:min-w-0">
+              <LineChart accessibilityLayer data={convertedMonthlySeries} margin={{ top: 18, right: 16, left: -12, bottom: 4 }}>
+                <CartesianGrid vertical={false} strokeDasharray="3 3" />
+                <XAxis dataKey="label" tickLine={false} axisLine={false} interval={0} />
+                <YAxis tickLine={false} axisLine={false} width={112} tickFormatter={(value) => formatMoneyInput(Number(value), currency)} />
+                <ChartTooltip content={<ChartTooltipContent indicator="line" formatter={tooltipFormatter} />} />
+                {categories.map((category) => visibleCategories[category.key] && (
+                  <Line
+                    key={category.key}
+                    type="monotone"
+                    dataKey={category.key}
+                    stroke={`var(--color-${category.key})`}
+                    strokeWidth={3}
+                    dot={{ r: 4 }}
+                    activeDot={{ r: 6 }}
+                    connectNulls={false}
+                  />
+                ))}
+              </LineChart>
+            </ChartContainer>
+          </div>
         ) : (
           <ChartContainer config={trendConfig} className="h-[320px] w-full">
             <LineChart accessibilityLayer data={convertedAlignedSeries} margin={{ top: 18, right: 16, left: -12, bottom: 4 }}>
@@ -360,10 +429,10 @@ export function SpendingTrendCard({
         )}
 
         <div className="flex flex-wrap items-center gap-4 text-xs text-muted-gray">
-          <span className="flex items-center gap-2"><span className="h-0.5 w-7 bg-on-surface" /> Ciclo actual</span>
-          {showPrevious && analysis.hasPreviousCycle && (
+          <span className="flex items-center gap-2"><span className="h-0.5 w-7 bg-on-surface" /> {granularity === 'monthly' ? 'Evolución mensual' : 'Ciclo actual'}</span>
+          {granularity !== 'monthly' && showPrevious && analysis.hasPreviousCycle ? (
             <span className="flex items-center gap-2"><span className="w-7 border-t-2 border-dashed border-muted-gray" /> Ciclo anterior</span>
-          )}
+          ) : null}
           <span>Haz clic en una categoría para ocultarla o mostrarla.</span>
         </div>
       </CardContent>

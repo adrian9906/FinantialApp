@@ -84,9 +84,12 @@
   html {
     background: var(--body-background);
     background-size: var(--body-background-size, auto);
+    overflow-x: hidden;
   }
 
   body {
+    min-width: 0;
+    overflow-x: hidden;
     background: var(--body-background);
     background-size: var(--body-background-size, auto);
     color: var(--color-on-background);
@@ -96,6 +99,10 @@
     transition:
       background 220ms ease,
       color 220ms ease;
+  }
+
+  #root {
+    min-width: 0;
   }
 
   ::selection {

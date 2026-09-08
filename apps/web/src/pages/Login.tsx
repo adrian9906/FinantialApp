@@ -12,6 +12,7 @@ import {
 } from 'lucide-react'
 import { Navigate, useLocation, useNavigate, useSearchParams } from 'react-router-dom'
 import { toast } from 'sonner'
+import { GoogleSignInButton } from '@/components/auth/GoogleSignInButton'
 
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
@@ -262,6 +263,7 @@ type LoginFormProps = {
   onSubmit: (event: FormEvent<HTMLFormElement>) => void
   onFieldChange: (field: keyof LoginFormState, value: string | boolean) => void
   onTogglePassword: () => void
+  onGoogleError: (message: string) => void
 }
 
 function LoginForm({
@@ -272,6 +274,7 @@ function LoginForm({
   onSubmit,
   onFieldChange,
   onTogglePassword,
+  onGoogleError,
 }: LoginFormProps) {
   return (
     <form className="mt-8 space-y-5" onSubmit={(event) => void onSubmit(event)}>
@@ -318,6 +321,14 @@ function LoginForm({
           </>
         ) : 'Entrar a Plata App'}
       </Button>
+
+      <div className="flex items-center gap-3">
+        <span className="h-px flex-1 bg-graphite" />
+        <span className="text-xs uppercase tracking-[0.18em] text-medium-gray">o</span>
+        <span className="h-px flex-1 bg-graphite" />
+      </div>
+
+      <GoogleSignInButton onError={onGoogleError} />
     </form>
   )
 }
@@ -489,6 +500,7 @@ function AuthCard({
           onSubmit={onLoginSubmit}
           onFieldChange={onLoginFieldChange}
           onTogglePassword={onTogglePassword}
+          onGoogleError={(message) => toast.error(message)}
         />
       ) : (
         <RegisterForm

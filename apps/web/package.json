@@ -17,6 +17,8 @@
     "@capacitor/android": "^7.6.7",
     "@capacitor/core": "^7.6.7",
     "@capacitor/ios": "^7.6.7",
+    "@capacitor/local-notifications": "7.0.0",
+    "@codetrix-studio/capacitor-google-auth": "3.4.0-rc.4",
     "@hookform/resolvers": "^5.4.0",
     "@plata/shared": "workspace:*",
     "@tabler/icons-react": "^3.46.0",

@@ -10,7 +10,9 @@ model Usuario {
   id         String   @id @default(uuid())
   nombre     String
   correo     String   @unique
-  contrasena String
+  // Null for accounts created through Google, which have no password.
+  contrasena String?
+  googleId   String?  @unique
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
 

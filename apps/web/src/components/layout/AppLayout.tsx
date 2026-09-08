@@ -1,6 +1,5 @@
 import { NavLink } from 'react-router-dom'
 import { useState } from 'react'
-import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { AppIcon, type AppIconName } from '@/components/icons/AppIcon'
@@ -38,10 +37,6 @@ const navItems = [
   { to: '/reports', icon: 'reports', label: 'Informes' },
   { to: '/settings', icon: 'settings', label: 'Ajustes' },
 ] satisfies Array<{ to: string, icon: AppIconName, label: string }>
-
-function handleSupportClick() {
-  toast.info('El acceso a soporte estará disponible pronto.')
-}
 
 export function Sidebar() {
   const [open, setOpen] = useState(false)
@@ -169,15 +164,15 @@ export function Sidebar() {
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
-
-          <button
-            type="button"
-            onClick={handleSupportClick}
-            className="flex items-center gap-3 rounded-lg px-3 py-2 text-sm text-muted-gray transition-all hover:bg-surface-container-high hover:text-on-surface"
-          >
-            <AppIcon name="life-buoy" className="size-[18px]" />
-            Soporte
-          </button>
+          <NavLink to="mailto:soporte@petronovacaribe.com">
+            <button
+              type="button"
+              className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm text-muted-gray transition-all hover:bg-surface-container-high hover:text-on-surface"
+            >
+              <AppIcon name="life-buoy" className="size-[18px]" />
+              Soporte
+            </button>
+          </NavLink>
         </div>
       </aside>
 
@@ -222,13 +217,15 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
       ) : null}
 
       <Sidebar />
-      <main className="pointer-events-none relative z-10 min-h-dvh flex-1 lg:pl-64">
-        <div className="pointer-events-auto mx-auto w-full max-w-full px-3 pb-5 pt-24 sm:px-6 sm:pb-6 sm:pt-28 md:max-w-[94%] lg:max-w-[90%] lg:px-8 lg:py-8">
-          <div className="mb-5 flex items-center gap-3">
-            <div data-tour="global-search" className="min-w-0 flex-1">
+      <main className="pointer-events-none relative z-10 min-h-dvh min-w-0 flex-1 overflow-x-hidden lg:pl-64">
+        <div className="pointer-events-auto mx-auto w-full min-w-0 max-w-full px-3 pb-5 pt-24 sm:px-6 sm:pb-6 sm:pt-28 md:max-w-[94%] lg:max-w-[90%] lg:px-8 lg:py-8">
+          <div className="mb-5 grid min-w-0 grid-cols-[minmax(0,1fr)_auto] gap-2 sm:flex sm:items-center sm:gap-3">
+            <div data-tour="global-search" className="col-span-2 min-w-0 sm:col-span-1 sm:flex-1">
               <GlobalSearchDialog />
             </div>
-            <CurrencySwitcher />
+            <div className="min-w-0">
+              <CurrencySwitcher />
+            </div>
             <AppTour />
           </div>
 
@@ -261,7 +258,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
 
           <InstallAppPrompt />
 
-          <div key={`${activeCurrencyCode}:${activeCurrencyRate}`} data-tour="workspace">{children}</div>
+          <div key={`${activeCurrencyCode}:${activeCurrencyRate}`} data-tour="workspace" className="min-w-0">{children}</div>
         </div>
       </main>
     </div>

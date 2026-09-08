@@ -59,7 +59,11 @@ function verifyHashedPassword(password: string, storedValue: string) {
   return timingSafeEqual(derived, storedBuffer)
 }
 
-export function verifyPassword(password: string, storedValue: string) {
+export function verifyPassword(password: string, storedValue: string | null | undefined) {
+  // Google-only accounts have no password: never let an empty or missing hash
+  // authenticate anyone.
+  if (!storedValue) return false
+
   if (!storedValue.includes(':')) {
     return password === storedValue
   }

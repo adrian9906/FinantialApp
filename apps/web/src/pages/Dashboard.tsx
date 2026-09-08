@@ -587,15 +587,15 @@ export default function Dashboard() {
       </section>
 
       <section className="grid grid-cols-1 xl:grid-cols-12 gap-4">
-        <Card className="xl:col-span-7 bg-surface border-graphite shadow-vault">
-          <CardHeader className="flex flex-row items-start justify-between gap-4">
-            <div>
+        <Card className="min-w-0 overflow-hidden border-graphite bg-surface shadow-vault xl:col-span-7">
+          <CardHeader className="flex flex-col items-start justify-between gap-4 sm:flex-row">
+            <div className="min-w-0">
               <CardTitle className="text-on-surface">Pulso Financiero</CardTitle>
               <CardDescription className="text-muted-gray">
                 Comparativa entre ingresos y movimientos del mes.
               </CardDescription>
             </div>
-            <Badge variant="secondary" className="bg-surface-container-high text-on-surface">
+            <Badge variant="secondary" className="shrink-0 bg-surface-container-high text-on-surface">
               {formatFormulaLabel(formula)}
             </Badge>
           </CardHeader>
