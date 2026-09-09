@@ -16,11 +16,12 @@ import { Label } from '@/components/ui/label'
 import { ChevronLeft, ChevronRight, Plus, Pencil, Trash2, Wallet, Receipt } from 'lucide-react'
 import { exportSalariesReport } from '@/lib/reportExports'
 import { useMonthlyOverview } from '@/lib/useMonthlyOverview'
-import { formatMoney, useCurrencyInput, useMoneyWithCode } from '@/lib/currency'
+import { convertUsdToInput, formatMoney, formatMoneyWithCode, getCurrencyByCode, useCurrencyInput, useMoneyWithCode } from '@/lib/currency'
 import { formatFormulaLabel, usePreferencesStore } from '@/store/preferencesStore'
 import { getActiveIncomeSources, getIncomesForMonth, getMonthKey, getSalaryForMonth, getTotalIncomeForMonth, normalizeSalaryHistory } from '@plata/shared'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { IncomeSourceManager } from '@/components/income/IncomeSourceManager'
+import { IncomeMoneyActions } from '@/components/income/IncomeMoneyActions'
 
 const MONTH_LABELS = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic']
 
@@ -48,11 +49,14 @@ export default function Salary() {
   const formatSalary = useMoneyWithCode()
   const moneyInput = useCurrencyInput()
   const formula = usePreferencesStore((state) => state.formula)
+  const currencies = usePreferencesStore((state) => state.currencies)
+  const activeCurrencyCode = usePreferencesStore((state) => state.activeCurrencyCode)
   const [open, setOpen] = useState(false)
   const [editId, setEditId] = useState<string | null>(null)
   const [amount, setAmount] = useState('')
   const [month, setMonth] = useState('')
   const [sourceId, setSourceId] = useState('')
+  const [currencyCode, setCurrencyCode] = useState(activeCurrencyCode)
   const [calendarYear, setCalendarYear] = useState(new Date().getFullYear())
   const [isSaving, setIsSaving] = useState(false)
   const [isExporting, setIsExporting] = useState(false)
@@ -76,6 +80,7 @@ export default function Salary() {
     setAmount('')
     setMonth('')
     setSourceId('')
+    setCurrencyCode(activeCurrencyCode)
     setEditId(null)
     setCalendarYear(new Date().getFullYear())
   }
@@ -83,9 +88,10 @@ export default function Salary() {
   function handleOpen(entry?: typeof salaries[number]) {
     if (entry) {
       setEditId(entry.id)
-      setAmount(moneyInput.fromUsd(entry.amount))
+      setAmount(convertUsdToInput(entry.amount, getCurrencyByCode(entry.currencyCode)))
       setMonth(entry.month)
       setSourceId(entry.sourceId ?? '')
+      setCurrencyCode(entry.currencyCode ?? 'USD')
       setCalendarYear(monthValueToDate(entry.month).getFullYear())
     } else {
       resetForm()
@@ -111,8 +117,9 @@ export default function Salary() {
 
     const source = incomeSources.find((entry) => entry.id === sourceId)
     const payload = {
-      amount: moneyInput.toUsd(amount),
+      amount: Number(amount.replace(',', '.')) / getCurrencyByCode(currencyCode).exchangeRate,
       month,
+      currencyCode,
       ...(source
         ? {
             sourceId: source.id,
@@ -243,7 +250,7 @@ export default function Salary() {
                       {entry.sourceName ?? 'Ingreso'}
                       {entry.kind === 'one-off' ? ' · puntual' : ''}
                     </span>
-                    <span className="font-medium text-on-surface">{formatSalary(entry.amount)}</span>
+                    <span className="font-medium text-on-surface">{formatMoneyWithCode(entry.amount, getCurrencyByCode(entry.currencyCode))}</span>
                   </li>
                 ))}
               </ul>
@@ -251,6 +258,7 @@ export default function Salary() {
           </Card>
 
           <IncomeSourceManager />
+          <IncomeMoneyActions />
 
         <div className="flex flex-col gap-4 bg-surface rounded-xl p-6 shadow-vault">
           <div className="flex justify-between items-center pb-3 border-b border-graphite">
@@ -272,7 +280,7 @@ export default function Salary() {
                       <Wallet className="size-4" />
                     </div>
                     <div>
-                      <p className="text-base font-medium text-on-surface">{formatSalary(entry.amount)}</p>
+                      <p className="text-base font-medium text-on-surface">{formatMoneyWithCode(entry.amount, getCurrencyByCode(entry.currencyCode))}</p>
                       <p className="text-xs text-muted-gray">
                         {entry.month}
                         {entry.sourceName ? ` · ${entry.sourceName}` : ''}
@@ -331,7 +339,7 @@ export default function Salary() {
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="amount" className="text-medium-gray">Monto ({moneyInput.currency.code})</Label>
+                <Label htmlFor="amount" className="text-medium-gray">Monto ({currencyCode})</Label>
                 <Input
                   id="amount"
                   type="number"
@@ -340,6 +348,23 @@ export default function Salary() {
                   onChange={(e) => setAmount(e.target.value)}
                   className="bg-abyss border-graphite text-on-surface focus:border-tertiary-container"
                 />
+              </div>
+
+              <div className="space-y-2">
+                <Label className="text-medium-gray">Moneda del ingreso</Label>
+                <Select value={currencyCode} onValueChange={(value) => {
+                  const next = value ?? 'USD'
+                  const currentUsd = Number(amount.replace(',', '.')) / getCurrencyByCode(currencyCode).exchangeRate
+                  setCurrencyCode(next)
+                  if (amount) setAmount(convertUsdToInput(currentUsd, getCurrencyByCode(next)))
+                }}>
+                  <SelectTrigger className="bg-abyss border-graphite"><SelectValue>{currencyCode}</SelectValue></SelectTrigger>
+                  <SelectContent>
+                    {currencies.map((currency) => (
+                      <SelectItem key={currency.code} value={currency.code}>{currency.code} · {currency.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
 
               <Card className="border-graphite bg-abyss p-4 shadow-vault-sm">

@@ -21,6 +21,9 @@ export interface ReceiptOCRRawResult {
 
 export interface ReceiptOCRLineItem {
   name: string
+  /** Units printed at the beginning of the receipt line. Defaults to one. */
+  quantity?: number
+  /** Total price printed for this line, not the unit price. */
   price: number
   category?: ExpenseCategory | WantCategory
 }
@@ -42,9 +45,11 @@ export interface ReceiptOCRParseContext {
   userRules?: readonly CategorizationRule[]
 }
 
-const TOTAL_KEYWORDS = /\b(?:total|importe|monto|a pagar|pagar|neto a|suma de|subtotal a pagar)\b/i
+const TOTAL_KEYWORDS = /\b(?:total|subtotal|importe|monto|a pagar|pagar|neto a|suma de)\b/i
 
-const GENERIC_HEADER = /^(?:total|importe|monto|a pagar|pagar|factura|ticket|recibo|cliente|cajero|atendio|atendido|gracias|vuelva|pronto|no fiscal|orden|mesa|proceda|telefono|nit|ruc|fecha|tarjeta|efectivo|cambio|subtotal|iva|igv|impuesto|descuento|folio|secuencia|no\.?|#|www|http|term|sucursal|local|caja|parcial|punto de venta|validar|verificar|aprobado|autorizacion|entrada|salida|referencia)\b/i
+const GENERIC_HEADER = /^(?:total|importe|monto|a pagar|pagar|pagado|factura|ticket|recibo|cliente|cajero|atendio|atendido|gracias|vuelva|pronto|no fiscal|orden|mesa|proceda|telefono|nit|ruc|fecha|tarjeta|efectivo|transferencia|cambio|subtotal|servicio|iva|igv|impuesto|descuento|folio|secuencia|no\.?|#|www|http|term|sucursal|local|caja|parcial|punto de venta|validar|verificar|aprobado|autorizacion|entrada|salida|referencia)\b/i
+
+const STANDALONE_MONTH = /^(?:ene(?:ro)?|feb(?:rero)?|mar(?:zo)?|abr(?:il)?|may(?:o)?|jun(?:io)?|jul(?:io)?|ago(?:sto)?|sep(?:tiembre)?|oct(?:ubre)?|nov(?:iembre)?|dic(?:iembre)?)\.?$/i
 
 const LETTERS = /[A-Za-z\u00C0-\u017F]{2,}/
 
@@ -107,6 +112,8 @@ function cleanLine(line: string) {
     .replace(/\u00A0/g, ' ')
     .replace(/[\u2018\u2019\u02BC\u02B9\u201C\u201D`\u00B4]/g, '')
     .replace(/\s+/g, ' ')
+    // Thermal printers often group thousands with a space: "1 800.00".
+    .replace(/(\d)\s+(?=\d{3}(?:[.,]\d{1,2})?\b)/g, '$1')
     .trim()
 }
 
@@ -273,6 +280,14 @@ function extractDate(lines: string[]): DateResult {
         continue
       }
 
+      const currentYear = new Date().getFullYear()
+      if (year < currentYear - 8 && year >= 2000 && year <= 2099) {
+        const printed = String(year)
+        const current = String(currentYear)
+        const differingDigits = [...printed].filter((digit, index) => digit !== current[index]).length
+        if (differingDigits === 1) year = currentYear
+      }
+
       if (month >= 1 && month <= 12 && day >= 1 && day <= 31 && isValidDate(year, month, day)) {
         found.push(`${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`)
       }
@@ -319,7 +334,6 @@ export function extractLineItems(
   totalAmount?: number,
 ): ReceiptOCRLineItem[] {
   const items: ReceiptOCRLineItem[] = []
-  const seen = new Set<string>()
   const cap = totalAmount ? Math.max(totalAmount * 1.3, 20) : Number.POSITIVE_INFINITY
   const dateRegex = /\d{1,4}[-/.]\d{1,2}[-/.]\d{1,4}/
 
@@ -333,35 +347,73 @@ export function extractLineItems(
     if (numbers.length === 0) continue
 
     let price: number | null = null
-    let priceTokenEnd = -1
+    let priceTokenStart = -1
     for (let i = numbers.length - 1; i >= 0; i -= 1) {
       const value = parseReceiptAmountToken(numbers[i])
       if (value !== null && value > 0 && value <= cap) {
         price = value
-        priceTokenEnd = trimmed.lastIndexOf(numbers[i]) + numbers[i].length
+        priceTokenStart = trimmed.lastIndexOf(numbers[i])
         break
       }
     }
     if (price === null) continue
 
-    let name = trimmed.slice(0, priceTokenEnd).trim()
+    let name = trimmed.slice(0, priceTokenStart).trim()
+    let quantity = 1
+    // A photographed receipt may add one stray glyph before the printed quantity
+    // (for example "O 1.00Jabon" or "“= 1.00Jabon").
+    const quantityMatch = name.match(/^\s*(?:(?:[^A-Za-z\u00C0-\u017F\d]+)|(?:[A-Za-z]\s+))?(\d+(?:[.,]\d{1,3})?)\s*(?:[xX*\u00D7]\s*)?(?=[A-Za-z\u00C0-\u017F])/)
+    if (quantityMatch) {
+      const parsedQuantity = parseReceiptAmountToken(quantityMatch[1])
+      if (parsedQuantity !== null && parsedQuantity > 0 && parsedQuantity <= 10_000) {
+        quantity = parsedQuantity
+        name = name.slice(quantityMatch[0].length)
+      }
+    }
     name = name
       .replace(/\s*\d+\s*[xX*\u00D7]\s*[\d.,]+\s*$/, '')
       .replace(/\s+\d+\s*$/, '')
       .replace(/[\s.,:;|=\-\u2013\u2014]+$/, '')
       .replace(/^\d+\s*[).:\-\u2022]\s*/, '')
       .trim()
-    if (!LETTERS.test(name)) continue
-
-    const key = name.toLocaleLowerCase('es')
-    if (seen.has(key)) continue
-    seen.add(key)
+      .replace(/^abon\b/i, 'Jabon')
+      .replace(/^ectar\b/i, 'Nectar')
+    const words = name.match(/[A-Za-z\u00C0-\u017F]+/g) ?? []
+    const letterCount = words.join('').length
+    if (!LETTERS.test(name) || letterCount < 4 || !words.some((word) => word.length >= 3)) continue
+    if (STANDALONE_MONTH.test(name)) continue
 
     const category = suggestCategoryFromReceipt(name, transactionType, userRules).category
-    items.push(category ? { name, price, category } : { name, price })
+    items.push(category ? { name, quantity, price, category } : { name, quantity, price })
   }
 
-  return items
+  if (!totalAmount || items.length < 2 || items.length > 16) return items
+
+  // OCR commonly mistakes SUBTOTAL/PAGADO lines for products. Prefer the largest
+  // plausible subset whose printed prices reconcile with the receipt total.
+  const tolerance = Math.max(0.02, totalAmount * 0.002)
+  let bestMask = 0
+  let bestCount = 0
+  let bestDifference = Number.POSITIVE_INFINITY
+  const combinations = 1 << items.length
+  for (let mask = 1; mask < combinations; mask += 1) {
+    let sum = 0
+    let count = 0
+    for (let index = 0; index < items.length; index += 1) {
+      if ((mask & (1 << index)) === 0) continue
+      sum += items[index].price
+      count += 1
+    }
+    const difference = Math.abs(sum - totalAmount)
+    if (difference <= tolerance && (count > bestCount || (count === bestCount && difference < bestDifference))) {
+      bestMask = mask
+      bestCount = count
+      bestDifference = difference
+    }
+  }
+
+  if (!bestMask || bestCount === items.length) return items
+  return items.filter((_, index) => (bestMask & (1 << index)) !== 0)
 }
 
 export function suggestCategoryFromReceipt(

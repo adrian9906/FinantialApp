@@ -27,6 +27,7 @@
     "test:sync": "tsx packages/shared/src/sync.test.mts",
     "test:date": "tsx apps/web/src/lib/date.test.mts",
     "test:income": "tsx packages/shared/src/income.test.mts",
+    "test:income-money": "tsx apps/web/src/lib/income-money.test.mts",
     "test:receipt": "tsx apps/web/src/lib/receipt-review.test.mts",
     "test:attachments": "tsx packages/shared/src/attachments.test.mts",
     "test:payment": "tsx packages/shared/src/payment-method.test.mts",

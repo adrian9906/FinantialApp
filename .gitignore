@@ -36,6 +36,10 @@ apps/*/.env.local
 apps/*/.expo
 apps/*/dist
 apps/*/node_modules
+# Private Android release signing material. Keep it local and backed up securely.
+apps/web/android/signing/
+Plata-App-v*.apk
+*.idsig
 .pnpm-store
 .codebase-memory
 docs/roadmap-funcionalidades-plata-app.md

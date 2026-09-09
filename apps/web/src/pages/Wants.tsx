@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import { buildWantTransferSavingDescription, createLearnedCategorizationRule, findCategorizationRule, isCashPayment, isInFinancialPeriod, type ReceiptOCRLineItem, type ReceiptOCRParsedDraft } from '@plata/shared'
-import { ArrowLeftRight, Banknote, Clapperboard, Gamepad2, Heart, LockKeyhole, Pencil, Plus, ShoppingBag, Sparkles, Ticket, Trash2, type LucideIcon } from 'lucide-react'
+import { ArrowLeftRight, Banknote, Clapperboard, Gamepad2, Heart, LockKeyhole, Pencil, Plus, ScanLine, ShoppingBag, Sparkles, Ticket, Trash2, type LucideIcon } from 'lucide-react'
 import { useFinanceStore } from '@/store/financeStore'
 import { buildWantDescription, createCustomWantCategory, getPlannedWantTotal, getWantCategoryLabel, parseWantDescription, type WantBuiltInCategory, type WantCategory } from '@/lib/want-utils'
+import { getPlannedExpenseTotal } from '@/lib/expense-utils'
 import { useMonthlyOverview } from '@/lib/useMonthlyOverview'
 import { formatMoney, useCurrencyInput } from '@/lib/currency'
 import { Badge } from '@/components/ui/badge'
@@ -34,6 +35,8 @@ import { buildPlanningHistorySuggestions, buildReusablePlanningListDrafts } from
 import { toast } from 'sonner'
 import { filterAndSortTransactionsByDate, getTodayDateKey, type TransactionDateFilter as TransactionDateFilterValue } from '@/lib/date'
 import { ReceiptOcrPanel } from '@/components/ocr/ReceiptOcrPanel'
+import { ReceiptItemsReviewDialog } from '@/components/ocr/ReceiptItemsReviewDialog'
+import { buildReceiptCategoryGroups, buildReceiptTransaction, getReceiptTotalsByType, type ReceiptReviewResult } from '@/lib/receipt-review'
 import { useAuthStore } from '@/store/authStore'
 
 interface WantFormState {
@@ -213,6 +216,12 @@ export default function Wants() {
   const [restoringListId, setRestoringListId] = useState<string | null>(null)
   const [customCategoryName, setCustomCategoryName] = useState('')
   const [dateFilter, setDateFilter] = useState<TransactionDateFilterValue>('cycle')
+  const [receiptItems, setReceiptItems] = useState<ReceiptOCRLineItem[]>([])
+  const [receiptDate, setReceiptDate] = useState<string | undefined>(undefined)
+  const [receiptReviewOpen, setReceiptReviewOpen] = useState(false)
+  const [receiptScanOpen, setReceiptScanOpen] = useState(false)
+  const [receiptScanId, setReceiptScanId] = useState(0)
+  const receiptCategoryGroups = useMemo(() => buildReceiptCategoryGroups(transactions), [transactions])
   const categoryWasChanged = useRef(false)
   const [form, setForm] = useState<WantFormState>({
     amount: '',
@@ -356,6 +365,8 @@ setCustomCategoryName('')
 
   function applyReceiptDraft(draft: ReceiptOCRParsedDraft) {
     setFormError(null)
+    setReceiptScanOpen(false)
+    setOpen(true)
     setForm((current) => ({
       ...current,
       amount: draft.amount !== undefined ? String(draft.amount) : current.amount,
@@ -367,40 +378,37 @@ setCustomCategoryName('')
     }))
   }
 
-  async function handleAddReceiptItems(items: ReceiptOCRLineItem[], date?: string) {
-    if (items.length === 0 || isSaving) return
-    if (isWantsDisabled) {
-      toast.error('La sección Gustos está desactivada porque su porcentaje es 0%.')
-      return
+  function handleAddReceiptItems(items: ReceiptOCRLineItem[], date?: string) {
+    setReceiptItems(items)
+    setReceiptDate(date)
+    setReceiptScanId((current) => current + 1)
+    setReceiptScanOpen(false)
+    setReceiptReviewOpen(true)
+    return Promise.resolve()
+  }
+
+  async function handleConfirmReceiptItems(reviewed: ReceiptReviewResult[], date: string) {
+    const totals = getReceiptTotalsByType(reviewed)
+    const availableExpenses = Math.max(0, overview.budgetExpenses - getPlannedExpenseTotal(overview.periodTransactions))
+    const availableWants = Math.max(0, overview.budgetWants - getPlannedWantTotal(overview.periodTransactions))
+
+    if (totals.expense > availableExpenses) {
+      toast.error(`Los gastos del recibo suman ${formatMoney(totals.expense)} y solo tienes ${formatMoney(availableExpenses)} disponibles para planificar.`)
+      throw new Error('over-budget')
     }
-    const total = items.reduce((sum, item) => sum + moneyInput.toUsd(item.price), 0)
-    if (total > availableToPlan) {
-      toast.error(`Los productos suman ${formatMoney(total)} y solo tienes ${formatMoney(availableToPlan)} disponibles para planificar.`)
-      return
+    if (totals.want > availableWants) {
+      toast.error(`Los gustos del recibo suman ${formatMoney(totals.want)} y solo tienes ${formatMoney(availableWants)} disponibles para planificar.`)
+      throw new Error('over-budget')
     }
-    if (plannedTotal + total > overview.budgetWants) {
-      toast.error(`No puedes agregarlos porque la lista subiria a ${formatMoney(plannedTotal + total)} y tu limite es ${formatMoney(overview.budgetWants)}.`)
-      return
-    }
-    setIsSaving(true)
-    try {
-      const targetDate = date ?? getTodayDateKey()
-      for (const item of items) {
-        const rule = findCategorizationRule(item.name, userRules)
-        const category = rule && rule.transactionType === 'want'
-          ? (rule.category as WantCategory)
-          : (item.category as WantCategory | undefined) ?? 'outings'
-        await addTransaction({
-          amount: moneyInput.toUsd(item.price),
-          type: 'want',
-          description: buildWantDescription(category, item.name.trim(), 'pending'),
-          date: targetDate,
-        })
-      }
-      toast.success(`Se agregaron ${items.length} producto${items.length === 1 ? '' : 's'} del recibo.`)
-    } finally {
-      setIsSaving(false)
-    }
+
+    await Promise.all(reviewed.map((item) => addTransaction(buildReceiptTransaction(item, date))))
+    reviewed.forEach((item) => {
+      const learned = item.transactionType === 'expense'
+        ? createLearnedCategorizationRule(item.name, { transactionType: 'expense', category: item.category })
+        : createLearnedCategorizationRule(item.name, { transactionType: 'want', category: item.category })
+      if (learned) saveCategoryRule(profileId, learned)
+    })
+    toast.success(`Se crearon ${reviewed.length} producto${reviewed.length === 1 ? '' : 's'} del recibo.`)
   }
 
   async function handleSave() {
@@ -559,6 +567,13 @@ setCustomCategoryName('')
         </div>
         <div className="flex flex-col gap-3 sm:flex-row lg:w-auto">
           <ExportExcelButton loading={isExporting} onClick={handleExport} className="w-full sm:w-auto bg-surface-container-high text-on-surface hover:bg-surface-container-higher" />
+          <Button
+            variant="secondary"
+            onClick={() => setReceiptScanOpen(true)}
+            className="w-full sm:w-auto"
+          >
+            <ScanLine className="size-4" /> Agregar por recibo
+          </Button>
           <Button
             disabled={isWantsDisabled}
             onClick={() => handleOpen()}
@@ -895,8 +910,6 @@ setCustomCategoryName('')
               </div>
             </div>
 
-            <ReceiptOcrPanel transactionType="want" userRules={userRules} onApply={applyReceiptDraft} onAddItems={handleAddReceiptItems} />
-
             <Card className="border-graphite bg-abyss p-4 shadow-vault-sm">
               <p className="text-xs uppercase tracking-[0.22em] text-medium-gray">Vista previa</p>
               <p className="mt-2 text-lg font-semibold text-on-surface">
@@ -935,6 +948,37 @@ setCustomCategoryName('')
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <Dialog open={receiptScanOpen} onOpenChange={setReceiptScanOpen}>
+        <DialogContent className="max-h-[calc(100dvh-2rem)] w-[calc(100vw-2rem)] min-w-0 overflow-x-hidden border-graphite bg-surface sm:max-w-xl">
+          <DialogHeader>
+            <DialogTitle className="text-on-surface">Agregar por recibo</DialogTitle>
+            <DialogDescription>
+              Sube o toma una foto. Después podrás corregir la fecha y decidir el destino de cada producto.
+            </DialogDescription>
+          </DialogHeader>
+          <ReceiptOcrPanel
+            transactionType="want"
+            userRules={userRules}
+            onApply={applyReceiptDraft}
+            onAddItems={handleAddReceiptItems}
+          />
+        </DialogContent>
+      </Dialog>
+
+      {receiptReviewOpen ? (
+        <ReceiptItemsReviewDialog
+          key={receiptScanId}
+          open={receiptReviewOpen}
+          onOpenChange={setReceiptReviewOpen}
+          items={receiptItems}
+          initialDate={receiptDate}
+          defaultTransactionType="want"
+          categoryGroups={receiptCategoryGroups}
+          userRules={userRules}
+          onConfirm={handleConfirmReceiptItems}
+        />
+      ) : null}
 
       <Dialog open={transferOpen} onOpenChange={(nextOpen) => { if (!isTransferring) setTransferOpen(nextOpen) }}>
         <DialogContent className="border-graphite bg-surface sm:max-w-xl">

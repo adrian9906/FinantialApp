@@ -16,6 +16,8 @@ export interface Salary {
   id: string
   amount: number
   month: string
+  /** Currency used by this income account. Amount stays normalized to USD. */
+  currencyCode?: string
   /** Which income source this belongs to; absent on legacy records. */
   sourceId?: string
   /** Free-text label kept alongside the id so history survives a deleted source. */

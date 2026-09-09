@@ -63,7 +63,10 @@ export function createEmptyBootstrapPayload(): BootstrapPayload {
 
 export function normalizeBootstrapPayload(payload?: Partial<BootstrapPayload> | null): BootstrapPayload {
   return {
-    salaries: payload?.salaries ?? [],
+    salaries: (payload?.salaries ?? []).map((salary) => ({
+      ...salary,
+      currencyCode: String(salary.currencyCode ?? 'USD').trim().toUpperCase() || 'USD',
+    })),
     incomeSources: payload?.incomeSources ?? [],
     transactions: payload?.transactions ?? [],
     debts: payload?.debts ?? [],

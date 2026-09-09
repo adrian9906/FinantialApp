@@ -28,6 +28,7 @@ import { isOnline } from '@/lib/offline'
 import { isUpgradeRequiredError, queueLocalChange, syncNow } from '@/lib/sync-engine'
 import { readSyncDocument } from '@/lib/sync-store'
 import { parseWantDescription } from '@/lib/want-utils'
+import { applyIncomeMoneyMovement, type IncomeMoneyDestination } from '@/lib/income-money'
 import { useAuthStore } from '@/store/authStore'
 import { usePreferencesStore } from '@/store/preferencesStore'
 
@@ -49,6 +50,8 @@ interface FinanceStore extends BootstrapPayload {
   addIncomeSource: (source: Omit<IncomeSource, 'id'>) => Promise<void>
   updateIncomeSource: (id: string, data: Partial<Omit<IncomeSource, 'id'>>) => Promise<void>
   removeIncomeSource: (id: string) => Promise<void>
+  assignIncomeMoney: (input: { amountUsd: number; month: string; destination: IncomeMoneyDestination }) => Promise<void>
+  transferIncomeMoney: (input: { sourceSalaryId: string; amountUsd: number; month: string; destination: IncomeMoneyDestination }) => Promise<void>
   addTransaction: (t: Omit<Transaction, 'id'>) => Promise<Transaction>
   updateTransaction: (id: string, data: Partial<Omit<Transaction, 'id'>>) => Promise<void>
   removeTransaction: (id: string) => Promise<void>
@@ -519,6 +522,12 @@ export const useFinanceStore = create<FinanceStore>()((set, get) => ({
       }))
       return
     }
+  },
+  assignIncomeMoney: async (input) => {
+    await updateLocalState(set, (state) => applyIncomeMoneyMovement(state, input, makeId))
+  },
+  transferIncomeMoney: async (input) => {
+    await updateLocalState(set, (state) => applyIncomeMoneyMovement(state, input, makeId))
   },
   addTransaction: async (transaction) => {
     if (transaction.type === 'want' && usePreferencesStore.getState().formula.wants === 0) {

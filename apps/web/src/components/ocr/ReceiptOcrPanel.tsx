@@ -3,7 +3,6 @@ import { Eye, ScanLine, Trash2 } from 'lucide-react'
 import type { CategorizationRule, ReceiptOCRLineItem, ReceiptOCRParsedDraft, ReceiptOCRTransactionType } from '@plata/shared'
 import { isOcrUserError, readImageFile, runClientOcr } from '@/lib/ocr'
 import { Button } from '@/components/ui/button'
-import { Checkbox } from '@/components/ui/checkbox'
 import { Progress } from '@/components/ui/progress'
 
 type OcrStatus = 'idle' | 'preparing' | 'recognizing' | 'parsing' | 'done' | 'error'
@@ -73,7 +72,6 @@ export function ReceiptOcrPanel({ transactionType, userRules, onApply, onAddItem
       setDraft(detected)
       setSelectedItems(new Set(detected.lineItems?.map((_, index) => index) ?? []))
       setStatus('done')
-      onApply(detected)
     } catch (error) {
       if (controller.signal.aborted) return
       setStatus('error')
@@ -87,20 +85,6 @@ export function ReceiptOcrPanel({ transactionType, userRules, onApply, onAddItem
     abortRef.current?.abort()
     setStatus('idle')
     setProgress(0)
-  }
-
-  function toggleItem(index: number) {
-    setSelectedItems((current) => {
-      const next = new Set(current)
-      if (next.has(index)) next.delete(index)
-      else next.add(index)
-      return next
-    })
-  }
-
-  function toggleAll(checked: boolean) {
-    if (!draft) return
-    setSelectedItems(checked ? new Set(draft.lineItems?.map((_, index) => index) ?? []) : new Set())
   }
 
   async function handleAddSelected() {
@@ -117,14 +101,13 @@ export function ReceiptOcrPanel({ transactionType, userRules, onApply, onAddItem
 
   const hasDetectedData = draft !== null && (draft.amount !== undefined || draft.date !== undefined || draft.suggestedName !== undefined)
   const summaryTokens = [
-    draft?.suggestedName ? { label: 'Nombre', value: draft.suggestedName } : null,
     draft?.amount !== undefined ? { label: 'Importe', value: String(draft.amount) } : null,
     draft?.date ? { label: 'Fecha', value: draft.date } : null,
   ].filter((token): token is { label: string; value: string } => token !== null)
 
   return (
-    <div className="space-y-3 rounded-xl border border-dashed border-graphite bg-abyss/60 p-4">
-      <div className="flex items-center justify-between gap-2">
+    <div className="min-w-0 space-y-3 rounded-xl border border-graphite bg-abyss/60 p-3 sm:p-4">
+      <div className="flex min-w-0 items-center justify-between gap-2">
         <p className="text-xs uppercase tracking-[0.18em] text-medium-gray">Escanear recibo</p>
         <Button
           type="button"
@@ -132,7 +115,7 @@ export function ReceiptOcrPanel({ transactionType, userRules, onApply, onAddItem
           size="sm"
           disabled={isProcessing}
           onClick={() => fileInputRef.current?.click()}
-          className="bg-surface-container-high text-on-surface hover:bg-surface-container-higher"
+          className="shrink-0 bg-surface-container-high text-on-surface hover:bg-surface-container-higher"
         >
           {isProcessing ? 'Procesando…' : <><ScanLine className="size-4" /> Escanear recibo</>}
         </Button>
@@ -145,13 +128,13 @@ export function ReceiptOcrPanel({ transactionType, userRules, onApply, onAddItem
         />
       </div>
 
-      <p className="text-xs leading-5 text-muted-gray">
+      {!preview ? <p className="text-xs leading-5 text-muted-gray">
         Sube una foto del recibo y los datos se rellenan automáticamente. Siempre podrás editarlos antes de guardar.
-      </p>
+      </p> : null}
 
       {preview ? (
-        <div className="flex items-center gap-3">
-          <img src={preview} alt="Vista previa del recibo" className="h-20 w-20 rounded-lg border border-graphite bg-surface object-cover" />
+        <div className="flex min-w-0 items-center gap-3 rounded-lg bg-surface/70 p-2">
+          <img src={preview} alt="Vista previa del recibo" className="h-20 w-16 shrink-0 rounded-md border border-graphite bg-surface object-cover" />
           <div className="min-w-0 flex-1">
             {isProcessing ? (
               <div className="space-y-1">
@@ -186,7 +169,7 @@ export function ReceiptOcrPanel({ transactionType, userRules, onApply, onAddItem
       ) : null}
 
       {hasDetectedData && status === 'done' ? (
-        <div className="space-y-2 rounded-lg border border-graphite bg-surface p-3">
+        <div className="min-w-0 space-y-2 rounded-lg bg-surface p-3">
           <div className="flex flex-wrap items-center gap-2">
             {summaryTokens.map((token) => (
               <span key={token.label} className="inline-flex items-center gap-1 rounded-md bg-surface-container-high px-2 py-1 text-xs text-on-surface">
@@ -222,40 +205,45 @@ export function ReceiptOcrPanel({ transactionType, userRules, onApply, onAddItem
               {draft.rawText}
             </pre>
           ) : null}
+
+          {draft && (!draft.lineItems || draft.lineItems.length === 0) ? (
+            <Button type="button" size="sm" onClick={() => onApply(draft)}>
+              Usar datos detectados
+            </Button>
+          ) : null}
         </div>
       ) : null}
 
       {status === 'done' && draft && draft.lineItems && draft.lineItems.length > 0 ? (
-        <div className="space-y-2 rounded-lg border border-graphite bg-surface p-3">
+        <div className="min-w-0 space-y-2 rounded-lg bg-surface p-3">
           <div className="flex items-center justify-between gap-2">
             <p className="text-xs font-medium text-on-surface">
               Productos detectados ({draft.lineItems.length})
             </p>
-            <button
-              type="button"
-              className="text-xs font-medium text-accent hover:text-accent/80"
-              onClick={() => toggleAll(selectedItems.size !== draft.lineItems?.length)}
-            >
-              {selectedItems.size === draft.lineItems?.length ? 'Quitar todos' : 'Marcar todos'}
-            </button>
+            <span className="text-[11px] text-success">Listos para revisar</span>
           </div>
 
-          <ul className="max-h-44 space-y-1 overflow-y-auto pr-1">
-            {draft.lineItems.map((item, index) => (
+          <ol className="space-y-1">
+            {draft.lineItems.slice(0, 5).map((item, index) => (
               <li key={`${item.name}-${index}`}>
-                <label className="flex cursor-pointer items-center gap-2 rounded-md px-1 py-1.5 hover:bg-surface-container-high">
-                  <Checkbox
-                    checked={selectedItems.has(index)}
-                    onCheckedChange={() => toggleItem(index)}
-                  />
-                  <span className="min-w-0 flex-1 truncate text-sm text-on-surface">{item.name}</span>
-                  <span className="shrink-0 tabular-nums text-sm font-medium text-on-surface">
+                <div className="flex min-w-0 items-center gap-2 rounded-md px-1 py-1.5">
+                  <span className="flex size-5 shrink-0 items-center justify-center rounded-full bg-primary/15 text-[11px] font-semibold text-accent">
+                    {index + 1}
+                  </span>
+                  <span className="min-w-0 flex-1 truncate text-xs text-on-surface">
+                    {item.quantity ?? 1} × {item.name || 'Producto sin nombre'}
+                  </span>
+                  <span className="shrink-0 tabular-nums text-xs font-medium text-on-surface">
                     {item.price.toLocaleString('es')}
                   </span>
-                </label>
+                </div>
               </li>
             ))}
-          </ul>
+          </ol>
+
+          {draft.lineItems.length > 5 ? (
+            <p className="pl-7 text-[11px] text-muted-gray">Y {draft.lineItems.length - 5} producto(s) más.</p>
+          ) : null}
 
           {onAddItems ? (
             <Button
@@ -263,9 +251,9 @@ export function ReceiptOcrPanel({ transactionType, userRules, onApply, onAddItem
               size="sm"
               disabled={addingItems || selectedItems.size === 0}
               onClick={() => void handleAddSelected()}
-              className="bg-primary text-on-primary hover:bg-primary/90"
+              className="w-full bg-primary text-on-primary hover:bg-primary/90 sm:w-auto"
             >
-              {addingItems ? 'Agregando…' : `Agregar ${selectedItems.size} producto${selectedItems.size === 1 ? '' : 's'}`}
+              {addingItems ? 'Abriendo revisión…' : `Revisar ${selectedItems.size} producto${selectedItems.size === 1 ? '' : 's'}`}
             </Button>
           ) : null}
         </div>

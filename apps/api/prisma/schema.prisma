@@ -76,6 +76,7 @@ model FuenteIngreso {
 model Salario {
   id        String   @id @default(uuid())
   salario   Float
+  moneda    String   @default("USD")
   fuenteId    String?
   fuenteNombre String?
   tipo        String?

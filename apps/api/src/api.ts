@@ -198,6 +198,7 @@ async function saveCurrencyPreferences(userId: string, body: JsonRecord) {
 function serializeSalary(entry: {
   id: string
   salario: number
+  moneda: string
   fecha: Date
   fuenteId?: string | null
   fuenteNombre?: string | null
@@ -207,6 +208,7 @@ function serializeSalary(entry: {
     id: entry.id,
     amount: entry.salario,
     month: toMonthString(entry.fecha),
+    currencyCode: entry.moneda || 'USD',
     ...(entry.fuenteId ? { sourceId: entry.fuenteId } : {}),
     ...(entry.fuenteNombre ? { sourceName: entry.fuenteNombre } : {}),
     ...(entry.tipo === 'one-off' || entry.tipo === 'recurring' ? { kind: entry.tipo } : {}),
@@ -527,7 +529,15 @@ async function loadBootstrap(userId: string, prisma: Prisma.TransactionClient, m
         select: { fecha: true },
       })).map((salary) => toMonthString(salary.fecha)),
     )
-    const carriedSalaries: Array<{ salario: number; fecha: Date; usuarioId: string }> = []
+    const carriedSalaries: Array<{
+      salario: number
+      moneda: string
+      fuenteId: string | null
+      fuenteNombre: string | null
+      tipo: string | null
+      fecha: Date
+      usuarioId: string
+    }> = []
     let month = new Date(latestSalary.fecha)
     month.setUTCMonth(month.getUTCMonth() + 1)
 
@@ -536,6 +546,10 @@ async function loadBootstrap(userId: string, prisma: Prisma.TransactionClient, m
       if (!existingSalaryMonths.has(monthKey)) {
         carriedSalaries.push({
           salario: latestSalary.salario,
+          moneda: latestSalary.moneda,
+          fuenteId: latestSalary.fuenteId,
+          fuenteNombre: latestSalary.fuenteNombre,
+          tipo: latestSalary.tipo,
           fecha: toMonthDate(monthKey),
           usuarioId: userId,
         })
@@ -707,6 +721,7 @@ async function writeSyncRecord(userId: string, operation: SyncOperation, tx: Pri
         data: {
           id: entry.id,
           salario: Number(entry.amount ?? 0),
+          moneda: String(entry.currencyCode ?? 'USD').trim().toUpperCase() || 'USD',
           fecha: toMonthDate(String(entry.month ?? toMonthString(new Date()))),
           fuenteId: entry.sourceId ?? null,
           fuenteNombre: entry.sourceName ?? null,

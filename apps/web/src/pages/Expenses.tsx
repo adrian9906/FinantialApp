@@ -4,6 +4,7 @@ import { buildExpenseTransferSavingDescription, createLearnedCategorizationRule,
 import { ArrowLeftRight, Banknote, Check, Dumbbell, HeartPulse, House, Package, Pencil, Plus, ScanLine, ShoppingBasket, Trash2, Wifi, type LucideIcon } from 'lucide-react'
 import { useFinanceStore } from '@/store/financeStore'
 import { buildExpenseDescription, createCustomExpenseCategory, getExpenseCategoryLabel, getPlannedExpenseTotal, parseExpenseDescription, type ExpenseBuiltInCategory, type ExpenseCategory } from '@/lib/expense-utils'
+import { getPlannedWantTotal } from '@/lib/want-utils'
 import { useMonthlyOverview } from '@/lib/useMonthlyOverview'
 import { formatMoney, useCurrencyInput } from '@/lib/currency'
 import { Badge } from '@/components/ui/badge'
@@ -34,7 +35,8 @@ import { filterAndSortTransactionsByDate, getTodayDateKey, type TransactionDateF
 import { ReceiptOcrPanel } from '@/components/ocr/ReceiptOcrPanel'
 import { PurchasePhotosField } from '@/components/expenses/PurchasePhotosField'
 import { Switch } from '@/components/ui/switch'
-import { ReceiptItemsReviewDialog, type ReceiptReviewResult } from '@/components/ocr/ReceiptItemsReviewDialog'
+import { ReceiptItemsReviewDialog } from '@/components/ocr/ReceiptItemsReviewDialog'
+import { buildReceiptCategoryGroups, buildReceiptTransaction, getReceiptTotalsByType, type ReceiptReviewResult } from '@/lib/receipt-review'
 import { useAuthStore } from '@/store/authStore'
 import { usePreferencesStore } from '@/store/preferencesStore'
 
@@ -232,6 +234,7 @@ export default function Expenses() {
   const [receiptScanOpen, setReceiptScanOpen] = useState(false)
   // Bumped per scan so the review dialog remounts with fresh rows.
   const [receiptScanId, setReceiptScanId] = useState(0)
+  const receiptCategoryGroups = useMemo(() => buildReceiptCategoryGroups(transactions), [transactions])
   const categoryWasChanged = useRef(false)
   const [form, setForm] = useState<ExpenseFormState>({
     amount: '',
@@ -310,27 +313,27 @@ export default function Expenses() {
     return Promise.resolve()
   }
 
-  async function handleConfirmReceiptItems(reviewed: ReceiptReviewResult[]) {
-    const total = reviewed.reduce((sum, item) => sum + item.amount, 0)
-    if (total > availableToPlan) {
-      toast.error(`Los productos suman ${formatMoney(total)} y solo tienes ${formatMoney(availableToPlan)} disponibles para planificar.`)
+  async function handleConfirmReceiptItems(reviewed: ReceiptReviewResult[], date: string) {
+    const totals = getReceiptTotalsByType(reviewed)
+    const availableExpenses = Math.max(0, overview.budgetExpenses - getPlannedExpenseTotal(overview.periodTransactions))
+    const availableWants = Math.max(0, overview.budgetWants - getPlannedWantTotal(overview.periodTransactions))
+
+    if (totals.expense > availableExpenses) {
+      toast.error(`Los gastos del recibo suman ${formatMoney(totals.expense)} y solo tienes ${formatMoney(availableExpenses)} disponibles para planificar.`)
       throw new Error('over-budget')
     }
-    if (plannedTotal + total > overview.budgetExpenses) {
-      toast.error(`No puedes agregarlos porque la lista subiria a ${formatMoney(plannedTotal + total)} y tu limite es ${formatMoney(overview.budgetExpenses)}.`)
+    if (totals.want > availableWants) {
+      toast.error(`Los gustos del recibo suman ${formatMoney(totals.want)} y solo tienes ${formatMoney(availableWants)} disponibles para planificar.`)
       throw new Error('over-budget')
     }
 
-    const targetDate = receiptDate ?? getTodayDateKey()
-    for (const item of reviewed) {
-      await addTransaction({
-        amount: item.amount,
-        type: 'expense',
-        // Bought items arrive already marked as checked.
-        description: buildExpenseDescription(item.category as ExpenseCategory, item.name, 'checked'),
-        date: targetDate,
-      })
-    }
+    await Promise.all(reviewed.map((item) => addTransaction(buildReceiptTransaction(item, date))))
+    reviewed.forEach((item) => {
+      const learned = item.transactionType === 'expense'
+        ? createLearnedCategorizationRule(item.name, { transactionType: 'expense', category: item.category })
+        : createLearnedCategorizationRule(item.name, { transactionType: 'want', category: item.category })
+      if (learned) saveCategoryRule(profileId, learned)
+    })
     toast.success(`Se agregaron ${reviewed.length} producto${reviewed.length === 1 ? '' : 's'} del recibo.`)
   }
 
@@ -1038,7 +1041,7 @@ export default function Expenses() {
       </Dialog>
 
       <Dialog open={receiptScanOpen} onOpenChange={setReceiptScanOpen}>
-        <DialogContent className="border-graphite bg-surface sm:max-w-2xl">
+        <DialogContent className="max-h-[calc(100dvh-2rem)] w-[calc(100vw-2rem)] min-w-0 overflow-x-hidden border-graphite bg-surface sm:max-w-xl">
           <DialogHeader>
             <DialogTitle className="text-on-surface">Agregar por recibo</DialogTitle>
             <DialogDescription>
@@ -1061,13 +1064,10 @@ export default function Expenses() {
         open={receiptReviewOpen}
         onOpenChange={setReceiptReviewOpen}
         items={receiptItems}
-        categories={expenseCategories.map((key) => ({ value: key, label: getCategoryMeta(key).label }))}
-        defaultCategory="essentials"
-        suggestCategory={(name) => {
-          // Reuse what the app already learned from previous receipts.
-          const rule = findCategorizationRule(name, userRules)
-          return rule && rule.transactionType === 'expense' ? rule.category : undefined
-        }}
+        initialDate={receiptDate}
+        defaultTransactionType="expense"
+        categoryGroups={receiptCategoryGroups}
+        userRules={userRules}
         onConfirm={handleConfirmReceiptItems}
       />
       ) : null}
