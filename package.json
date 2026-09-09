@@ -30,6 +30,7 @@
     "test:receipt": "tsx apps/web/src/lib/receipt-review.test.mts",
     "test:attachments": "tsx packages/shared/src/attachments.test.mts",
     "test:payment": "tsx packages/shared/src/payment-method.test.mts",
+    "test:monthly-overview": "tsx packages/shared/src/monthly-overview.test.mts",
     "test:google": "tsx apps/api/src/google-auth.test.mts"
   },
   "devDependencies": {

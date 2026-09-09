@@ -326,7 +326,7 @@ export default function Wants() {
   const checkedCount = filteredWantItems.filter((item) => item.status === 'checked').length
   const pendingCount = filteredWantItems.filter((item) => item.status === 'pending').length
   const currentItemAmount = editId ? wantItems.find((item) => item.id === editId)?.amount ?? 0 : 0
-  const plannedTotal = getPlannedWantTotal(transactions) - currentItemAmount
+  const plannedTotal = getPlannedWantTotal(overview.periodTransactions) - currentItemAmount
   const availableToPlan = Math.max(0, overview.budgetWants - plannedTotal)
   const pct = overview.budgetWants > 0 ? Math.min(100, Math.round((overview.totalWants / overview.budgetWants) * 100)) : 0
   const remaining = overview.budgetWants - overview.totalWants

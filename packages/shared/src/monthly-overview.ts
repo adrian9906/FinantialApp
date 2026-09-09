@@ -68,6 +68,24 @@ export function isInFinancialPeriod(
   return createdAt >= startTime
 }
 
+/**
+ * Applies the canonical financial-period boundary to transactions. Consumers
+ * that derive planned and actual totals must use this same collection.
+ */
+export function getTransactionsInFinancialPeriod(
+  transactions: Transaction[],
+  options: Pick<MonthlyOverviewOptions, 'periodStart' | 'periodEnd' | 'strictSameDayBoundary' | 'excludedTransactionIds'> = {},
+) {
+  const periodStart = options.periodStart ?? `${getMonthKey()}-01T00:00:00.000Z`
+  const excludedTransactionIds = new Set(options.excludedTransactionIds)
+
+  return transactions.filter((transaction) => (
+    !excludedTransactionIds.has(transaction.id)
+    && isInFinancialPeriod(transaction, periodStart, options.strictSameDayBoundary)
+    && (!options.periodEnd || transaction.date.slice(0, 10) <= options.periodEnd.slice(0, 10))
+  ))
+}
+
 export function getMonthlyOverview(
   salaries: Salary[],
   transactions: Transaction[],
@@ -82,12 +100,12 @@ export function getMonthlyOverview(
   // Falls back to the last known recurring pay when the month has none.
   const registered = getTotalIncomeForMonth(salaries, salaryMonth)
   const grossSalary = registered > 0 ? registered : getSalaryForMonth(salaries, salaryMonth)?.amount ?? 0
-  const excludedTransactionIds = new Set(options.excludedTransactionIds)
-  const monthlyTransactions = transactions.filter((transaction) => (
-    !excludedTransactionIds.has(transaction.id)
-    && isInFinancialPeriod(transaction, periodStart, options.strictSameDayBoundary)
-    && (!periodEnd || transaction.date.slice(0, 10) <= periodEnd.slice(0, 10))
-  ))
+  const monthlyTransactions = getTransactionsInFinancialPeriod(transactions, {
+    periodStart,
+    periodEnd,
+    strictSameDayBoundary: options.strictSameDayBoundary,
+    excludedTransactionIds: options.excludedTransactionIds,
+  })
   const totalExpenses = getEffectiveExpenseTotal(monthlyTransactions)
   const totalWants = getEffectiveWantTotal(monthlyTransactions)
   const transferredFromExpenses = getExpenseTransferTotal(monthlyTransactions)
@@ -130,6 +148,7 @@ export function getMonthlyOverview(
     // Exposed so the planning lists can show exactly the transactions these
     // totals are built from.
     periodStart,
+    periodTransactions: monthlyTransactions,
     grossSalary,
     totalSalary,
     totalExpenses,

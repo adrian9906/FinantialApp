@@ -454,7 +454,7 @@ export default function Expenses() {
   const checkedCount = filteredExpenseItems.filter((item) => item.status === 'checked').length
   const pendingCount = filteredExpenseItems.filter((item) => item.status === 'pending').length
   const currentItemAmount = editId ? expenseItems.find((item) => item.id === editId)?.amount ?? 0 : 0
-  const plannedTotal = getPlannedExpenseTotal(transactions) - currentItemAmount
+  const plannedTotal = getPlannedExpenseTotal(overview.periodTransactions) - currentItemAmount
   const availableToPlan = Math.max(0, overview.budgetExpenses - plannedTotal)
   const pct = overview.budgetExpenses > 0 ? Math.min(100, Math.round((overview.totalExpenses / overview.budgetExpenses) * 100)) : 0
   const remaining = overview.budgetExpenses - overview.totalExpenses
