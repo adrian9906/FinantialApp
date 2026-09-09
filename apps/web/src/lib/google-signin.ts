@@ -1,5 +1,7 @@
 import { Capacitor } from '@capacitor/core'
 
+import { requestJson } from '@/lib/api'
+
 /**
  * Obtains a Google ID token.
  *
@@ -10,13 +12,24 @@ import { Capacitor } from '@capacitor/core'
  */
 
 const GSI_SRC = 'https://accounts.google.com/gsi/client'
+let runtimeGoogleClientId = ''
 
 export function getGoogleClientId() {
-  return import.meta.env.VITE_GOOGLE_CLIENT_ID?.trim() ?? ''
+  return import.meta.env.VITE_GOOGLE_CLIENT_ID?.trim() || runtimeGoogleClientId
 }
 
-export function isGoogleSignInAvailable() {
-  return getGoogleClientId().length > 0
+async function resolveGoogleClientId() {
+  const bundledClientId = getGoogleClientId()
+  if (bundledClientId) return bundledClientId
+
+  try {
+    const response = await requestJson<{ clientId: string }>('/auth/google/config')
+    runtimeGoogleClientId = response.clientId?.trim() ?? ''
+  } catch {
+    runtimeGoogleClientId = ''
+  }
+
+  return runtimeGoogleClientId
 }
 
 export class GoogleSignInCancelled extends Error {}
@@ -83,7 +96,12 @@ function loadGoogleScript(): Promise<boolean> {
  * clicked programmatically, which keeps a real user gesture behind the popup
  * (Google requires one) while the visible button is entirely ours.
  */
-export function signInWithGoogleWeb(): Promise<string> {
+export async function signInWithGoogleWeb(): Promise<string> {
+  const clientId = await resolveGoogleClientId()
+  if (!clientId) {
+    throw new Error('El acceso con Google no está configurado en producción.')
+  }
+
   return new Promise((resolve, reject) => {
     void loadGoogleScript().then((loaded) => {
       const accounts = getGoogleAccounts()
@@ -95,7 +113,7 @@ export function signInWithGoogleWeb(): Promise<string> {
       let settled = false
 
       accounts.id.initialize({
-        client_id: getGoogleClientId(),
+        client_id: clientId,
         ux_mode: 'popup',
         callback: (response) => {
           if (settled) return
@@ -136,10 +154,16 @@ export function signInWithGoogleWeb(): Promise<string> {
 
 /** Native sign-in for the Capacitor build. */
 export async function signInWithGoogleNative(): Promise<string> {
-  const { GoogleAuth } = await import('@codetrix-studio/capacitor-google-auth')
+  const [{ GoogleAuth }, clientId] = await Promise.all([
+    import('@codetrix-studio/capacitor-google-auth'),
+    resolveGoogleClientId(),
+  ])
+  if (!clientId) {
+    throw new Error('El acceso con Google no está configurado en producción.')
+  }
 
   await GoogleAuth.initialize({
-    clientId: getGoogleClientId(),
+    clientId,
     scopes: ['profile', 'email'],
     grantOfflineAccess: false,
   })

@@ -4,3 +4,6 @@ project(':capacitor-android').projectDir = new File('../../../node_modules/.pnpm
 
 include ':capacitor-local-notifications'
 project(':capacitor-local-notifications').projectDir = new File('../../../node_modules/.pnpm/@capacitor+local-notifications@7.0.0_@capacitor+core@7.6.7/node_modules/@capacitor/local-notifications/android')
+
+include ':codetrix-studio-capacitor-google-auth'
+project(':codetrix-studio-capacitor-google-auth').projectDir = new File('../../../node_modules/.pnpm/@codetrix-studio+capacitor-_ac26984b3580ca9fb1e85d8cec4dd53f/node_modules/@codetrix-studio/capacitor-google-auth/android')

@@ -255,6 +255,7 @@ export default function Dashboard() {
         wishlist={wishlist}
         currentPeriodStart={currentPeriodStart}
         strictSameDayBoundary={overview.strictSameDayBoundary}
+        excludedTransactionIds={overview.excludedTransactionIds}
       />
 
 

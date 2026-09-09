@@ -2,7 +2,6 @@ import { useState } from 'react'
 
 import { Button } from '@/components/ui/button'
 import {
-  isGoogleSignInAvailable,
   isNativePlatform,
   signInWithGoogleNative,
   signInWithGoogleWeb,
@@ -35,8 +34,6 @@ export function GoogleSignInButton({ onError, onSuccess }: GoogleSignInButtonPro
   const loginWithGoogle = useAuthStore((state) => state.loginWithGoogle)
   const [isWorking, setIsWorking] = useState(false)
 
-  if (!isGoogleSignInAvailable()) return null
-
   async function handleSignIn() {
     setIsWorking(true)
     try {
@@ -49,9 +46,7 @@ export function GoogleSignInButton({ onError, onSuccess }: GoogleSignInButtonPro
     } catch (error) {
       // Closing the popup is not a failure worth shouting about.
       if (error instanceof GoogleSignInCancelled) return
-      onError(error instanceof Error && error.message.includes('cargar')
-        ? error.message
-        : 'No se pudo iniciar sesión con Google.')
+      onError(error instanceof Error ? error.message : 'No se pudo iniciar sesión con Google.')
     } finally {
       setIsWorking(false)
     }

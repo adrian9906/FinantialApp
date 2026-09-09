@@ -1,7 +1,7 @@
 import { createHash, randomUUID } from 'node:crypto'
 import { createEmptyBootstrapPayload, SYNC_PROTOCOL, canonicalJson, syncCollections, syncKey, getSyncValue, type SyncOperation, type SyncResponse } from '@plata/shared'
 import { parseSyncOperation } from './sync-validation.js'
-import { isGoogleAuthConfigured, verifyGoogleIdToken } from './google-auth.js'
+import { getGoogleWebClientId, isGoogleAuthConfigured, verifyGoogleIdToken } from './google-auth.js'
 import { sanitizeAttachments, sanitizePlace } from '@plata/shared'
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import type {
@@ -1673,6 +1673,12 @@ export async function handleApiRequest(req: IncomingMessage, res: ServerResponse
   }
 
   try {
+    if (pathname === '/api/auth/google/config' && method === 'GET') {
+      res.setHeader('Cache-Control', 'public, max-age=300')
+      sendJson(res, 200, { clientId: getGoogleWebClientId() })
+      return true
+    }
+
     if (pathname === '/api/auth/me' && method === 'GET') {
       const user = await getSessionUser(req)
 

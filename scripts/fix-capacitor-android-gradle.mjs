@@ -79,6 +79,19 @@ try {
   console.warn('[fix-capacitor-android-gradle] No se pudo parchear @capacitor/local-notifications todavía.');
 }
 
+try {
+  const googleAuthPackageJson = require.resolve('@codetrix-studio/capacitor-google-auth/package.json', {
+    paths: [webAppDir, rootDir],
+  });
+  const googleAuthDir = path.dirname(googleAuthPackageJson);
+  await patchGradleFile(
+    path.join(googleAuthDir, 'android', 'build.gradle'),
+    '@codetrix-studio/capacitor-google-auth',
+  );
+} catch {
+  console.warn('[fix-capacitor-android-gradle] No se pudo parchear @codetrix-studio/capacitor-google-auth todavía.');
+}
+
 const cordovaPluginsGradle = path.join(
   rootDir,
   'apps',

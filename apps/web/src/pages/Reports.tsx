@@ -46,6 +46,7 @@ import {
 } from '@/lib/reporting'
 import { buildUnnecessarySpendingInsights } from '@/lib/unnecessary-spending'
 import { getCanonicalPlanningHistory } from '@/lib/planningHistory'
+import { buildMonthlySpendingTrend } from '@/lib/monthlySpendingTrend'
 import { useFinanceStore } from '@/store/financeStore'
 import { usePreferencesStore } from '@/store/preferencesStore'
 
@@ -74,7 +75,6 @@ type SpendingTrendVisibility = Record<SpendingTrendCategory, boolean>
 
 const formatCurrency = formatMoney
 const DAY_IN_MS = 86_400_000
-const monthNameFormatter = new Intl.DateTimeFormat('es-ES', { month: 'long', timeZone: 'UTC' })
 const fullDateFormatter = new Intl.DateTimeFormat('es-ES', {
   day: 'numeric',
   month: 'long',
@@ -100,17 +100,6 @@ function dateKeyToUtc(value: string) {
 
 function addUtcDays(value: string, days: number) {
   return new Date(dateKeyToUtc(value) + days * DAY_IN_MS).toISOString().slice(0, 10)
-}
-
-function capitalize(value: string) {
-  return value.charAt(0).toUpperCase() + value.slice(1)
-}
-
-function cycleMonthLabel(monthKey: string, showYear: boolean) {
-  const [year, month] = monthKey.split('-').map(Number)
-  if (!year || !month) return monthKey
-  const monthName = capitalize(monthNameFormatter.format(new Date(Date.UTC(year, month - 1, 1))))
-  return showYear ? `${monthName} ${year}` : monthName
 }
 
 function sumCompletedCycle(cycle: MonthlyPlanningHistory, type: 'expenses' | 'wants') {
@@ -206,46 +195,6 @@ function buildWeeklyTrend(entries: SpendingTrendEntry[], start: string, end: str
     if (index >= 0 && index < points.length) addEntry(points[index], entry)
   })
   return points
-}
-
-function buildMonthlyTrend(
-  closedCycles: MonthlyPlanningHistory[],
-  currentExpenses: number,
-  currentWants: number,
-  currentSavingsUsed: number,
-  currentPeriodStart: string,
-  wishlistEntries: SpendingTrendEntry[],
-) {
-  const months = new Map<string, SpendingTrendPoint>()
-  const years = new Set(closedCycles.map((cycle) => cycle.month.slice(0, 4)))
-
-  closedCycles.slice().reverse().forEach((cycle) => {
-    const point = months.get(cycle.month) ?? emptyTrendPoint(cycle.month, cycle.label)
-    point.gastos += sumCompletedCycle(cycle, 'expenses')
-    point.gustos += sumCompletedCycle(cycle, 'wants')
-    months.set(cycle.month, point)
-  })
-
-  wishlistEntries.forEach((entry) => {
-    if (entry.date >= currentPeriodStart.slice(0, 10)) return
-    const month = entry.date.slice(0, 7)
-    const point = months.get(month)
-    if (point) point.ahorroUsado += entry.amount
-  })
-
-  const showYear = years.size > 1
-  return [
-    ...Array.from(months.entries())
-      .sort(([left], [right]) => left.localeCompare(right))
-      .map(([month, point]) => ({ ...point, label: cycleMonthLabel(month, showYear) })),
-    {
-      label: cycleMonthLabel(new Date().toISOString().slice(0, 7), showYear),
-      period: `Desde ${fullDateFormatter.format(new Date(`${currentPeriodStart.slice(0, 10)}T00:00:00.000Z`))}`,
-      gastos: currentExpenses,
-      gustos: currentWants,
-      ahorroUsado: currentSavingsUsed,
-    },
-  ]
 }
 
 function buildYearlyTrend(
@@ -347,15 +296,21 @@ export default function Reports() {
     const latestClosedCycle = closedCycles[0]
     const cycleBeforeLatest = closedCycles[1]
     const currentPeriodStart = getFinancialPeriodStart(monthlyPlanningHistory, now)
+    const latestReset = monthlyPlanningHistory.find((entry) => entry.createdAt === currentPeriodStart)
+    const strictSameDayBoundary = Boolean(latestReset)
+    const excludedTransactionIds = latestReset?.savingTransactionIds ?? []
+    const excludedTransactionIdSet = new Set(excludedTransactionIds)
     const currentCycleTransactions = transactions.filter((transaction) => (
-      isInFinancialPeriod(transaction, currentPeriodStart, true)
+      !excludedTransactionIdSet.has(transaction.id)
+      && isInFinancialPeriod(transaction, currentPeriodStart, strictSameDayBoundary)
       && transaction.date.slice(0, 10) <= currentPeriodEnd
     ))
     const currentOverview = getMonthlyOverview(salaries, transactions, debts, formula, {
       periodStart: currentPeriodStart,
       periodEnd: currentPeriodEnd,
       salaryMonth: currentMonthKey,
-      strictSameDayBoundary: true,
+      strictSameDayBoundary,
+      excludedTransactionIds,
     })
     const cycleEndsAt = getFinancialPeriodEnd(currentPeriodStart)
     const startOfToday = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()))
@@ -564,10 +519,17 @@ export default function Reports() {
       (sum, entry) => entry.type === 'ahorroUsado' ? sum + entry.amount : sum,
       0,
     )
+    const monthlySpendingTrend = buildMonthlySpendingTrend({
+      history: monthlyPlanningHistory,
+      transactions,
+      wishlist,
+      currentPeriodStart,
+      currentPeriodEnd,
+      strictSameDayBoundary,
+      excludedTransactionIds,
+    })
     const currentTrendTotals: Record<SpendingTrendCategory, number> = {
-      gastos: currentSummary.expenses,
-      gustos: currentSummary.wants,
-      ahorroUsado: currentSavingsUsed,
+      ...monthlySpendingTrend.currentTotals,
     }
     const spendingTrendSeries = spendingTrendGranularity === 'daily'
       ? alignWithPrevious(
@@ -588,14 +550,7 @@ export default function Reports() {
               currentPeriodStart,
               wishlistSpendingEntries,
             ))
-          : compareWithPreviousPeriod(buildMonthlyTrend(
-              closedCycles,
-              currentSummary.expenses,
-              currentSummary.wants,
-              currentSavingsUsed,
-              currentPeriodStart,
-              wishlistSpendingEntries,
-            ))
+          : compareWithPreviousPeriod(monthlySpendingTrend.series)
 
     const spendingTrendSignals = spendingTrendCategories.map((category) => ({
       ...category,

@@ -11,9 +11,13 @@ import { OAuth2Client } from 'google-auth-library'
  */
 
 /** Web client plus, optionally, the Android/iOS clients used by Capacitor. */
+export function getGoogleWebClientId() {
+  return process.env.GOOGLE_CLIENT_ID?.trim() ?? ''
+}
+
 function getAllowedAudiences() {
   return [
-    process.env.GOOGLE_CLIENT_ID,
+    getGoogleWebClientId(),
     process.env.GOOGLE_ANDROID_CLIENT_ID,
     process.env.GOOGLE_IOS_CLIENT_ID,
   ].filter((value): value is string => Boolean(value && value.trim()))

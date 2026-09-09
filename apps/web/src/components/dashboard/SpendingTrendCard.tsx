@@ -18,6 +18,7 @@ import { ChartContainer, ChartTooltip, ChartTooltipContent, type ChartConfig } f
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { formatMoney, formatMoneyInput, useCurrencyInput } from '@/lib/currency'
 import { getCanonicalPlanningHistory } from '@/lib/planningHistory'
+import { buildMonthlySpendingTrend } from '@/lib/monthlySpendingTrend'
 import { cn } from '@/lib/utils'
 
 type Granularity = 'daily' | 'weekly' | 'monthly'
@@ -26,6 +27,7 @@ type SpendingEntry = { date: string; category: CategoryKey; amount: number }
 type CategoryVisibility = Record<CategoryKey, boolean>
 
 const DAY_IN_MS = 86_400_000
+const EMPTY_TRANSACTION_IDS: string[] = []
 const categories: Array<{ key: CategoryKey; label: string; color: string }> = [
   { key: 'gastos', label: 'Gastos', color: '#3b82f6' },
   { key: 'gustos', label: 'Gustos', color: '#a855f7' },
@@ -45,7 +47,6 @@ const trendConfig = {
 } satisfies ChartConfig
 
 const cycleDateFormatter = new Intl.DateTimeFormat('es-ES', { day: '2-digit', month: 'short' })
-const monthFormatter = new Intl.DateTimeFormat('es-ES', { month: 'long', timeZone: 'UTC' })
 
 function dayNumber(value: string) {
   const [year, month, day] = value.slice(0, 10).split('-').map(Number)
@@ -62,75 +63,6 @@ function previousMonthDate(value: string) {
   const targetYear = month === 1 ? year - 1 : year
   const lastDay = new Date(Date.UTC(targetYear, targetMonth, 0)).getUTCDate()
   return `${targetYear}-${String(targetMonth).padStart(2, '0')}-${String(Math.min(day, lastDay)).padStart(2, '0')}`
-}
-
-function sumCategory(entries: SpendingEntry[], category: CategoryKey) {
-  return entries.reduce((sum, entry) => entry.category === category ? sum + entry.amount : sum, 0)
-}
-
-function nextMonthKey(monthKey: string) {
-  const [year, month] = monthKey.split('-').map(Number)
-  const next = new Date(Date.UTC(year, month, 1))
-  return `${next.getUTCFullYear()}-${String(next.getUTCMonth() + 1).padStart(2, '0')}`
-}
-
-function formatMonth(monthKey: string, showYear: boolean) {
-  const [year, month] = monthKey.split('-').map(Number)
-  const name = monthFormatter.format(new Date(Date.UTC(year, month - 1, 1)))
-  const label = name.charAt(0).toUpperCase() + name.slice(1)
-  return showYear ? `${label} ${year}` : label
-}
-
-function buildMonthlySeries(
-  closedCycles: MonthlyPlanningHistory[],
-  currentTotals: Record<CategoryKey, number>,
-  wishlist: WishlistItem[],
-  currentPeriodStart: string,
-  currentEnd: string,
-) {
-  const totals = new Map<string, Record<CategoryKey, number>>()
-  const ensureMonth = (monthKey: string) => {
-    const current = totals.get(monthKey) ?? { gastos: 0, gustos: 0, ahorroUsado: 0 }
-    totals.set(monthKey, current)
-    return current
-  }
-  closedCycles.forEach((cycle) => {
-    const month = ensureMonth(cycle.month)
-    month.gastos += cycle.expenses.reduce(
-      (sum, entry) => entry.status === 'checked' ? sum + Math.max(0, entry.amount) : sum,
-      0,
-    )
-    month.gustos += cycle.wants.reduce(
-      (sum, entry) => entry.status === 'checked' ? sum + Math.max(0, entry.amount) : sum,
-      0,
-    )
-  })
-
-  wishlist.forEach((item) => {
-    if (!isWishlistPurchased(item) || !item.purchasedAt) return
-    if (Date.parse(item.purchasedAt) >= Date.parse(currentPeriodStart)) return
-    const monthKey = item.purchasedAt.slice(0, 7)
-    const month = totals.get(monthKey)
-    if (month) month.ahorroUsado += getWishlistReservedAmount(item)
-  })
-
-  const currentMonth = currentEnd.slice(0, 7)
-  const current = ensureMonth(currentMonth)
-  current.gastos += currentTotals.gastos
-  current.gustos += currentTotals.gustos
-  current.ahorroUsado += currentTotals.ahorroUsado
-  const populatedMonths = [...totals.keys()].filter((monthKey) => monthKey <= currentMonth).sort()
-  const firstMonth = populatedMonths[0] ?? currentMonth
-  const monthKeys: string[] = []
-  for (let monthKey = firstMonth; monthKey <= currentMonth; monthKey = nextMonthKey(monthKey)) {
-    monthKeys.push(monthKey)
-  }
-  const showYear = new Set(monthKeys.map((monthKey) => monthKey.slice(0, 4))).size > 1
-
-  return monthKeys.map((monthKey) => ({
-    label: formatMonth(monthKey, showYear),
-    ...ensureMonth(monthKey),
-  }))
 }
 
 function convertSeriesValues<T extends Record<string, string | number | null>>(rows: T[], exchangeRate: number) {
@@ -193,12 +125,14 @@ export function SpendingTrendCard({
   wishlist,
   currentPeriodStart,
   strictSameDayBoundary,
+  excludedTransactionIds = EMPTY_TRANSACTION_IDS,
 }: {
   history: MonthlyPlanningHistory[]
   transactions: Transaction[]
   wishlist: WishlistItem[]
   currentPeriodStart: string
   strictSameDayBoundary: boolean
+  excludedTransactionIds?: string[]
 }) {
   const { currency } = useCurrencyInput()
   const [granularity, setGranularity] = useState<Granularity>('weekly')
@@ -254,8 +188,15 @@ export function SpendingTrendCard({
       }
     })
 
-    const currentTotals = Object.fromEntries(categories.map(({ key }) => [key, sumCategory(currentEntries, key)])) as Record<CategoryKey, number>
-    const monthlySeries = buildMonthlySeries(closedCycles, currentTotals, wishlist, currentPeriodStart, currentEnd)
+    const monthlyTrend = buildMonthlySpendingTrend({
+      history,
+      transactions,
+      wishlist,
+      currentPeriodStart,
+      currentPeriodEnd: currentEnd,
+      strictSameDayBoundary,
+      excludedTransactionIds,
+    })
 
     return {
       currentStart,
@@ -263,12 +204,12 @@ export function SpendingTrendCard({
       previousStart,
       previousEnd,
       hasPreviousCycle: Boolean(previousCycle),
-      currentTotals,
-      monthlySeries,
+      currentTotals: monthlyTrend.currentTotals,
+      monthlySeries: monthlyTrend.series,
       currentEntries,
       previousEntries,
     }
-  }, [currentPeriodStart, history, strictSameDayBoundary, transactions, wishlist])
+  }, [currentPeriodStart, excludedTransactionIds, history, strictSameDayBoundary, transactions, wishlist])
 
   const alignedSeries = useMemo(() => granularity === 'monthly' ? [] : buildAlignedSeries({
     currentEntries: analysis.currentEntries,
