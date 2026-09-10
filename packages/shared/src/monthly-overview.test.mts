@@ -70,10 +70,10 @@ const resetOverview = getMonthlyOverview([], [
 
 assert.deepEqual(
   resetOverview.periodTransactions.map((transaction) => transaction.id),
-  ['restored-backdated-expense', 'planned-future-expense'],
-  'los gastos activos del reset deben conservarse aunque su fecha original sea anterior o futura',
+  ['planned-future-expense'],
+  'el ciclo debe excluir gastos anteriores al reset y conservar los planificados para una fecha futura del ciclo',
 )
-assert.equal(getPlannedExpenseTotal(resetOverview.periodTransactions), 40)
-assert.equal(resetOverview.totalExpenses, 25)
+assert.equal(getPlannedExpenseTotal(resetOverview.periodTransactions), 15)
+assert.equal(resetOverview.totalExpenses, 0)
 
-console.log('PASS: el reset conserva todos los gastos activos con sus fechas originales')
+console.log('PASS: el reset separa el ciclo anterior sin perder la planificación futura')
