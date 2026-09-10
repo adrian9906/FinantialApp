@@ -45,3 +45,4 @@ Plata-App-v*.apk
 docs/roadmap-funcionalidades-plata-app.md
 docs/landing-page-contexto-plata-app.md
 promo/
+.npm-cache/
