@@ -31,3 +31,49 @@ assert.equal(getPlannedExpenseTotal(overview.periodTransactions), 80)
 assert.equal(getPlannedWantTotal(overview.periodTransactions), 40)
 
 console.log('PASS: la planificacion usa exactamente las transacciones del resumen mensual')
+
+const resetOverview = getMonthlyOverview([], [
+  {
+    id: 'restored-backdated-expense',
+    amount: 25,
+    type: 'expense',
+    description: 'food::checked::0::Compra restaurada',
+    date: '2026-08-02',
+    createdAt: '2026-08-02T12:00:00.000Z',
+  },
+  {
+    id: 'planned-future-expense',
+    amount: 15,
+    type: 'expense',
+    description: 'services::pending::0::Pago planificado',
+    date: '2026-09-30',
+    createdAt: '2026-09-07T12:00:00.000Z',
+  },
+  {
+    id: 'old-saving',
+    amount: 50,
+    type: 'saving',
+    description: 'Ahorro anterior',
+    date: '2026-08-02',
+    createdAt: '2026-08-02T12:00:00.000Z',
+  },
+], [], {
+  expenses: 50,
+  savings: 30,
+  wants: 20,
+  rolloverSavings: false,
+}, {
+  periodStart: '2026-08-26T15:56:40.348Z',
+  periodEnd: '2026-09-10',
+  strictSameDayBoundary: true,
+})
+
+assert.deepEqual(
+  resetOverview.periodTransactions.map((transaction) => transaction.id),
+  ['restored-backdated-expense', 'planned-future-expense'],
+  'los gastos activos del reset deben conservarse aunque su fecha original sea anterior o futura',
+)
+assert.equal(getPlannedExpenseTotal(resetOverview.periodTransactions), 40)
+assert.equal(resetOverview.totalExpenses, 25)
+
+console.log('PASS: el reset conserva todos los gastos activos con sus fechas originales')

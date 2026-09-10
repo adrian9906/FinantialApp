@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useShallow } from 'zustand/react/shallow'
-import { buildWantTransferSavingDescription, createLearnedCategorizationRule, findCategorizationRule, isCashPayment, isInFinancialPeriod, type ReceiptOCRLineItem, type ReceiptOCRParsedDraft } from '@plata/shared'
+import { buildWantTransferSavingDescription, createLearnedCategorizationRule, findCategorizationRule, isCashPayment, type ReceiptOCRLineItem, type ReceiptOCRParsedDraft } from '@plata/shared'
 import { ArrowLeftRight, Banknote, Clapperboard, Gamepad2, Heart, LockKeyhole, Pencil, Plus, ScanLine, ShoppingBag, Sparkles, Ticket, Trash2, type LucideIcon } from 'lucide-react'
 import { useFinanceStore } from '@/store/financeStore'
 import { buildWantDescription, createCustomWantCategory, getPlannedWantTotal, getWantCategoryLabel, parseWantDescription, type WantBuiltInCategory, type WantCategory } from '@/lib/want-utils'
@@ -201,6 +201,7 @@ export default function Wants() {
   const incomeSources = useFinanceStore((state) => state.incomeSources)
   const overview = useMonthlyOverview()
   const formula = usePreferencesStore((state) => state.formula)
+  const activeCurrencyCode = usePreferencesStore((state) => state.activeCurrencyCode)
   const profileId = useAuthStore((state) => state.user?.id) ?? 'guest'
   const userRules = usePreferencesStore(useShallow((state) => state.categoryRulesByProfile[profileId] ?? []))
   const saveCategoryRule = usePreferencesStore((state) => state.saveCategoryRule)
@@ -223,7 +224,10 @@ export default function Wants() {
   const [receiptReviewOpen, setReceiptReviewOpen] = useState(false)
   const [receiptScanOpen, setReceiptScanOpen] = useState(false)
   const [receiptScanId, setReceiptScanId] = useState(0)
-  const accounts = useMemo(() => getIncomeAccountsForMonth(salaries, incomeSources), [incomeSources, salaries])
+  const accounts = useMemo(
+    () => getIncomeAccountsForMonth(salaries, incomeSources, undefined, activeCurrencyCode),
+    [activeCurrencyCode, incomeSources, salaries],
+  )
   const [selectedIncomeSourcePreference, setSelectedIncomeSourceId] = useState('')
   const [formIncomeSourcePreference, setFormIncomeSourceId] = useState('')
   const selectedIncomeSourceId = accounts.some((account) => account.source.id === selectedIncomeSourcePreference)
@@ -287,11 +291,9 @@ export default function Wants() {
   }
 
   const wantItems = useMemo<WantViewItem[]>(() => {
-    return transactions
+    return overview.periodTransactions
       .filter((transaction) => transaction.type === 'want'
-      && transaction.incomeSourceId === selectedIncomeSourceId
-      && !overview.excludedTransactionIds.includes(transaction.id)
-      && isInFinancialPeriod(transaction, overview.periodStart, overview.strictSameDayBoundary))
+      && transaction.incomeSourceId === selectedIncomeSourceId)
       .map((transaction) => {
         const parsed = parseWantDescription(transaction.description)
         return {
@@ -304,7 +306,7 @@ export default function Wants() {
           isCash: isCashPayment(transaction),
         }
       })
-  }, [overview.excludedTransactionIds, overview.periodStart, overview.strictSameDayBoundary, selectedIncomeSourceId, transactions])
+  }, [overview.periodTransactions, selectedIncomeSourceId])
 
   const wantCategories = (() => {
     const categories = new Set<WantCategory>(Object.keys(CATEGORY_META) as WantBuiltInCategory[])

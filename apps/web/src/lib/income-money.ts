@@ -50,6 +50,7 @@ export function applyIncomeMoneyMovement(
     destinationSource = {
       id: createId('income-source'),
       name,
+      currencyCode: normalizedCurrency,
       recurring: movement.destination.recurring !== false,
       balanceMode: movement.destination.balanceMode === 'zero' ? 'zero' : 'fixed',
       isCash: movement.destination.isCash !== false,

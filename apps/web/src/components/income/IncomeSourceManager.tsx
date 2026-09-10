@@ -15,7 +15,10 @@ import {
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { convertUsdToInput, formatMoneyWithCode, getCurrencyByCode } from '@/lib/currency'
 import { useFinanceStore } from '@/store/financeStore'
+import { usePreferencesStore } from '@/store/preferencesStore'
+import { getIncomesForMonth, getMonthKey, normalizeSalaryHistory } from '@plata/shared'
 
 export function IncomeSourceManager() {
   const incomeSources = useFinanceStore((state) => state.incomeSources)
@@ -23,10 +26,25 @@ export function IncomeSourceManager() {
   const addIncomeSource = useFinanceStore((state) => state.addIncomeSource)
   const updateIncomeSource = useFinanceStore((state) => state.updateIncomeSource)
   const removeIncomeSource = useFinanceStore((state) => state.removeIncomeSource)
+  const addSalary = useFinanceStore((state) => state.addSalary)
+  const updateSalary = useFinanceStore((state) => state.updateSalary)
+  const currencies = usePreferencesStore((state) => state.currencies)
+  const activeCurrencyCode = usePreferencesStore((state) => state.activeCurrencyCode)
+  const currentMonth = getMonthKey()
+  const currentIncomes = getIncomesForMonth(salaries, currentMonth)
+  const salaryHistory = normalizeSalaryHistory(salaries)
+  const visibleSources = incomeSources.filter((source) => {
+    const accountIncome = currentIncomes.find((entry) => entry.sourceId === source.id)
+      ?? salaryHistory.find((entry) => entry.sourceId === source.id)
+    const accountCurrencyCode = source.currencyCode ?? accountIncome?.currencyCode
+    return accountCurrencyCode?.trim().toUpperCase() === activeCurrencyCode.trim().toUpperCase()
+  })
 
   const [open, setOpen] = useState(false)
   const [editId, setEditId] = useState<string | null>(null)
   const [name, setName] = useState('')
+  const [amount, setAmount] = useState('')
+  const [currencyCode, setCurrencyCode] = useState(activeCurrencyCode)
   const [recurring, setRecurring] = useState(true)
   const [balanceMode, setBalanceMode] = useState<'fixed' | 'zero'>('fixed')
   const [isCash, setIsCash] = useState(true)
@@ -35,6 +53,8 @@ export function IncomeSourceManager() {
 
   function resetForm() {
     setName('')
+    setAmount('')
+    setCurrencyCode(activeCurrencyCode)
     setRecurring(true)
     setBalanceMode('fixed')
     setIsCash(true)
@@ -52,6 +72,12 @@ export function IncomeSourceManager() {
     if (!source) return
     setEditId(id)
     setName(source.name)
+    const currentIncome = currentIncomes.find((entry) => entry.sourceId === id)
+    const latestIncome = salaryHistory.find((entry) => entry.sourceId === id)
+    const accountIncome = currentIncome ?? latestIncome
+    const accountCurrencyCode = source.currencyCode ?? accountIncome?.currencyCode ?? activeCurrencyCode
+    setAmount(currentIncome ? convertUsdToInput(currentIncome.balance ?? currentIncome.amount, getCurrencyByCode(accountCurrencyCode)) : '0')
+    setCurrencyCode(accountCurrencyCode)
     setRecurring(source.recurring)
     setBalanceMode(source.balanceMode === 'zero' ? 'zero' : 'fixed')
     setIsCash(source.isCash !== false)
@@ -63,6 +89,12 @@ export function IncomeSourceManager() {
     const trimmed = name.trim()
     if (!trimmed) {
       setError('Escribe un nombre para la fuente de ingreso.')
+      return
+    }
+
+    const parsedAmount = Number(amount.trim().replace(',', '.'))
+    if (amount.trim() === '' || !Number.isFinite(parsedAmount) || parsedAmount < 0) {
+      setError('Escribe una cantidad válida para esta cuenta. Puede ser 0.')
       return
     }
 
@@ -78,12 +110,35 @@ export function IncomeSourceManager() {
     try {
       const sourceData: Omit<import('@plata/shared').IncomeSource, 'id'> = {
         name: trimmed,
+        currencyCode,
         recurring,
         balanceMode: recurring ? balanceMode : 'fixed',
         isCash,
       }
-      if (editId) await updateIncomeSource(editId, sourceData)
-      else await addIncomeSource(sourceData)
+      const currency = getCurrencyByCode(currencyCode)
+      const amountUsd = parsedAmount / currency.exchangeRate
+      const initialIncome = {
+        amount: amountUsd,
+        balance: amountUsd,
+        month: currentMonth,
+        currencyCode,
+        kind: (recurring ? 'recurring' : 'one-off') as 'recurring' | 'one-off',
+        balanceMode: recurring && balanceMode === 'zero' ? 'zero' as const : 'fixed' as const,
+      }
+
+      if (editId) {
+        const source = incomeSources.find((entry) => entry.id === editId)
+        if (!source) throw new Error('No se pudo encontrar la cuenta de ingreso.')
+        await updateIncomeSource(editId, sourceData)
+        const currentIncome = currentIncomes.find((entry) => entry.sourceId === source.id)
+        const incomeData = { ...initialIncome, sourceId: source.id, sourceName: trimmed }
+        if (currentIncome) await updateSalary(currentIncome.id, incomeData)
+        else await addSalary(incomeData)
+      } else {
+        await addIncomeSource(sourceData, initialIncome)
+      }
+
+      toast.success(editId ? 'Cuenta actualizada.' : 'Cuenta de ingreso creada.')
       setOpen(false)
       resetForm()
     } catch {
@@ -119,58 +174,73 @@ export function IncomeSourceManager() {
         <div className="flex items-center gap-2">
           <Briefcase className="size-4 text-primary" aria-hidden="true" />
           <div>
-            <h3 className="text-base font-semibold text-on-surface">Fuentes de ingreso</h3>
-            <p className="text-xs text-muted-gray">Tus trabajos y otras entradas de dinero.</p>
+            <h3 className="text-base font-semibold text-on-surface">Cuentas de ingreso</h3>
+            <p className="text-xs text-muted-gray">Cada cuenta conserva su propio saldo y moneda.</p>
           </div>
         </div>
         <Button size="sm" variant="secondary" onClick={openCreate}>
           <Plus className="size-4" aria-hidden="true" />
-          Agregar
+          Nueva cuenta
         </Button>
       </div>
 
-      {incomeSources.length === 0 ? (
+      {visibleSources.length === 0 ? (
         <p className="rounded-xl border border-dashed border-graphite bg-abyss/70 p-4 text-sm text-muted-gray">
-          Aún no tienes fuentes. Agrega tu trabajo para registrar ingresos por separado.
+          No tienes cuentas en {activeCurrencyCode}. Crea una con su saldo inicial y moneda.
         </p>
       ) : (
         <ul className="space-y-2">
-          {incomeSources.map((source) => (
-            <li
-              key={source.id}
-              className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-graphite bg-abyss p-3"
-            >
-              <div>
-                <p className="text-sm font-medium text-on-surface">{source.name}</p>
-                <p className="text-xs text-muted-gray">
-                  {source.recurring
-                    ? source.balanceMode === 'zero' ? 'Mensual · comienza en 0' : 'Mensual · conserva el saldo'
-                    : 'Solo cuenta este mes'}
-                </p>
-                <p className={`mt-1 inline-flex items-center gap-1 text-xs ${source.isCash === false ? 'text-sky-300' : 'text-emerald-300'}`}>
-                  {source.isCash === false ? <ArrowLeftRight className="size-3.5" /> : <Banknote className="size-3.5" />}
-                  {source.isCash === false ? 'Transferencia' : 'Efectivo'}
-                </p>
-              </div>
-              <div className="flex gap-1">
-                <Button size="sm" variant="ghost" aria-label={`Editar ${source.name}`} onClick={() => openEdit(source.id)}>
-                  <Pencil className="size-4" aria-hidden="true" />
-                </Button>
-                <Button size="sm" variant="ghost" aria-label={`Eliminar ${source.name}`} onClick={() => void handleRemove(source.id)}>
-                  <Trash2 className="size-4 text-error" aria-hidden="true" />
-                </Button>
-              </div>
-            </li>
-          ))}
+          {visibleSources.map((source) => {
+            const currentIncome = currentIncomes.find((entry) => entry.sourceId === source.id)
+            const latestIncome = salaryHistory.find((entry) => entry.sourceId === source.id)
+            const accountCurrency = getCurrencyByCode(source.currencyCode ?? currentIncome?.currencyCode ?? latestIncome?.currencyCode ?? activeCurrencyCode)
+            const accountBalance = currentIncome?.balance ?? currentIncome?.amount ?? 0
+
+            return (
+              <li
+                key={source.id}
+                className="rounded-xl border border-graphite bg-abyss p-4 shadow-vault-sm"
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-medium text-on-surface">{source.name}</p>
+                    <p className="mt-1 text-2xl font-semibold tracking-tight text-on-surface">
+                      {formatMoneyWithCode(accountBalance, accountCurrency)}
+                    </p>
+                    <p className="text-xs text-muted-gray">Saldo disponible · {accountCurrency.name}</p>
+                  </div>
+                  <div className="flex shrink-0 gap-1">
+                    <Button size="sm" variant="ghost" aria-label={`Editar ${source.name}`} onClick={() => openEdit(source.id)}>
+                      <Pencil className="size-4" aria-hidden="true" />
+                    </Button>
+                    <Button size="sm" variant="ghost" aria-label={`Eliminar ${source.name}`} onClick={() => void handleRemove(source.id)}>
+                      <Trash2 className="size-4 text-error" aria-hidden="true" />
+                    </Button>
+                  </div>
+                </div>
+                <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1 border-t border-graphite pt-3">
+                  <p className="text-xs text-muted-gray">
+                    {source.recurring
+                      ? source.balanceMode === 'zero' ? 'Mensual · comienza en 0' : 'Mensual · conserva el saldo'
+                      : 'Solo cuenta este mes'}
+                  </p>
+                  <p className={`inline-flex items-center gap-1 text-xs ${source.isCash === false ? 'text-sky-300' : 'text-emerald-300'}`}>
+                    {source.isCash === false ? <ArrowLeftRight className="size-3.5" /> : <Banknote className="size-3.5" />}
+                    {source.isCash === false ? 'Transferencia' : 'Efectivo'}
+                  </p>
+                </div>
+              </li>
+            )
+          })}
         </ul>
       )}
 
       <Dialog open={open} onOpenChange={(next) => { setOpen(next); if (!next) resetForm() }}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle>{editId ? 'Editar fuente' : 'Nueva fuente de ingreso'}</DialogTitle>
+            <DialogTitle>{editId ? 'Editar cuenta' : 'Nueva cuenta de ingreso'}</DialogTitle>
             <DialogDescription>
-              Ponle el nombre de tu trabajo o de la entrada de dinero, por ejemplo "Empresa X" o "Freelance".
+              Define el nombre, cuánto dinero tiene y en qué moneda está guardado.
             </DialogDescription>
           </DialogHeader>
 
@@ -183,6 +253,36 @@ export function IncomeSourceManager() {
                 placeholder="Empresa X, Freelance, Bonus anual..."
               />
             </div>
+
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-[minmax(0,1fr)_9rem]">
+              <div className="grid gap-2">
+                <Label htmlFor="income-account-amount" className="text-medium-gray">Dinero en la cuenta</Label>
+                <Input
+                  id="income-account-amount"
+                  type="number"
+                  min="0"
+                  step="any"
+                  inputMode="decimal"
+                  value={amount}
+                  onChange={(event) => { setAmount(event.target.value); setError(null) }}
+                  placeholder="0"
+                />
+              </div>
+              <div className="grid gap-2">
+                <Label className="text-medium-gray">Moneda</Label>
+                <Select value={currencyCode} onValueChange={(value) => setCurrencyCode(value ?? activeCurrencyCode)}>
+                  <SelectTrigger><SelectValue>{currencyCode}</SelectValue></SelectTrigger>
+                  <SelectContent>
+                    {currencies.map((currency) => (
+                      <SelectItem key={currency.code} value={currency.code}>{currency.code}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            <p className="-mt-2 text-xs text-muted-gray">
+              Puedes poner 0 y después asignarle o transferirle dinero.
+            </p>
 
             <div className="grid gap-2">
               <Label className="text-medium-gray">Forma de pago de esta cuenta</Label>

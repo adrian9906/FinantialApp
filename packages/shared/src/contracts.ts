@@ -71,6 +71,7 @@ export function normalizeBootstrapPayload(payload?: Partial<BootstrapPayload> | 
     })),
     incomeSources: (payload?.incomeSources ?? []).map((source) => ({
       ...source,
+      currencyCode: String(source.currencyCode ?? 'USD').trim().toUpperCase() || 'USD',
       balanceMode: source.balanceMode === 'zero' ? 'zero' : 'fixed',
       isCash: source.isCash !== false,
     })),

@@ -79,11 +79,19 @@ export function getTransactionsInFinancialPeriod(
   const periodStart = options.periodStart ?? `${getMonthKey()}-01T00:00:00.000Z`
   const excludedTransactionIds = new Set(options.excludedTransactionIds)
 
-  return transactions.filter((transaction) => (
-    !excludedTransactionIds.has(transaction.id)
-    && isInFinancialPeriod(transaction, periodStart, options.strictSameDayBoundary)
-    && (!options.periodEnd || transaction.date.slice(0, 10) <= options.periodEnd.slice(0, 10))
-  ))
+  return transactions.filter((transaction) => {
+    // A monthly reset physically archives and removes every active expense and
+    // want. Therefore, while a reset boundary is active, any expense/want that
+    // still exists in the live tables belongs to the current planning cycle.
+    // Filtering those rows again by their purchase date hid restored/backdated
+    // items even though they were valid members of the current reset.
+    const isResetManagedPlanningItem = Boolean(options.strictSameDayBoundary)
+      && (transaction.type === 'expense' || transaction.type === 'want')
+
+    return !excludedTransactionIds.has(transaction.id)
+      && (isResetManagedPlanningItem || isInFinancialPeriod(transaction, periodStart, options.strictSameDayBoundary))
+      && (isResetManagedPlanningItem || !options.periodEnd || transaction.date.slice(0, 10) <= options.periodEnd.slice(0, 10))
+  })
 }
 
 export function getMonthlyOverview(

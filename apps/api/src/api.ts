@@ -222,6 +222,7 @@ function serializeSalary(entry: {
 function serializeIncomeSource(entry: {
   id: string
   nombre: string
+  moneda: string
   recurrente: boolean
   modoSaldo: string
   esEfectivo: boolean
@@ -230,6 +231,7 @@ function serializeIncomeSource(entry: {
   return {
     id: entry.id,
     name: entry.nombre,
+    currencyCode: entry.moneda || 'USD',
     recurring: entry.recurrente,
     balanceMode: entry.modoSaldo === 'zero' ? 'zero' : 'fixed',
     isCash: entry.esEfectivo,
@@ -749,6 +751,7 @@ async function writeSyncRecord(userId: string, operation: SyncOperation, tx: Pri
         data: {
           id: entry.id,
           nombre: entry.name,
+          moneda: String(entry.currencyCode ?? 'USD').trim().toUpperCase() || 'USD',
           recurrente: entry.recurring,
           modoSaldo: entry.balanceMode === 'zero' ? 'zero' : 'fixed',
           esEfectivo: entry.isCash !== false,
@@ -1031,12 +1034,14 @@ async function restoreMonthlyReset(
 
   const expenses = parseMonthlyPlanningItems(history.gastos)
   const wants = parseMonthlyPlanningItems(history.gustos)
-  const today = new Date()
   const createdTransactions: Transaction[] = []
 
   await prisma.$transaction(async (tx) => {
     if (scope === 'expenses' || scope === 'all') {
       for (const entry of expenses) {
+        const transactionDate = entry.date && Number.isFinite(Date.parse(entry.date))
+          ? new Date(entry.date)
+          : new Date()
         const description = buildExpenseDescription(
           entry.category as ReturnType<typeof parseExpenseDescription>['category'],
           entry.itemName,
@@ -1046,13 +1051,13 @@ async function restoreMonthlyReset(
         const created = await tx.gasto.create({
           data: {
             cantidad: entry.amount,
-            fecha: today,
+            fecha: transactionDate,
             usuarioId: userId,
             items: {
               create: {
                 nombre: description,
                 precio: entry.amount,
-                fecha: today,
+                fecha: transactionDate,
                 categoria: 'expense',
                 innecesario: Boolean(entry.unnecessary),
               },
@@ -1067,16 +1072,19 @@ async function restoreMonthlyReset(
 
     if (scope === 'wants' || scope === 'all') {
       for (const entry of wants) {
+        const transactionDate = entry.date && Number.isFinite(Date.parse(entry.date))
+          ? new Date(entry.date)
+          : new Date()
         const created = await tx.gusto.create({
           data: {
             cantidad: entry.amount,
-            fecha: today,
+            fecha: transactionDate,
             usuarioId: userId,
             items: {
               create: {
                 nombre: `${entry.category}::${entry.status}::${entry.itemName}`,
                 precio: entry.amount,
-                fecha: today,
+                fecha: transactionDate,
                 categoria: 'want',
               },
             },

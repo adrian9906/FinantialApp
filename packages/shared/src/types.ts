@@ -2,6 +2,8 @@
 export interface IncomeSource {
   id: string
   name: string
+  /** Currency owned by the account; transactions inherit it. */
+  currencyCode?: string
   /** Recurring sources carry forward to the next month on their own. */
   recurring: boolean
   /** Fixed sources either repeat their balance or start each month at zero. */

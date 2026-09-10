@@ -1,12 +1,29 @@
 import assert from 'node:assert/strict'
 
-import type { Salary, Transaction } from '@plata/shared'
+import type { IncomeSource, Salary, Transaction } from '@plata/shared'
 import { reconcileIncomeAccountCharge } from './income-account.ts'
+import { getIncomeAccountsForMonth } from './income-account-view.ts'
 
 const salaries: Salary[] = [
   { id: 'usd', amount: 100, balance: 100, month: '2026-09', sourceId: 'salary', sourceName: 'Salario', currencyCode: 'USD' },
   { id: 'cup', amount: 20, balance: 20, month: '2026-09', sourceId: 'cash', sourceName: 'Efectivo', currencyCode: 'CUP' },
 ]
+
+const sources: IncomeSource[] = [
+  { id: 'salary', name: 'Salario All Novu', recurring: true, isCash: true },
+  { id: 'cash', name: 'Efectivo CUP', recurring: true, isCash: true },
+]
+
+assert.deepEqual(
+  getIncomeAccountsForMonth(salaries, sources, '2026-09', 'USD').map((account) => account.source.id),
+  ['salary'],
+  'USD solo debe mostrar cuentas USD',
+)
+assert.deepEqual(
+  getIncomeAccountsForMonth(salaries, sources, '2026-09', 'CUP').map((account) => account.source.id),
+  ['cash'],
+  'CUP solo debe mostrar cuentas CUP',
+)
 
 const expense: Transaction = {
   id: 'expense-1',

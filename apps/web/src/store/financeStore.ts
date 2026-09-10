@@ -48,7 +48,10 @@ interface FinanceStore extends BootstrapPayload {
   addSalary: (salary: Omit<Salary, 'id'>) => Promise<void>
   updateSalary: (id: string, data: Partial<Omit<Salary, 'id'>>) => Promise<void>
   removeSalary: (id: string) => Promise<void>
-  addIncomeSource: (source: Omit<IncomeSource, 'id'>) => Promise<void>
+  addIncomeSource: (
+    source: Omit<IncomeSource, 'id'>,
+    initialIncome: Omit<Salary, 'id' | 'sourceId' | 'sourceName'>,
+  ) => Promise<IncomeSource>
   updateIncomeSource: (id: string, data: Partial<Omit<IncomeSource, 'id'>>) => Promise<void>
   removeIncomeSource: (id: string) => Promise<void>
   assignIncomeMoney: (input: { amountUsd: number; month: string; destination: IncomeMoneyDestination }) => Promise<void>
@@ -494,13 +497,25 @@ export const useFinanceStore = create<FinanceStore>()((set, get) => ({
       return
     }
   },
-  addIncomeSource: async (source) => {
+  addIncomeSource: async (source, initialIncome) => {
     if (isLocalMutationMode()) {
+      const createdSource = { ...source, id: makeId('income-source') }
       await updateLocalState(set, (state) => ({
-        incomeSources: [...state.incomeSources, { ...source, id: makeId('income-source') }],
+        incomeSources: [...state.incomeSources, createdSource],
+        salaries: normalizeSalaryHistory([
+          {
+            ...initialIncome,
+            id: makeId('salary'),
+            sourceId: createdSource.id,
+            sourceName: createdSource.name,
+          },
+          ...state.salaries,
+        ]),
       }))
-      return
+      return createdSource
     }
+
+    throw new Error('No se pudo crear la cuenta de ingreso.')
   },
   updateIncomeSource: async (id, data) => {
     if (isLocalMutationMode()) {

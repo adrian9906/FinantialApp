@@ -16,11 +16,16 @@ export function getIncomeAccountsForMonth(
   salaries: Salary[],
   sources: IncomeSource[],
   month = new Date().toISOString().slice(0, 7),
+  currencyCode?: string,
 ): IncomeAccountView[] {
   const sourceById = new Map(sources.filter((source) => !source.archived).map((source) => [source.id, source]))
+  const normalizedCurrencyCode = currencyCode?.trim().toUpperCase()
 
   return salaries
-    .filter((salary) => salary.month === month && salary.sourceId && sourceById.has(salary.sourceId))
+    .filter((salary) => salary.month === month
+      && salary.sourceId
+      && sourceById.has(salary.sourceId)
+      && (!normalizedCurrencyCode || (salary.currencyCode ?? 'USD').trim().toUpperCase() === normalizedCurrencyCode))
     .map((salary) => ({ salary, source: sourceById.get(salary.sourceId!)! }))
     .sort((left, right) => left.source.name.localeCompare(right.source.name, 'es'))
 }

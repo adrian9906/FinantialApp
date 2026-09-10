@@ -63,6 +63,7 @@ model SyncReceipt {
 model FuenteIngreso {
   id        String   @id @default(uuid())
   nombre    String
+  moneda    String   @default("USD")
   recurrente Boolean @default(true)
   modoSaldo  String   @default("fixed")
   esEfectivo Boolean  @default(true)
