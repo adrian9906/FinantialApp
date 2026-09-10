@@ -45,6 +45,7 @@ export default function Salary() {
   const addSalary = useFinanceStore((state) => state.addSalary)
   const updateSalary = useFinanceStore((state) => state.updateSalary)
   const removeSalary = useFinanceStore((state) => state.removeSalary)
+  const updateIncomeSource = useFinanceStore((state) => state.updateIncomeSource)
   const overview = useMonthlyOverview()
   const formatSalary = useMoneyWithCode()
   const moneyInput = useCurrencyInput()
@@ -57,6 +58,8 @@ export default function Salary() {
   const [month, setMonth] = useState('')
   const [sourceId, setSourceId] = useState('')
   const [currencyCode, setCurrencyCode] = useState(activeCurrencyCode)
+  const [recurring, setRecurring] = useState(true)
+  const [balanceMode, setBalanceMode] = useState<'fixed' | 'zero'>('fixed')
   const [calendarYear, setCalendarYear] = useState(new Date().getFullYear())
   const [isSaving, setIsSaving] = useState(false)
   const [isExporting, setIsExporting] = useState(false)
@@ -81,6 +84,8 @@ export default function Salary() {
     setMonth('')
     setSourceId('')
     setCurrencyCode(activeCurrencyCode)
+    setRecurring(true)
+    setBalanceMode('fixed')
     setEditId(null)
     setCalendarYear(new Date().getFullYear())
   }
@@ -92,6 +97,9 @@ export default function Salary() {
       setMonth(entry.month)
       setSourceId(entry.sourceId ?? '')
       setCurrencyCode(entry.currencyCode ?? 'USD')
+      const source = incomeSources.find((candidate) => candidate.id === entry.sourceId)
+      setRecurring(source?.recurring ?? entry.kind !== 'one-off')
+      setBalanceMode(source?.balanceMode === 'zero' || entry.balanceMode === 'zero' ? 'zero' : 'fixed')
       setCalendarYear(monthValueToDate(entry.month).getFullYear())
     } else {
       resetForm()
@@ -124,8 +132,8 @@ export default function Salary() {
         ? {
             sourceId: source.id,
             sourceName: source.name,
-            kind: (source.recurring ? 'recurring' : 'one-off') as 'recurring' | 'one-off',
-            balanceMode: source.balanceMode === 'zero' ? 'zero' as const : 'fixed' as const,
+            kind: (recurring ? 'recurring' : 'one-off') as 'recurring' | 'one-off',
+            balanceMode: recurring && balanceMode === 'zero' ? 'zero' as const : 'fixed' as const,
           }
         : {}),
     }
@@ -133,6 +141,12 @@ export default function Salary() {
     setIsSaving(true)
 
     try {
+      if (source) {
+        await updateIncomeSource(source.id, {
+          recurring,
+          balanceMode: recurring ? balanceMode : 'fixed',
+        })
+      }
       if (editId) {
         await updateSalary(editId, payload)
       } else {
@@ -317,7 +331,13 @@ export default function Salary() {
             <div className="space-y-4">
               <div className="space-y-2">
                 <Label className="text-medium-gray">Fuente de ingreso</Label>
-                <Select value={sourceId} onValueChange={(value) => setSourceId(value ?? '')}>
+                <Select value={sourceId} onValueChange={(value) => {
+                  const nextId = value ?? ''
+                  const nextSource = incomeSources.find((entry) => entry.id === nextId)
+                  setSourceId(nextId)
+                  setRecurring(nextSource?.recurring ?? true)
+                  setBalanceMode(nextSource?.balanceMode === 'zero' ? 'zero' : 'fixed')
+                }}>
                   <SelectTrigger className="bg-abyss border-graphite">
                     <SelectValue>
                       {selectedSource
@@ -352,6 +372,48 @@ export default function Salary() {
                   className="bg-abyss border-graphite text-on-surface focus:border-tertiary-container"
                 />
               </div>
+
+              {selectedSource ? (
+                <Card className="space-y-4 border-graphite bg-abyss p-4 shadow-vault-sm">
+                  <div className="space-y-2">
+                    <Label className="text-medium-gray">¿Este ingreso se repite?</Label>
+                    <Select value={recurring ? 'recurring' : 'one-off'} onValueChange={(value) => setRecurring(value === 'recurring')}>
+                      <SelectTrigger className="w-full border-graphite bg-surface">
+                        <SelectValue>{recurring ? 'Sí, todos los meses' : 'No, solo este mes'}</SelectValue>
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="recurring">Sí, todos los meses</SelectItem>
+                        <SelectItem value="one-off">No, solo este mes</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <p className="text-xs text-muted-gray">
+                      {recurring
+                        ? 'La cuenta seguirá apareciendo automáticamente en los próximos meses.'
+                        : 'Este monto existirá únicamente en el mes seleccionado.'}
+                    </p>
+                  </div>
+
+                  {recurring ? (
+                    <div className="space-y-2 border-t border-graphite pt-4">
+                      <Label className="text-medium-gray">¿Con qué saldo empieza al hacer el reset mensual?</Label>
+                      <Select value={balanceMode} onValueChange={(value) => setBalanceMode(value === 'zero' ? 'zero' : 'fixed')}>
+                        <SelectTrigger className="w-full border-graphite bg-surface">
+                          <SelectValue>{balanceMode === 'zero' ? 'Comenzar en 0' : 'Repetir el saldo indicado'}</SelectValue>
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="fixed">Repetir el saldo indicado</SelectItem>
+                          <SelectItem value="zero">Comenzar en 0</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <p className="text-xs leading-5 text-muted-gray">
+                        {balanceMode === 'fixed'
+                          ? 'Ejemplo: Salario por transferencia vuelve a cargar automáticamente este monto.'
+                          : 'Ejemplo: Cambio en moneda nacional aparece en 0; luego tú le asignas o transfieres dinero.'}
+                      </p>
+                    </div>
+                  ) : null}
+                </Card>
+              ) : null}
 
               <div className="space-y-2">
                 <Label className="text-medium-gray">Moneda del ingreso</Label>

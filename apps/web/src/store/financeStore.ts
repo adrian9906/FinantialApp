@@ -504,18 +504,26 @@ export const useFinanceStore = create<FinanceStore>()((set, get) => ({
   },
   updateIncomeSource: async (id, data) => {
     if (isLocalMutationMode()) {
-      await updateLocalState(set, (state) => ({
-        incomeSources: state.incomeSources.map((entry) => (entry.id === id ? { ...entry, ...data } : entry)),
-        // Keep the stored label in sync so past months show the current name.
-        salaries: state.salaries.map((entry) => entry.sourceId === id
-          ? {
-              ...entry,
-              ...(data.name ? { sourceName: data.name } : {}),
-              ...(data.recurring !== undefined ? { kind: data.recurring ? 'recurring' as const : 'one-off' as const } : {}),
-              ...(data.balanceMode ? { balanceMode: data.balanceMode } : {}),
-            }
-          : entry),
-      }))
+      await updateLocalState(set, (state) => {
+        const latestMonth = state.salaries
+          .filter((entry) => entry.sourceId === id)
+          .reduce((latest, entry) => entry.month > latest ? entry.month : latest, '')
+        return {
+          incomeSources: state.incomeSources.map((entry) => (entry.id === id ? { ...entry, ...data } : entry)),
+          // Names remain readable in history, while recurrence only changes
+          // the latest record that controls future monthly materialization.
+          salaries: state.salaries.map((entry) => entry.sourceId === id
+            ? {
+                ...entry,
+                ...(data.name ? { sourceName: data.name } : {}),
+                ...(entry.month === latestMonth && data.recurring !== undefined
+                  ? { kind: data.recurring ? 'recurring' as const : 'one-off' as const }
+                  : {}),
+                ...(entry.month === latestMonth && data.balanceMode ? { balanceMode: data.balanceMode } : {}),
+              }
+            : entry),
+        }
+      })
       return
     }
   },
