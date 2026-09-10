@@ -33,6 +33,7 @@
     "test:attachments": "tsx packages/shared/src/attachments.test.mts",
     "test:payment": "tsx packages/shared/src/payment-method.test.mts",
     "test:monthly-overview": "tsx packages/shared/src/monthly-overview.test.mts",
+    "test:currency": "tsx --tsconfig apps/web/tsconfig.app.json apps/web/src/lib/currency-registry.test.mts",
     "test:google": "tsx apps/api/src/google-auth.test.mts"
   },
   "devDependencies": {

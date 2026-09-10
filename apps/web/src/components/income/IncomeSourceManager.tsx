@@ -15,7 +15,7 @@ import {
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { convertUsdToInput, formatMoneyWithCode, getCurrencyByCode } from '@/lib/currency'
+import { convertUsdToInput, ensureCurrencyPreference, formatMoneyWithCode, getCurrencyByCode } from '@/lib/currency'
 import { useFinanceStore } from '@/store/financeStore'
 import { usePreferencesStore } from '@/store/preferencesStore'
 import { getIncomesForMonth, getMonthKey, normalizeSalaryHistory } from '@plata/shared'
@@ -108,6 +108,9 @@ export function IncomeSourceManager() {
 
     setIsSaving(true)
     try {
+      // Persist the chosen currency as a preference so the account keeps its
+      // denomination on other devices instead of falling back to USD.
+      ensureCurrencyPreference(currencyCode)
       const sourceData: Omit<import('@plata/shared').IncomeSource, 'id'> = {
         name: trimmed,
         currencyCode,

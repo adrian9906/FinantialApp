@@ -30,6 +30,7 @@ import { readSyncDocument } from '@/lib/sync-store'
 import { parseWantDescription } from '@/lib/want-utils'
 import { applyIncomeMoneyMovement, type IncomeMoneyDestination } from '@/lib/income-money'
 import { reconcileIncomeAccountCharge } from '@/lib/income-account'
+import { ensureCurrencyPreference } from '@/lib/currency'
 import { useAuthStore } from '@/store/authStore'
 import { usePreferencesStore } from '@/store/preferencesStore'
 
@@ -123,6 +124,11 @@ function normalizeDebt(entry: Partial<Debt>): Debt {
 
 function normalizeBootstrapSnapshot(payload?: Partial<BootstrapPayload> | null): BootstrapPayload {
   const snapshot = normalizeBootstrapPayload(payload)
+
+  // Accounts created before their currency was registered as a preference would
+  // otherwise resolve to USD on a fresh device and appear converted.
+  snapshot.incomeSources.forEach((source) => ensureCurrencyPreference(source.currencyCode))
+  snapshot.salaries.forEach((salary) => ensureCurrencyPreference(salary.currencyCode))
 
   return ensureCurrentSubscriptionExpenses({
     ...snapshot,
