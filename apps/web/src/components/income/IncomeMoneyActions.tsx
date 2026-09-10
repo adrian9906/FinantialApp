@@ -22,11 +22,17 @@ interface DestinationFieldsProps {
   setNewName: (value: string) => void
   currencyCode: string
   setCurrencyCode: (value: string) => void
+  newRecurring: boolean
+  setNewRecurring: (value: boolean) => void
+  newBalanceMode: 'fixed' | 'zero'
+  setNewBalanceMode: (value: 'fixed' | 'zero') => void
+  newIsCash: boolean
+  setNewIsCash: (value: boolean) => void
   excludedSourceId?: string
 }
 
 function DestinationFields(props: DestinationFieldsProps) {
-  const { destinationId, setDestinationId, newName, setNewName, currencyCode, setCurrencyCode, excludedSourceId } = props
+  const { destinationId, setDestinationId, newName, setNewName, currencyCode, setCurrencyCode, newRecurring, setNewRecurring, newBalanceMode, setNewBalanceMode, newIsCash, setNewIsCash, excludedSourceId } = props
   const sources = useFinanceStore((state) => state.incomeSources)
   const salaries = useFinanceStore((state) => state.salaries)
   const currencies = usePreferencesStore((state) => state.currencies)
@@ -52,9 +58,34 @@ function DestinationFields(props: DestinationFieldsProps) {
       </div>
 
       {destinationId === NEW_SOURCE ? (
-        <div className="grid gap-2">
-          <Label htmlFor="new-income-name">Nombre del nuevo ingreso</Label>
-          <Input id="new-income-name" value={newName} onChange={(event) => setNewName(event.target.value)} placeholder="Transferencia, negocio, efectivo..." className="bg-abyss border-graphite" />
+        <div className="grid gap-4 rounded-xl border border-graphite bg-abyss p-3">
+          <div className="grid gap-2">
+            <Label htmlFor="new-income-name">Nombre del nuevo ingreso</Label>
+            <Input id="new-income-name" value={newName} onChange={(event) => setNewName(event.target.value)} placeholder="Transferencia, negocio, efectivo..." />
+          </div>
+          <div className="grid gap-2">
+            <Label>¿Cuándo existe?</Label>
+            <Select value={newRecurring ? 'recurring' : 'one-off'} onValueChange={(value) => setNewRecurring(value === 'recurring')}>
+              <SelectTrigger><SelectValue>{newRecurring ? 'Todos los meses' : 'Solo este mes'}</SelectValue></SelectTrigger>
+              <SelectContent><SelectItem value="recurring">Todos los meses</SelectItem><SelectItem value="one-off">Solo este mes</SelectItem></SelectContent>
+            </Select>
+          </div>
+          <div className="grid gap-2">
+            <Label>Forma de pago</Label>
+            <Select value={newIsCash ? 'cash' : 'transfer'} onValueChange={(value) => setNewIsCash(value !== 'transfer')}>
+              <SelectTrigger><SelectValue>{newIsCash ? 'Efectivo' : 'Transferencia'}</SelectValue></SelectTrigger>
+              <SelectContent><SelectItem value="cash">Efectivo</SelectItem><SelectItem value="transfer">Transferencia</SelectItem></SelectContent>
+            </Select>
+          </div>
+          {newRecurring ? (
+            <div className="grid gap-2">
+              <Label>¿Cómo inicia el próximo mes?</Label>
+              <Select value={newBalanceMode} onValueChange={(value) => setNewBalanceMode(value === 'zero' ? 'zero' : 'fixed')}>
+                <SelectTrigger><SelectValue>{newBalanceMode === 'zero' ? 'En cero' : 'Con el mismo saldo'}</SelectValue></SelectTrigger>
+                <SelectContent><SelectItem value="fixed">Con el mismo saldo</SelectItem><SelectItem value="zero">En cero</SelectItem></SelectContent>
+              </Select>
+            </div>
+          ) : null}
         </div>
       ) : null}
 
@@ -77,7 +108,7 @@ export function IncomeMoneyActions() {
   const currencies = usePreferencesStore((state) => state.currencies)
   const activeCurrencyCode = usePreferencesStore((state) => state.activeCurrencyCode)
   const month = getMonthKey()
-  const currentIncomes = useMemo(() => getIncomesForMonth(salaries, month).filter((income) => income.amount > 0), [salaries, month])
+  const currentIncomes = useMemo(() => getIncomesForMonth(salaries, month).filter((income) => Number(income.balance ?? income.amount) > 0), [salaries, month])
 
   const [assignOpen, setAssignOpen] = useState(false)
   const [transferOpen, setTransferOpen] = useState(false)
@@ -87,6 +118,9 @@ export function IncomeMoneyActions() {
   const [destinationId, setDestinationId] = useState('')
   const [newName, setNewName] = useState('')
   const [destinationCurrencyCode, setDestinationCurrencyCode] = useState(activeCurrencyCode)
+  const [newRecurring, setNewRecurring] = useState(true)
+  const [newBalanceMode, setNewBalanceMode] = useState<'fixed' | 'zero'>('fixed')
+  const [newIsCash, setNewIsCash] = useState(true)
   const [isSaving, setIsSaving] = useState(false)
 
   const sourceSalary = currentIncomes.find((income) => income.id === sourceSalaryId)
@@ -104,13 +138,18 @@ export function IncomeMoneyActions() {
     setNewName('')
     setSourceCurrencyCode(activeCurrencyCode)
     setDestinationCurrencyCode(activeCurrencyCode)
+    setNewRecurring(true)
+    setNewBalanceMode('fixed')
+    setNewIsCash(true)
   }
 
   function destination() {
     return {
       ...(destinationId !== NEW_SOURCE ? { sourceId: destinationId } : { newSourceName: newName }),
       currencyCode: targetCurrency.code,
-      recurring: true,
+      recurring: newRecurring,
+      balanceMode: newRecurring ? newBalanceMode : 'fixed' as const,
+      isCash: newIsCash,
     }
   }
 
@@ -168,7 +207,7 @@ export function IncomeMoneyActions() {
             <div className="grid gap-2"><Label htmlFor="assign-amount">Monto</Label><Input id="assign-amount" type="number" min="0" inputMode="decimal" value={amount} onChange={(event) => setAmount(event.target.value)} className="bg-abyss border-graphite" /></div>
             <div className="grid gap-2"><Label>Moneda que recibiste</Label><Select value={sourceCurrencyCode} onValueChange={(value) => setSourceCurrencyCode(value ?? 'USD')}><SelectTrigger className="bg-abyss border-graphite"><SelectValue>{sourceCurrencyCode}</SelectValue></SelectTrigger><SelectContent>{currencies.map((currency) => <SelectItem key={currency.code} value={currency.code}>{currency.code} · {currency.name}</SelectItem>)}</SelectContent></Select></div>
           </div>
-          <DestinationFields destinationId={destinationId} setDestinationId={setDestinationId} newName={newName} setNewName={setNewName} currencyCode={destinationCurrencyCode} setCurrencyCode={setDestinationCurrencyCode} />
+          <DestinationFields destinationId={destinationId} setDestinationId={setDestinationId} newName={newName} setNewName={setNewName} currencyCode={destinationCurrencyCode} setCurrencyCode={setDestinationCurrencyCode} newRecurring={newRecurring} setNewRecurring={setNewRecurring} newBalanceMode={newBalanceMode} setNewBalanceMode={setNewBalanceMode} newIsCash={newIsCash} setNewIsCash={setNewIsCash} />
           {conversionPreview}
           <DialogFooter><Button variant="ghost" disabled={isSaving} onClick={() => setAssignOpen(false)}>Cancelar</Button><Button loading={isSaving} disabled={!destinationId || amountUsd <= 0} onClick={() => void handleAssign()}>Asignar dinero</Button></DialogFooter>
         </DialogContent>
@@ -177,9 +216,9 @@ export function IncomeMoneyActions() {
       <Dialog open={transferOpen} onOpenChange={(open) => { if (!isSaving) setTransferOpen(open) }}>
         <DialogContent className="border-graphite bg-surface sm:max-w-lg">
           <DialogHeader><DialogTitle>Transferir entre ingresos</DialogTitle><DialogDescription>El valor se convierte automáticamente cuando las monedas son diferentes.</DialogDescription></DialogHeader>
-          <div className="grid gap-2"><Label>Desde</Label><Select value={sourceSalaryId} onValueChange={(value) => setSourceSalaryId(value ?? '')}><SelectTrigger className="bg-abyss border-graphite"><SelectValue>{sourceSalary ? `${sourceSalary.sourceName ?? 'Ingreso'} · ${formatMoneyWithCode(sourceSalary.amount, sourceCurrency)}` : 'Seleccionar ingreso'}</SelectValue></SelectTrigger><SelectContent>{currentIncomes.map((income) => <SelectItem key={income.id} value={income.id}>{income.sourceName ?? 'Ingreso'} · {formatMoneyWithCode(income.amount, getCurrencyByCode(income.currencyCode))}</SelectItem>)}</SelectContent></Select></div>
-          <div className="grid gap-2"><Label htmlFor="transfer-amount">Monto a transferir ({sourceCurrency.code})</Label><Input id="transfer-amount" type="number" min="0" max={sourceSalary ? convertFromUsd(sourceSalary.amount, sourceCurrency) : undefined} inputMode="decimal" value={amount} onChange={(event) => setAmount(event.target.value)} className="bg-abyss border-graphite" />{sourceSalary ? <p className="text-xs text-muted-gray">Disponible: {formatMoneyWithCode(sourceSalary.amount, sourceCurrency)}</p> : null}</div>
-          <DestinationFields destinationId={destinationId} setDestinationId={setDestinationId} newName={newName} setNewName={setNewName} currencyCode={destinationCurrencyCode} setCurrencyCode={setDestinationCurrencyCode} excludedSourceId={sourceSalary?.sourceId} />
+          <div className="grid gap-2"><Label>Desde</Label><Select value={sourceSalaryId} onValueChange={(value) => setSourceSalaryId(value ?? '')}><SelectTrigger className="bg-abyss border-graphite"><SelectValue>{sourceSalary ? `${sourceSalary.sourceName ?? 'Ingreso'} · ${formatMoneyWithCode(Number(sourceSalary.balance ?? sourceSalary.amount), sourceCurrency)}` : 'Seleccionar ingreso'}</SelectValue></SelectTrigger><SelectContent>{currentIncomes.map((income) => <SelectItem key={income.id} value={income.id}>{income.sourceName ?? 'Ingreso'} · {formatMoneyWithCode(Number(income.balance ?? income.amount), getCurrencyByCode(income.currencyCode))}</SelectItem>)}</SelectContent></Select></div>
+          <div className="grid gap-2"><Label htmlFor="transfer-amount">Monto a transferir ({sourceCurrency.code})</Label><Input id="transfer-amount" type="number" min="0" max={sourceSalary ? convertFromUsd(Number(sourceSalary.balance ?? sourceSalary.amount), sourceCurrency) : undefined} inputMode="decimal" value={amount} onChange={(event) => setAmount(event.target.value)} className="bg-abyss border-graphite" />{sourceSalary ? <p className="text-xs text-muted-gray">Disponible: {formatMoneyWithCode(Number(sourceSalary.balance ?? sourceSalary.amount), sourceCurrency)}</p> : null}</div>
+          <DestinationFields destinationId={destinationId} setDestinationId={setDestinationId} newName={newName} setNewName={setNewName} currencyCode={destinationCurrencyCode} setCurrencyCode={setDestinationCurrencyCode} newRecurring={newRecurring} setNewRecurring={setNewRecurring} newBalanceMode={newBalanceMode} setNewBalanceMode={setNewBalanceMode} newIsCash={newIsCash} setNewIsCash={setNewIsCash} excludedSourceId={sourceSalary?.sourceId} />
           {conversionPreview}
           <DialogFooter><Button variant="ghost" disabled={isSaving} onClick={() => setTransferOpen(false)}>Cancelar</Button><Button loading={isSaving} disabled={!sourceSalaryId || !destinationId || amountUsd <= 0} onClick={() => void handleTransfer()}>Transferir</Button></DialogFooter>
         </DialogContent>

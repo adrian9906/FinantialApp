@@ -125,6 +125,7 @@ export default function Salary() {
             sourceId: source.id,
             sourceName: source.name,
             kind: (source.recurring ? 'recurring' : 'one-off') as 'recurring' | 'one-off',
+            balanceMode: source.balanceMode === 'zero' ? 'zero' as const : 'fixed' as const,
           }
         : {}),
     }
@@ -249,6 +250,7 @@ export default function Salary() {
                     <span className="text-muted-gray">
                       {entry.sourceName ?? 'Ingreso'}
                       {entry.kind === 'one-off' ? ' · puntual' : ''}
+                      {entry.kind !== 'one-off' && entry.balanceMode === 'zero' ? ' · reinicia en 0' : ''}
                     </span>
                     <span className="font-medium text-on-surface">{formatMoneyWithCode(entry.amount, getCurrencyByCode(entry.currencyCode))}</span>
                   </li>
@@ -285,6 +287,7 @@ export default function Salary() {
                         {entry.month}
                         {entry.sourceName ? ` · ${entry.sourceName}` : ''}
                         {entry.kind === 'one-off' ? ' · puntual' : ''}
+                        {entry.kind !== 'one-off' && entry.balanceMode === 'zero' ? ' · reinicia en 0' : ''}
                       </p>
                     </div>
                   </div>

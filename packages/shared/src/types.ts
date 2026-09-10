@@ -4,6 +4,10 @@ export interface IncomeSource {
   name: string
   /** Recurring sources carry forward to the next month on their own. */
   recurring: boolean
+  /** Fixed sources either repeat their balance or start each month at zero. */
+  balanceMode?: 'fixed' | 'zero'
+  /** Default payment rail for purchases made from this account. */
+  isCash?: boolean
   archived?: boolean
 }
 
@@ -15,6 +19,8 @@ export interface IncomeSource {
 export interface Salary {
   id: string
   amount: number
+  /** Spendable account balance; amount remains the monthly planning base. */
+  balance?: number
   month: string
   /** Currency used by this income account. Amount stays normalized to USD. */
   currencyCode?: string
@@ -24,6 +30,8 @@ export interface Salary {
   sourceName?: string
   /** One-off income (bonus, aguinaldo) never carries forward. */
   kind?: 'recurring' | 'one-off'
+  /** How a recurring balance is initialized when the next month is created. */
+  balanceMode?: 'fixed' | 'zero'
 }
 
 export interface Transaction {
@@ -38,6 +46,9 @@ export interface Transaction {
    * records, which are treated as cash.
    */
   isCash?: boolean
+  /** Income account charged by this transaction. */
+  incomeSourceId?: string
+  incomeSourceName?: string
   type: 'expense' | 'want' | 'saving'
   description?: string
   date: string

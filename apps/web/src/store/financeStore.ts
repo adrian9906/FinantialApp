@@ -29,6 +29,7 @@ import { isUpgradeRequiredError, queueLocalChange, syncNow } from '@/lib/sync-en
 import { readSyncDocument } from '@/lib/sync-store'
 import { parseWantDescription } from '@/lib/want-utils'
 import { applyIncomeMoneyMovement, type IncomeMoneyDestination } from '@/lib/income-money'
+import { reconcileIncomeAccountCharge } from '@/lib/income-account'
 import { useAuthStore } from '@/store/authStore'
 import { usePreferencesStore } from '@/store/preferencesStore'
 
@@ -506,9 +507,14 @@ export const useFinanceStore = create<FinanceStore>()((set, get) => ({
       await updateLocalState(set, (state) => ({
         incomeSources: state.incomeSources.map((entry) => (entry.id === id ? { ...entry, ...data } : entry)),
         // Keep the stored label in sync so past months show the current name.
-        salaries: data.name
-          ? state.salaries.map((entry) => (entry.sourceId === id ? { ...entry, sourceName: data.name } : entry))
-          : state.salaries,
+        salaries: state.salaries.map((entry) => entry.sourceId === id
+          ? {
+              ...entry,
+              ...(data.name ? { sourceName: data.name } : {}),
+              ...(data.recurring !== undefined ? { kind: data.recurring ? 'recurring' as const : 'one-off' as const } : {}),
+              ...(data.balanceMode ? { balanceMode: data.balanceMode } : {}),
+            }
+          : entry),
       }))
       return
     }
@@ -537,22 +543,33 @@ export const useFinanceStore = create<FinanceStore>()((set, get) => ({
     const created = { ...transaction, id: makeId(transaction.type), createdAt: new Date().toISOString() }
     await updateLocalState(set, (state) => ({
       transactions: [created, ...state.transactions],
+      salaries: reconcileIncomeAccountCharge(state.salaries, undefined, created),
     }))
     return created
   },
   updateTransaction: async (id, data) => {
     if (isLocalMutationMode()) {
-      await updateLocalState(set, (state) => ({
-        transactions: state.transactions.map((entry) => (entry.id === id ? { ...entry, ...data } : entry)),
-      }))
+      await updateLocalState(set, (state) => {
+        const previous = state.transactions.find((entry) => entry.id === id)
+        if (!previous) return {}
+        const next = { ...previous, ...data }
+        return {
+          transactions: state.transactions.map((entry) => (entry.id === id ? next : entry)),
+          salaries: reconcileIncomeAccountCharge(state.salaries, previous, next),
+        }
+      })
       return
     }
   },
   removeTransaction: async (id) => {
     if (isLocalMutationMode()) {
-      await updateLocalState(set, (state) => ({
-        transactions: state.transactions.filter((entry) => entry.id !== id),
-      }))
+      await updateLocalState(set, (state) => {
+        const previous = state.transactions.find((entry) => entry.id === id)
+        return {
+          transactions: state.transactions.filter((entry) => entry.id !== id),
+          salaries: reconcileIncomeAccountCharge(state.salaries, previous, undefined),
+        }
+      })
       return
     }
   },

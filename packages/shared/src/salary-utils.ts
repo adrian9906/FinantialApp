@@ -76,7 +76,10 @@ export function getSalaryForMonth(salaries: Salary[], month = getMonthKey()) {
 
   return {
     ...previousMonth[0],
-    amount: previousMonth.reduce((sum, salary) => sum + salary.amount, 0),
+    amount: previousMonth.reduce(
+      (sum, salary) => sum + (salary.balanceMode === 'zero' ? 0 : salary.amount),
+      0,
+    ),
   }
 }
 
@@ -109,7 +112,15 @@ export function carrySalaryForwardToMonth(
       const key = `${month}/${getIncomeKey(source)}`
       if (covered.has(key)) continue
       covered.add(key)
-      carried.push({ ...source, id: createId(), month })
+      carried.push({
+        ...source,
+        id: createId(),
+        month,
+        amount: source.balanceMode === 'zero' ? 0 : source.amount,
+        balance: source.balanceMode === 'zero'
+          ? 0
+          : source.amount,
+      })
     }
     month = addMonthsToKey(month, 1)
   }

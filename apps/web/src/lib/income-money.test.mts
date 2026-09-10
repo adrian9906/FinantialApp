@@ -10,8 +10,8 @@ const initial = {
     { id: 'transfer-source', name: 'Transferencia', recurring: true },
   ],
   salaries: [
-    { id: 'salary-usd', amount: 100, month: '2026-09', currencyCode: 'USD', sourceId: 'salary-source', sourceName: 'Salario', kind: 'recurring' as const },
-    { id: 'transfer-cup', amount: 10, month: '2026-09', currencyCode: 'CUP', sourceId: 'transfer-source', sourceName: 'Transferencia', kind: 'recurring' as const },
+    { id: 'salary-usd', amount: 100, balance: 80, month: '2026-09', currencyCode: 'USD', sourceId: 'salary-source', sourceName: 'Salario', kind: 'recurring' as const },
+    { id: 'transfer-cup', amount: 10, balance: 10, month: '2026-09', currencyCode: 'CUP', sourceId: 'transfer-source', sourceName: 'Transferencia', kind: 'recurring' as const },
   ],
 }
 
@@ -24,18 +24,23 @@ const transferred = applyIncomeMoneyMovement(initial, {
 
 assert.equal(transferred.salaries.find((entry) => entry.id === 'salary-usd')?.amount, 75)
 assert.equal(transferred.salaries.find((entry) => entry.id === 'transfer-cup')?.amount, 35)
+assert.equal(transferred.salaries.find((entry) => entry.id === 'salary-usd')?.balance, 55)
+assert.equal(transferred.salaries.find((entry) => entry.id === 'transfer-cup')?.balance, 35)
 assert.equal(transferred.salaries.find((entry) => entry.id === 'transfer-cup')?.currencyCode, 'CUP')
 
 const assigned = applyIncomeMoneyMovement(transferred, {
   amountUsd: 5,
   month: '2026-09',
-  destination: { newSourceName: 'Efectivo', currencyCode: 'CUP' },
+  destination: { newSourceName: 'Efectivo', currencyCode: 'CUP', recurring: true, balanceMode: 'zero', isCash: true },
 }, makeId)
 
 const createdSource = assigned.incomeSources.find((entry) => entry.name === 'Efectivo')
 assert.ok(createdSource)
 assert.equal(assigned.salaries.find((entry) => entry.sourceId === createdSource.id)?.amount, 5)
 assert.equal(assigned.salaries.find((entry) => entry.sourceId === createdSource.id)?.currencyCode, 'CUP')
+assert.equal(createdSource.balanceMode, 'zero')
+assert.equal(createdSource.isCash, true)
+assert.equal(assigned.salaries.find((entry) => entry.sourceId === createdSource.id)?.balanceMode, 'zero')
 
 assert.throws(() => applyIncomeMoneyMovement(initial, {
   sourceSalaryId: 'salary-usd',

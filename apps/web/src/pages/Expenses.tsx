@@ -6,7 +6,7 @@ import { useFinanceStore } from '@/store/financeStore'
 import { buildExpenseDescription, createCustomExpenseCategory, getExpenseCategoryLabel, getPlannedExpenseTotal, parseExpenseDescription, type ExpenseBuiltInCategory, type ExpenseCategory } from '@/lib/expense-utils'
 import { getPlannedWantTotal } from '@/lib/want-utils'
 import { useMonthlyOverview } from '@/lib/useMonthlyOverview'
-import { formatMoney, useCurrencyInput } from '@/lib/currency'
+import { convertToUsd, convertUsdToInput, formatMoneyInput, formatMoneyWithCode, getCurrencyByCode } from '@/lib/currency'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
@@ -34,11 +34,12 @@ import { toast } from 'sonner'
 import { filterAndSortTransactionsByDate, getTodayDateKey, type TransactionDateFilter as TransactionDateFilterValue } from '@/lib/date'
 import { ReceiptOcrPanel } from '@/components/ocr/ReceiptOcrPanel'
 import { PurchasePhotosField } from '@/components/expenses/PurchasePhotosField'
-import { Switch } from '@/components/ui/switch'
 import { ReceiptItemsReviewDialog } from '@/components/ocr/ReceiptItemsReviewDialog'
 import { buildReceiptCategoryGroups, buildReceiptTransaction, getReceiptTotalsByType, type ReceiptReviewResult } from '@/lib/receipt-review'
 import { useAuthStore } from '@/store/authStore'
 import { usePreferencesStore } from '@/store/preferencesStore'
+import { IncomeAccountSelect } from '@/components/income/IncomeAccountSelect'
+import { getIncomeAccountOverview, getIncomeAccountsForMonth } from '@/lib/income-account-view'
 
 interface ExpenseFormState {
   amount: string
@@ -210,8 +211,10 @@ export default function Expenses() {
   const updateTransaction = useFinanceStore((state) => state.updateTransaction)
   const removeTransaction = useFinanceStore((state) => state.removeTransaction)
   const monthlyPlanningHistory = useFinanceStore((state) => state.monthlyPlanningHistory)
+  const salaries = useFinanceStore((state) => state.salaries)
+  const incomeSources = useFinanceStore((state) => state.incomeSources)
   const overview = useMonthlyOverview()
-  const moneyInput = useCurrencyInput()
+  const formula = usePreferencesStore((state) => state.formula)
   const profileId = useAuthStore((state) => state.user?.id) ?? 'guest'
   const userRules = usePreferencesStore(useShallow((state) => state.categoryRulesByProfile[profileId] ?? []))
   const saveCategoryRule = usePreferencesStore((state) => state.saveCategoryRule)
@@ -234,6 +237,22 @@ export default function Expenses() {
   const [receiptScanOpen, setReceiptScanOpen] = useState(false)
   // Bumped per scan so the review dialog remounts with fresh rows.
   const [receiptScanId, setReceiptScanId] = useState(0)
+  const accounts = useMemo(() => getIncomeAccountsForMonth(salaries, incomeSources), [incomeSources, salaries])
+  const [selectedIncomeSourcePreference, setSelectedIncomeSourceId] = useState('')
+  const [formIncomeSourcePreference, setFormIncomeSourceId] = useState('')
+  const selectedIncomeSourceId = accounts.some((account) => account.source.id === selectedIncomeSourcePreference)
+    ? selectedIncomeSourcePreference
+    : accounts[0]?.source.id ?? ''
+  const formIncomeSourceId = accounts.some((account) => account.source.id === formIncomeSourcePreference)
+    ? formIncomeSourcePreference
+    : accounts[0]?.source.id ?? ''
+  const selectedAccount = accounts.find((account) => account.source.id === selectedIncomeSourceId)
+  const formAccount = accounts.find((account) => account.source.id === formIncomeSourceId)
+  const accountCurrency = getCurrencyByCode(selectedAccount?.salary.currencyCode)
+  const formCurrency = getCurrencyByCode(formAccount?.salary.currencyCode)
+  const accountOverview = getIncomeAccountOverview(selectedAccount, overview.periodTransactions, formula)
+  const formAccountOverview = getIncomeAccountOverview(formAccount, overview.periodTransactions, formula)
+  const formatAccountMoney = (value: number) => formatMoneyWithCode(value, accountCurrency)
   const receiptCategoryGroups = useMemo(() => buildReceiptCategoryGroups(transactions), [transactions])
   const categoryWasChanged = useRef(false)
   const [form, setForm] = useState<ExpenseFormState>({
@@ -257,6 +276,7 @@ export default function Expenses() {
       isCash: true,
     })
     setEditId(null)
+    setFormIncomeSourceId(selectedIncomeSourceId || accounts[0]?.source.id || '')
     setFormError(null)
     setCustomCategoryName('')
     categoryWasChanged.current = false
@@ -267,9 +287,11 @@ export default function Expenses() {
     categoryWasChanged.current = false
     if (entry) {
       const parsed = parseExpenseDescription(entry.description)
+      const entryAccount = accounts.find((account) => account.source.id === entry.incomeSourceId)
       setEditId(entry.id)
+      setFormIncomeSourceId(entry.incomeSourceId ?? selectedIncomeSourceId)
       setForm({
-        amount: moneyInput.fromUsd(entry.amount),
+        amount: convertUsdToInput(entry.amount, getCurrencyByCode(entryAccount?.salary.currencyCode)),
         itemName: parsed.itemName,
         category: parsed.category,
         date: entry.date,
@@ -314,20 +336,29 @@ export default function Expenses() {
   }
 
   async function handleConfirmReceiptItems(reviewed: ReceiptReviewResult[], date: string) {
+    if (!selectedAccount) {
+      toast.error('Selecciona primero el ingreso desde donde se descontará el recibo.')
+      throw new Error('missing-income-account')
+    }
     const totals = getReceiptTotalsByType(reviewed)
-    const availableExpenses = Math.max(0, overview.budgetExpenses - getPlannedExpenseTotal(overview.periodTransactions))
-    const availableWants = Math.max(0, overview.budgetWants - getPlannedWantTotal(overview.periodTransactions))
+    const availableExpenses = Math.max(0, accountOverview.budgetExpenses - getPlannedExpenseTotal(accountOverview.periodTransactions))
+    const availableWants = Math.max(0, accountOverview.budgetWants - getPlannedWantTotal(accountOverview.periodTransactions))
 
     if (totals.expense > availableExpenses) {
-      toast.error(`Los gastos del recibo suman ${formatMoney(totals.expense)} y solo tienes ${formatMoney(availableExpenses)} disponibles para planificar.`)
+      toast.error(`Los gastos del recibo suman ${formatAccountMoney(totals.expense)} y solo tienes ${formatAccountMoney(availableExpenses)} disponibles para planificar.`)
       throw new Error('over-budget')
     }
     if (totals.want > availableWants) {
-      toast.error(`Los gustos del recibo suman ${formatMoney(totals.want)} y solo tienes ${formatMoney(availableWants)} disponibles para planificar.`)
+      toast.error(`Los gustos del recibo suman ${formatAccountMoney(totals.want)} y solo tienes ${formatAccountMoney(availableWants)} disponibles para planificar.`)
       throw new Error('over-budget')
     }
 
-    await Promise.all(reviewed.map((item) => addTransaction(buildReceiptTransaction(item, date))))
+    await Promise.all(reviewed.map((item) => addTransaction({
+      ...buildReceiptTransaction(item, date),
+      incomeSourceId: selectedAccount.source.id,
+      incomeSourceName: selectedAccount.source.name,
+      isCash: selectedAccount.source.isCash !== false,
+    })))
     reviewed.forEach((item) => {
       const learned = item.transactionType === 'expense'
         ? createLearnedCategorizationRule(item.name, { transactionType: 'expense', category: item.category })
@@ -340,19 +371,31 @@ export default function Expenses() {
   async function handleSave() {
     if (!form.amount || !form.itemName || isSaving) return
 
-    const nextAmount = moneyInput.toUsd(form.amount)
+    if (!formAccount) {
+      setFormError('Selecciona el ingreso desde donde se descontará el dinero.')
+      return
+    }
+
+    const nextAmount = convertToUsd(Number(form.amount), formCurrency)
     if (!Number.isFinite(nextAmount) || nextAmount <= 0) {
       setFormError('El precio debe ser mayor que cero.')
       return
     }
 
     if (nextAmount > availableToPlan) {
-      setFormError(`Ese precio supera el disponible para planificar: ${formatMoney(availableToPlan)}.`)
+      setFormError(`Ese precio supera el disponible para planificar: ${formatMoneyWithCode(availableToPlan, formCurrency)}.`)
       return
     }
 
-    if (plannedTotal + nextAmount > overview.budgetExpenses) {
-      setFormError(`No puedes agregarlo porque la lista total se iria a ${formatMoney(plannedTotal + nextAmount)} y tu limite es ${formatMoney(overview.budgetExpenses)}.`)
+    if (plannedTotal + nextAmount > formAccountOverview.budgetExpenses) {
+      setFormError(`No puedes agregarlo porque la lista total se iría a ${formatMoneyWithCode(plannedTotal + nextAmount, formCurrency)} y tu límite es ${formatMoneyWithCode(formAccountOverview.budgetExpenses, formCurrency)}.`)
+      return
+    }
+
+    const previousRefund = editingTransaction?.incomeSourceId === formAccount.source.id ? editingTransaction.amount : 0
+    const availableAccountBalance = Number(formAccount.salary.balance ?? formAccount.salary.amount) + previousRefund
+    if (nextAmount > availableAccountBalance) {
+      setFormError(`Ese ingreso solo tiene ${formatMoneyWithCode(availableAccountBalance, formCurrency)} de saldo.`)
       return
     }
 
@@ -374,7 +417,9 @@ export default function Expenses() {
       // Optional extras; omitted entirely when empty.
       ...(place ? { place } : {}),
       ...(attachments.length > 0 ? { attachments } : {}),
-      isCash: form.isCash,
+      isCash: formAccount.source.isCash !== false,
+      incomeSourceId: formAccount.source.id,
+      incomeSourceName: formAccount.source.name,
     }
 
     setIsSaving(true)
@@ -403,6 +448,7 @@ export default function Expenses() {
 
   const expenseItems: ExpenseViewItem[] = transactions
     .filter((transaction) => transaction.type === 'expense'
+      && transaction.incomeSourceId === selectedIncomeSourceId
       && !overview.excludedTransactionIds.includes(transaction.id)
       && isInFinancialPeriod(transaction, overview.periodStart, overview.strictSameDayBoundary))
     .map((transaction) => {
@@ -456,20 +502,21 @@ export default function Expenses() {
   const expenseCount = filteredExpenseItems.length
   const checkedCount = filteredExpenseItems.filter((item) => item.status === 'checked').length
   const pendingCount = filteredExpenseItems.filter((item) => item.status === 'pending').length
-  const currentItemAmount = editId ? expenseItems.find((item) => item.id === editId)?.amount ?? 0 : 0
-  const plannedTotal = getPlannedExpenseTotal(overview.periodTransactions) - currentItemAmount
-  const availableToPlan = Math.max(0, overview.budgetExpenses - plannedTotal)
-  const pct = overview.budgetExpenses > 0 ? Math.min(100, Math.round((overview.totalExpenses / overview.budgetExpenses) * 100)) : 0
-  const remaining = overview.budgetExpenses - overview.totalExpenses
-  const typedAmount = moneyInput.toUsd(form.amount)
+  const editingTransaction = editId ? transactions.find((transaction) => transaction.id === editId) : undefined
+  const currentItemAmount = editingTransaction?.incomeSourceId === formIncomeSourceId ? editingTransaction.amount : 0
+  const plannedTotal = getPlannedExpenseTotal(formAccountOverview.periodTransactions) - currentItemAmount
+  const availableToPlan = Math.max(0, formAccountOverview.budgetExpenses - plannedTotal)
+  const pct = accountOverview.budgetExpenses > 0 ? Math.min(100, Math.round((accountOverview.totalExpenses / accountOverview.budgetExpenses) * 100)) : 0
+  const remaining = accountOverview.budgetExpenses - accountOverview.totalExpenses
+  const typedAmount = convertToUsd(Number(form.amount), formCurrency)
   const liveBudgetError = !form.amount
     ? null
     : !Number.isFinite(typedAmount) || typedAmount <= 0
       ? 'El precio debe ser mayor que cero.'
       : typedAmount > availableToPlan
-        ? `Te pasas por ${formatMoney(typedAmount - availableToPlan)}. Solo te quedan ${formatMoney(availableToPlan)} disponibles para planificar.`
-        : plannedTotal + typedAmount > overview.budgetExpenses
-          ? `No puedes agregar este producto porque la lista subiria a ${formatMoney(plannedTotal + typedAmount)} y tu limite es ${formatMoney(overview.budgetExpenses)}.`
+        ? `Te pasas por ${formatMoneyWithCode(typedAmount - availableToPlan, formCurrency)}. Solo te quedan ${formatMoneyWithCode(availableToPlan, formCurrency)} disponibles para planificar.`
+        : plannedTotal + typedAmount > formAccountOverview.budgetExpenses
+          ? `No puedes agregar este producto porque la lista subiría a ${formatMoneyWithCode(plannedTotal + typedAmount, formCurrency)} y tu límite es ${formatMoneyWithCode(formAccountOverview.budgetExpenses, formCurrency)}.`
           : null
 
   function handleCreateCategory() {
@@ -496,13 +543,19 @@ export default function Expenses() {
 
     const total = drafts.reduce((sum, draft) => sum + draft.amount, 0)
     if (total > availableToPlan) {
-      toast.error(`La lista necesita ${formatMoney(total)} y solo tienes ${formatMoney(availableToPlan)} disponibles.`)
+      toast.error(`La lista necesita ${formatAccountMoney(total)} y solo tienes ${formatAccountMoney(availableToPlan)} disponibles.`)
       return
     }
 
     setRestoringListId(entry.id)
     try {
-      await Promise.all(drafts.map((draft) => addTransaction(draft)))
+      if (!selectedAccount) throw new Error('Selecciona primero un ingreso.')
+      await Promise.all(drafts.map((draft) => addTransaction({
+        ...draft,
+        incomeSourceId: selectedAccount.source.id,
+        incomeSourceName: selectedAccount.source.name,
+        isCash: selectedAccount.source.isCash !== false,
+      })))
       toast.success(`Se reutilizaron ${drafts.length} artículo(s) de ${entry.label}.`)
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'No se pudo reutilizar la lista.')
@@ -541,13 +594,13 @@ export default function Expenses() {
   async function handleTransferRemainingToSavings() {
     if (isTransferring) return
 
-    const nextAmount = moneyInput.toUsd(transferAmount)
+    const nextAmount = convertToUsd(Number(transferAmount), accountCurrency)
     if (!Number.isFinite(nextAmount) || nextAmount <= 0) {
       setTransferError('El monto debe ser mayor que cero.')
       return
     }
     if (nextAmount > remaining) {
-      setTransferError(`Solo puedes mover hasta ${formatMoney(Math.max(0, remaining))}.`)
+      setTransferError(`Solo puedes mover hasta ${formatAccountMoney(Math.max(0, remaining))}.`)
       return
     }
 
@@ -601,6 +654,15 @@ export default function Expenses() {
         </div>
       </header>
 
+      <Card className="border-graphite bg-surface p-4 shadow-vault-sm">
+        <IncomeAccountSelect
+          accounts={accounts}
+          value={selectedIncomeSourceId}
+          onValueChange={setSelectedIncomeSourceId}
+          label="Ver gastos del ingreso"
+        />
+      </Card>
+
       <div className="relative overflow-hidden rounded-xl bg-surface p-4 shadow-vault sm:p-6">
         <div className="absolute right-0 top-0 h-40 w-40 rounded-bl-full bg-primary/8 blur-2xl" />
         <div className="relative z-10 grid gap-4 lg:grid-cols-[1.4fr_0.6fr]">
@@ -608,11 +670,11 @@ export default function Expenses() {
             <div className="mb-2 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
               <p className="text-xs uppercase tracking-wider text-muted-gray">Presupuesto mensual (50%)</p>
               <Badge variant="secondary" className={`w-fit ${remaining >= 0 ? 'bg-success/10 text-success' : 'bg-error/10 text-error'}`}>
-                {remaining >= 0 ? `${formatMoney(remaining)} disponible` : `${formatMoney(Math.abs(remaining))} excedido`}
+                {remaining >= 0 ? `${formatAccountMoney(remaining)} disponible` : `${formatAccountMoney(Math.abs(remaining))} excedido`}
               </Badge>
             </div>
             <h2 className="mb-3 break-words text-[28px] font-semibold leading-tight text-on-surface sm:text-[30px]">
-              {formatMoney(overview.totalExpenses)} <span className="text-base font-normal text-muted-gray">/ {formatMoney(overview.budgetExpenses)}</span>
+              {formatAccountMoney(accountOverview.totalExpenses)} <span className="text-base font-normal text-muted-gray">/ {formatAccountMoney(accountOverview.budgetExpenses)}</span>
             </h2>
             <div className="h-2 w-full overflow-hidden rounded-full bg-surface-container-highest">
               <div className="h-full rounded-full bg-primary transition-all duration-1000" style={{ width: `${pct}%` }} />
@@ -691,7 +753,7 @@ export default function Expenses() {
                 <div className="grid grid-cols-1 gap-3 border-b border-graphite px-4 py-4 sm:grid-cols-2 sm:px-5">
                   <div className="rounded-xl bg-abyss p-3 shadow-vault-sm">
                     <p className="text-xs uppercase tracking-[0.16em] text-medium-gray">Total</p>
-                    <p className="mt-2 text-lg font-semibold text-on-surface">{formatMoney(total)}</p>
+                    <p className="mt-2 text-lg font-semibold text-on-surface">{formatAccountMoney(total)}</p>
                   </div>
                   <div className="rounded-xl bg-abyss p-3 shadow-vault-sm">
                     <p className="text-xs uppercase tracking-[0.16em] text-medium-gray">Completados</p>
@@ -768,7 +830,7 @@ export default function Expenses() {
                                     </div>
                                   </div>
                                   <span className={`text-sm font-semibold ${isChecked ? 'text-muted-gray' : 'text-error'} sm:text-right`}>
-                                    {formatMoney(item.amount)}
+                                    {formatAccountMoney(item.amount)}
                                   </span>
                                 </div>
 
@@ -817,6 +879,11 @@ export default function Expenses() {
             <DialogDescription>Guarda cada producto esencial como un gasto individual, organizado por categoría.</DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
+            <IncomeAccountSelect
+              accounts={accounts}
+              value={formIncomeSourceId}
+              onValueChange={(value) => { setFormError(null); setFormIncomeSourceId(value); setForm((current) => ({ ...current, amount: '' })) }}
+            />
             <div className="grid gap-4 lg:grid-cols-2">
               <div className="space-y-2">
                 <Label className="text-medium-gray">Categoría</Label>
@@ -854,7 +921,7 @@ export default function Expenses() {
                 <p className="text-xs text-muted-gray">Crea una categoría propia y quedará disponible con tus gastos guardados.</p>
               </div>
               <div className="space-y-2">
-                <Label className="text-medium-gray">Precio ({moneyInput.currency.code})</Label>
+                <Label className="text-medium-gray">Precio ({formCurrency.code})</Label>
                 <Input
                   type="number"
                   placeholder="18"
@@ -862,7 +929,7 @@ export default function Expenses() {
                   onChange={(e) => { setFormError(null); setForm((current) => ({ ...current, amount: e.target.value })) }}
                   className="bg-abyss border-graphite text-on-surface"
                 />
-                {liveBudgetError ? <p className="text-xs text-error">{liveBudgetError}</p> : <p className="text-xs text-muted-gray">Puedes planificar hasta {formatMoney(availableToPlan)} sin pasarte.</p>}
+                {liveBudgetError ? <p className="text-xs text-error">{liveBudgetError}</p> : <p className="text-xs text-muted-gray">Puedes planificar hasta {formatMoneyWithCode(availableToPlan, formCurrency)} sin pasarte.</p>}
               </div>
             </div>
 
@@ -893,7 +960,7 @@ export default function Expenses() {
                 onReuse={(suggestion) => {
                   setFormError(null)
                   setForm({
-                    amount: moneyInput.fromUsd(suggestion.amount),
+                    amount: convertUsdToInput(suggestion.amount, formCurrency),
                     itemName: suggestion.itemName,
                     category: suggestion.category as ExpenseCategory,
                     date: getTodayDateKey(),
@@ -915,20 +982,11 @@ export default function Expenses() {
             <div className="space-y-2">
               <Label className="text-medium-gray">Forma de pago</Label>
               <div className="flex items-center justify-between rounded-xl border border-graphite bg-abyss px-3 py-2.5">
-                <span className={`inline-flex items-center gap-2 text-sm ${form.isCash ? 'text-emerald-300' : 'text-muted-gray'}`}>
-                  <Banknote className="size-4" aria-hidden="true" />
-                  Efectivo
+                <span className={`inline-flex items-center gap-2 text-sm ${formAccount?.source.isCash === false ? 'text-sky-300' : 'text-emerald-300'}`}>
+                  {formAccount?.source.isCash === false ? <ArrowLeftRight className="size-4" /> : <Banknote className="size-4" />}
+                  {formAccount?.source.isCash === false ? 'Transferencia' : 'Efectivo'}
                 </span>
-                <Switch
-                  // Checked means transfer, so cash stays the default.
-                  checked={!form.isCash}
-                  onCheckedChange={(checked) => setForm((current) => ({ ...current, isCash: !checked }))}
-                  aria-label={form.isCash ? 'Pagado en efectivo' : 'Pagado por transferencia'}
-                />
-                <span className={`inline-flex items-center gap-2 text-sm ${form.isCash ? 'text-muted-gray' : 'text-sky-300'}`}>
-                  <ArrowLeftRight className="size-4" aria-hidden="true" />
-                  Transferencia
-                </span>
+                <span className="text-xs text-muted-gray">Definido por el ingreso</span>
               </div>
             </div>
 
@@ -959,17 +1017,17 @@ export default function Expenses() {
                   {getCategoryMeta(form.category).label}
                 </Badge>
                 <span className="text-sm text-muted-gray">
-                  {form.amount ? moneyInput.formatInput(Number(form.amount)) : 'Sin precio'}
+                  {form.amount ? formatMoneyInput(Number(form.amount), formCurrency) : 'Sin precio'}
                 </span>
                 <span className="text-sm text-muted-gray">
                   {form.date || 'Sin fecha'}
                 </span>
               </div>
               <p className="mt-3 text-sm text-muted-gray">
-                Disponible para planificar: {formatMoney(availableToPlan)}
+                Disponible para planificar: {formatMoneyWithCode(availableToPlan, formCurrency)}
               </p>
               <p className="mt-1 text-xs text-muted-gray">
-                El dinero solo se descuenta del presupuesto cuando marques el checkbox del producto.
+                Al guardar, el dinero se descuenta del saldo de {formAccount?.source.name ?? 'ese ingreso'}.
               </p>
             </Card>
             {formError ? <p className="text-sm text-error">{formError}</p> : null}
@@ -998,7 +1056,7 @@ export default function Expenses() {
           </DialogHeader>
           <div className="space-y-4">
             <div className="space-y-2">
-              <Label className="text-medium-gray">Monto a mover ({moneyInput.currency.code})</Label>
+              <Label className="text-medium-gray">Monto a mover ({accountCurrency.code})</Label>
               <Input
                 type="number"
                 min="0"
@@ -1011,7 +1069,7 @@ export default function Expenses() {
                 className="bg-abyss border-graphite text-on-surface"
               />
               <p className="text-xs text-muted-gray">
-                Disponible para mover: {formatMoney(Math.max(0, remaining))}
+                Disponible para mover: {formatAccountMoney(Math.max(0, remaining))}
               </p>
             </div>
             {transferError ? <p className="text-sm text-error">{transferError}</p> : null}

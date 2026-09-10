@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Briefcase, Pencil, Plus, Trash2 } from 'lucide-react'
+import { ArrowLeftRight, Banknote, Briefcase, Pencil, Plus, Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
 
 import { Button } from '@/components/ui/button'
@@ -28,12 +28,16 @@ export function IncomeSourceManager() {
   const [editId, setEditId] = useState<string | null>(null)
   const [name, setName] = useState('')
   const [recurring, setRecurring] = useState(true)
+  const [balanceMode, setBalanceMode] = useState<'fixed' | 'zero'>('fixed')
+  const [isCash, setIsCash] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [isSaving, setIsSaving] = useState(false)
 
   function resetForm() {
     setName('')
     setRecurring(true)
+    setBalanceMode('fixed')
+    setIsCash(true)
     setEditId(null)
     setError(null)
   }
@@ -49,6 +53,8 @@ export function IncomeSourceManager() {
     setEditId(id)
     setName(source.name)
     setRecurring(source.recurring)
+    setBalanceMode(source.balanceMode === 'zero' ? 'zero' : 'fixed')
+    setIsCash(source.isCash !== false)
     setError(null)
     setOpen(true)
   }
@@ -70,8 +76,14 @@ export function IncomeSourceManager() {
 
     setIsSaving(true)
     try {
-      if (editId) await updateIncomeSource(editId, { name: trimmed, recurring })
-      else await addIncomeSource({ name: trimmed, recurring })
+      const sourceData: Omit<import('@plata/shared').IncomeSource, 'id'> = {
+        name: trimmed,
+        recurring,
+        balanceMode: recurring ? balanceMode : 'fixed',
+        isCash,
+      }
+      if (editId) await updateIncomeSource(editId, sourceData)
+      else await addIncomeSource(sourceData)
       setOpen(false)
       resetForm()
     } catch {
@@ -131,7 +143,13 @@ export function IncomeSourceManager() {
               <div>
                 <p className="text-sm font-medium text-on-surface">{source.name}</p>
                 <p className="text-xs text-muted-gray">
-                  {source.recurring ? 'Se repite cada mes' : 'Solo cuando lo registres'}
+                  {source.recurring
+                    ? source.balanceMode === 'zero' ? 'Mensual · comienza en 0' : 'Mensual · conserva el saldo'
+                    : 'Solo cuenta este mes'}
+                </p>
+                <p className={`mt-1 inline-flex items-center gap-1 text-xs ${source.isCash === false ? 'text-sky-300' : 'text-emerald-300'}`}>
+                  {source.isCash === false ? <ArrowLeftRight className="size-3.5" /> : <Banknote className="size-3.5" />}
+                  {source.isCash === false ? 'Transferencia' : 'Efectivo'}
                 </p>
               </div>
               <div className="flex gap-1">
@@ -167,24 +185,54 @@ export function IncomeSourceManager() {
             </div>
 
             <div className="grid gap-2">
+              <Label className="text-medium-gray">Forma de pago de esta cuenta</Label>
+              <Select value={isCash ? 'cash' : 'transfer'} onValueChange={(value) => setIsCash(value !== 'transfer')}>
+                <SelectTrigger><SelectValue>{isCash ? 'Efectivo' : 'Transferencia'}</SelectValue></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="cash"><Banknote className="size-4" />Efectivo</SelectItem>
+                  <SelectItem value="transfer"><ArrowLeftRight className="size-4" />Transferencia</SelectItem>
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-gray">Los gastos y gustos tomarán esta forma de pago automáticamente.</p>
+            </div>
+
+            <div className="grid gap-2">
               <Label className="text-medium-gray">Tipo</Label>
               <Select value={recurring ? 'recurring' : 'one-off'} onValueChange={(value) => setRecurring(value === 'recurring')}>
                 <SelectTrigger>
                   {/* Short labels: the full meaning is spelled out in the hint
                       below, and long options were being clipped in the list. */}
-                  <SelectValue>{recurring ? 'Fijo' : 'Puntual'}</SelectValue>
+                  <SelectValue>{recurring ? 'Todos los meses' : 'Solo este mes'}</SelectValue>
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="recurring">Fijo</SelectItem>
-                  <SelectItem value="one-off">Puntual</SelectItem>
+                  <SelectItem value="recurring">Todos los meses</SelectItem>
+                  <SelectItem value="one-off">Solo este mes</SelectItem>
                 </SelectContent>
               </Select>
               <p className="text-xs text-muted-gray">
                 {recurring
-                  ? 'Fijo: se repite cada mes. Se copia solo al mes siguiente, como el sueldo de un trabajo.'
-                  : 'Puntual: como un bonus. Solo cuenta en el mes en que lo registras.'}
+                  ? 'Este ingreso seguirá existiendo automáticamente cada mes.'
+                  : 'Como un bonus: solo cuenta en el mes en que lo registras.'}
               </p>
             </div>
+
+            {recurring ? (
+              <div className="grid gap-2 rounded-xl border border-graphite bg-abyss p-3">
+                <Label className="text-medium-gray">¿Cómo inicia el próximo mes?</Label>
+                <Select value={balanceMode} onValueChange={(value) => setBalanceMode(value === 'zero' ? 'zero' : 'fixed')}>
+                  <SelectTrigger><SelectValue>{balanceMode === 'zero' ? 'En cero' : 'Con el mismo saldo'}</SelectValue></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="fixed">Con el mismo saldo</SelectItem>
+                    <SelectItem value="zero">En cero</SelectItem>
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-muted-gray">
+                  {balanceMode === 'fixed'
+                    ? 'Ideal para Salario: el importe se repite automáticamente.'
+                    : 'Ideal para Cambio en moneda nacional: aparece en 0 y luego le asignas o transfieres dinero.'}
+                </p>
+              </div>
+            ) : null}
 
             {error ? <p className="text-sm text-error">{error}</p> : null}
           </div>

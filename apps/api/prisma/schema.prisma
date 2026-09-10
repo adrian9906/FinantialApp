@@ -64,6 +64,8 @@ model FuenteIngreso {
   id        String   @id @default(uuid())
   nombre    String
   recurrente Boolean @default(true)
+  modoSaldo  String   @default("fixed")
+  esEfectivo Boolean  @default(true)
   archivada Boolean  @default(false)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -76,7 +78,9 @@ model FuenteIngreso {
 model Salario {
   id        String   @id @default(uuid())
   salario   Float
+  saldo     Float
   moneda    String   @default("USD")
+  modoSaldo String   @default("fixed")
   fuenteId    String?
   fuenteNombre String?
   tipo        String?
@@ -112,12 +116,15 @@ model Gasto {
   lugar     String?
   adjuntos  String[] @default([])
   esEfectivo Boolean @default(true)
+  fuenteIngresoId String?
+  fuenteIngresoNombre String?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
   usuarioId String
   usuario   Usuario  @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
   items     Item[]
 
+  @@index([usuarioId, fuenteIngresoId, fecha])
   @@map("gastos")
 }
 
@@ -128,12 +135,15 @@ model Gusto {
   lugar     String?
   adjuntos  String[] @default([])
   esEfectivo Boolean @default(true)
+  fuenteIngresoId String?
+  fuenteIngresoNombre String?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
   usuarioId String
   usuario   Usuario  @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
   items     Item[]
 
+  @@index([usuarioId, fuenteIngresoId, fecha])
   @@map("gustos")
 }
 

@@ -6,14 +6,13 @@ import { useFinanceStore } from '@/store/financeStore'
 import { buildWantDescription, createCustomWantCategory, getPlannedWantTotal, getWantCategoryLabel, parseWantDescription, type WantBuiltInCategory, type WantCategory } from '@/lib/want-utils'
 import { getPlannedExpenseTotal } from '@/lib/expense-utils'
 import { useMonthlyOverview } from '@/lib/useMonthlyOverview'
-import { formatMoney, useCurrencyInput } from '@/lib/currency'
+import { convertToUsd, convertUsdToInput, formatMoney, formatMoneyInput, formatMoneyWithCode, getCurrencyByCode } from '@/lib/currency'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { ExportExcelButton } from '@/components/reports/ExportExcelButton'
 import { Checkbox } from '@/components/ui/checkbox'
 import { DatePickerField } from '@/components/ui/date-picker-field'
-import { Switch } from '@/components/ui/switch'
 import {
   Dialog,
   DialogContent,
@@ -38,6 +37,8 @@ import { ReceiptOcrPanel } from '@/components/ocr/ReceiptOcrPanel'
 import { ReceiptItemsReviewDialog } from '@/components/ocr/ReceiptItemsReviewDialog'
 import { buildReceiptCategoryGroups, buildReceiptTransaction, getReceiptTotalsByType, type ReceiptReviewResult } from '@/lib/receipt-review'
 import { useAuthStore } from '@/store/authStore'
+import { IncomeAccountSelect } from '@/components/income/IncomeAccountSelect'
+import { getIncomeAccountOverview, getIncomeAccountsForMonth } from '@/lib/income-account-view'
 
 interface WantFormState {
   amount: string
@@ -196,8 +197,9 @@ export default function Wants() {
   const updateTransaction = useFinanceStore((state) => state.updateTransaction)
   const removeTransaction = useFinanceStore((state) => state.removeTransaction)
   const monthlyPlanningHistory = useFinanceStore((state) => state.monthlyPlanningHistory)
+  const salaries = useFinanceStore((state) => state.salaries)
+  const incomeSources = useFinanceStore((state) => state.incomeSources)
   const overview = useMonthlyOverview()
-  const moneyInput = useCurrencyInput()
   const formula = usePreferencesStore((state) => state.formula)
   const profileId = useAuthStore((state) => state.user?.id) ?? 'guest'
   const userRules = usePreferencesStore(useShallow((state) => state.categoryRulesByProfile[profileId] ?? []))
@@ -221,6 +223,22 @@ export default function Wants() {
   const [receiptReviewOpen, setReceiptReviewOpen] = useState(false)
   const [receiptScanOpen, setReceiptScanOpen] = useState(false)
   const [receiptScanId, setReceiptScanId] = useState(0)
+  const accounts = useMemo(() => getIncomeAccountsForMonth(salaries, incomeSources), [incomeSources, salaries])
+  const [selectedIncomeSourcePreference, setSelectedIncomeSourceId] = useState('')
+  const [formIncomeSourcePreference, setFormIncomeSourceId] = useState('')
+  const selectedIncomeSourceId = accounts.some((account) => account.source.id === selectedIncomeSourcePreference)
+    ? selectedIncomeSourcePreference
+    : accounts[0]?.source.id ?? ''
+  const formIncomeSourceId = accounts.some((account) => account.source.id === formIncomeSourcePreference)
+    ? formIncomeSourcePreference
+    : accounts[0]?.source.id ?? ''
+  const selectedAccount = accounts.find((account) => account.source.id === selectedIncomeSourceId)
+  const formAccount = accounts.find((account) => account.source.id === formIncomeSourceId)
+  const accountCurrency = getCurrencyByCode(selectedAccount?.salary.currencyCode)
+  const formCurrency = getCurrencyByCode(formAccount?.salary.currencyCode)
+  const accountOverview = getIncomeAccountOverview(selectedAccount, overview.periodTransactions, formula)
+  const formAccountOverview = getIncomeAccountOverview(formAccount, overview.periodTransactions, formula)
+  const formatAccountMoney = (value: number) => formatMoneyWithCode(value, accountCurrency)
   const receiptCategoryGroups = useMemo(() => buildReceiptCategoryGroups(transactions), [transactions])
   const categoryWasChanged = useRef(false)
   const [form, setForm] = useState<WantFormState>({
@@ -230,16 +248,6 @@ export default function Wants() {
     category: 'outings',
     date: getTodayDateKey(),
   })
-
-  useEffect(() => {
-    if (!isWantsDisabled) return
-    setOpen(false)
-    setTransferOpen(false)
-    setEditId(null)
-    setFormError(null)
-    setCustomCategoryName('')
-    setTransferError(null)
-  }, [isWantsDisabled])
 
   function resetForm() {
     categoryWasChanged.current = false
@@ -251,6 +259,7 @@ export default function Wants() {
       isCash: true,
     })
     setEditId(null)
+    setFormIncomeSourceId(selectedIncomeSourceId || accounts[0]?.source.id || '')
     setFormError(null)
   }
 
@@ -261,9 +270,11 @@ export default function Wants() {
 
     if (entry) {
       const parsed = parseWantDescription(entry.description)
+      const entryAccount = accounts.find((account) => account.source.id === entry.incomeSourceId)
       setEditId(entry.id)
+      setFormIncomeSourceId(entry.incomeSourceId ?? selectedIncomeSourceId)
       setForm({
-        amount: moneyInput.fromUsd(entry.amount),
+        amount: convertUsdToInput(entry.amount, getCurrencyByCode(entryAccount?.salary.currencyCode)),
         itemName: parsed.itemName,
         category: parsed.category,
         date: entry.date,
@@ -278,6 +289,7 @@ export default function Wants() {
   const wantItems = useMemo<WantViewItem[]>(() => {
     return transactions
       .filter((transaction) => transaction.type === 'want'
+      && transaction.incomeSourceId === selectedIncomeSourceId
       && !overview.excludedTransactionIds.includes(transaction.id)
       && isInFinancialPeriod(transaction, overview.periodStart, overview.strictSameDayBoundary))
       .map((transaction) => {
@@ -292,7 +304,7 @@ export default function Wants() {
           isCash: isCashPayment(transaction),
         }
       })
-  }, [transactions])
+  }, [overview.excludedTransactionIds, overview.periodStart, overview.strictSameDayBoundary, selectedIncomeSourceId, transactions])
 
   const wantCategories = (() => {
     const categories = new Set<WantCategory>(Object.keys(CATEGORY_META) as WantBuiltInCategory[])
@@ -334,20 +346,21 @@ export default function Wants() {
   const wantCount = filteredWantItems.length
   const checkedCount = filteredWantItems.filter((item) => item.status === 'checked').length
   const pendingCount = filteredWantItems.filter((item) => item.status === 'pending').length
-  const currentItemAmount = editId ? wantItems.find((item) => item.id === editId)?.amount ?? 0 : 0
-  const plannedTotal = getPlannedWantTotal(overview.periodTransactions) - currentItemAmount
-  const availableToPlan = Math.max(0, overview.budgetWants - plannedTotal)
-  const pct = overview.budgetWants > 0 ? Math.min(100, Math.round((overview.totalWants / overview.budgetWants) * 100)) : 0
-  const remaining = overview.budgetWants - overview.totalWants
-  const typedAmount = moneyInput.toUsd(form.amount)
+  const editingTransaction = editId ? transactions.find((transaction) => transaction.id === editId) : undefined
+  const currentItemAmount = editingTransaction?.incomeSourceId === formIncomeSourceId ? editingTransaction.amount : 0
+  const plannedTotal = getPlannedWantTotal(formAccountOverview.periodTransactions) - currentItemAmount
+  const availableToPlan = Math.max(0, formAccountOverview.budgetWants - plannedTotal)
+  const pct = accountOverview.budgetWants > 0 ? Math.min(100, Math.round((accountOverview.totalWants / accountOverview.budgetWants) * 100)) : 0
+  const remaining = accountOverview.budgetWants - accountOverview.totalWants
+  const typedAmount = convertToUsd(Number(form.amount), formCurrency)
   const liveBudgetError = !form.amount
     ? null
     : !Number.isFinite(typedAmount) || typedAmount <= 0
       ? 'El precio debe ser mayor que cero.'
       : typedAmount > availableToPlan
-        ? `Te pasas por ${formatMoney(typedAmount - availableToPlan)}. Solo te quedan ${formatMoney(availableToPlan)} disponibles para planificar.`
-        : plannedTotal + typedAmount > overview.budgetWants
-          ? `No puedes agregar este gusto porque la lista subiria a ${formatMoney(plannedTotal + typedAmount)} y tu limite es ${formatMoney(overview.budgetWants)}.`
+        ? `Te pasas por ${formatMoneyWithCode(typedAmount - availableToPlan, formCurrency)}. Solo te quedan ${formatMoneyWithCode(availableToPlan, formCurrency)} disponibles para planificar.`
+        : plannedTotal + typedAmount > formAccountOverview.budgetWants
+          ? `No puedes agregar este gusto porque la lista subiría a ${formatMoneyWithCode(plannedTotal + typedAmount, formCurrency)} y tu límite es ${formatMoneyWithCode(formAccountOverview.budgetWants, formCurrency)}.`
           : null
 
   function handleCreateCategory() {
@@ -388,20 +401,29 @@ setCustomCategoryName('')
   }
 
   async function handleConfirmReceiptItems(reviewed: ReceiptReviewResult[], date: string) {
+    if (!selectedAccount) {
+      toast.error('Selecciona primero el ingreso desde donde se descontará el recibo.')
+      throw new Error('missing-income-account')
+    }
     const totals = getReceiptTotalsByType(reviewed)
-    const availableExpenses = Math.max(0, overview.budgetExpenses - getPlannedExpenseTotal(overview.periodTransactions))
-    const availableWants = Math.max(0, overview.budgetWants - getPlannedWantTotal(overview.periodTransactions))
+    const availableExpenses = Math.max(0, accountOverview.budgetExpenses - getPlannedExpenseTotal(accountOverview.periodTransactions))
+    const availableWants = Math.max(0, accountOverview.budgetWants - getPlannedWantTotal(accountOverview.periodTransactions))
 
     if (totals.expense > availableExpenses) {
-      toast.error(`Los gastos del recibo suman ${formatMoney(totals.expense)} y solo tienes ${formatMoney(availableExpenses)} disponibles para planificar.`)
+      toast.error(`Los gastos del recibo suman ${formatAccountMoney(totals.expense)} y solo tienes ${formatAccountMoney(availableExpenses)} disponibles para planificar.`)
       throw new Error('over-budget')
     }
     if (totals.want > availableWants) {
-      toast.error(`Los gustos del recibo suman ${formatMoney(totals.want)} y solo tienes ${formatMoney(availableWants)} disponibles para planificar.`)
+      toast.error(`Los gustos del recibo suman ${formatAccountMoney(totals.want)} y solo tienes ${formatAccountMoney(availableWants)} disponibles para planificar.`)
       throw new Error('over-budget')
     }
 
-    await Promise.all(reviewed.map((item) => addTransaction(buildReceiptTransaction(item, date))))
+    await Promise.all(reviewed.map((item) => addTransaction({
+      ...buildReceiptTransaction(item, date),
+      incomeSourceId: selectedAccount.source.id,
+      incomeSourceName: selectedAccount.source.name,
+      isCash: selectedAccount.source.isCash !== false,
+    })))
     reviewed.forEach((item) => {
       const learned = item.transactionType === 'expense'
         ? createLearnedCategorizationRule(item.name, { transactionType: 'expense', category: item.category })
@@ -417,20 +439,31 @@ setCustomCategoryName('')
       setFormError('La sección Gustos está desactivada porque su porcentaje es 0%.')
       return
     }
+    if (!formAccount) {
+      setFormError('Selecciona el ingreso desde donde se descontará el dinero.')
+      return
+    }
 
-    const nextAmount = moneyInput.toUsd(form.amount)
+    const nextAmount = convertToUsd(Number(form.amount), formCurrency)
     if (!Number.isFinite(nextAmount) || nextAmount <= 0) {
       setFormError('El precio debe ser mayor que cero.')
       return
     }
 
     if (nextAmount > availableToPlan) {
-      setFormError(`Ese precio supera el disponible para planificar: ${formatMoney(availableToPlan)}.`)
+      setFormError(`Ese precio supera el disponible para planificar: ${formatMoneyWithCode(availableToPlan, formCurrency)}.`)
       return
     }
 
-    if (plannedTotal + nextAmount > overview.budgetWants) {
-      setFormError(`No puedes agregarlo porque la lista total se iria a ${formatMoney(plannedTotal + nextAmount)} y tu limite es ${formatMoney(overview.budgetWants)}.`)
+    if (plannedTotal + nextAmount > formAccountOverview.budgetWants) {
+      setFormError(`No puedes agregarlo porque la lista total se iría a ${formatMoneyWithCode(plannedTotal + nextAmount, formCurrency)} y tu límite es ${formatMoneyWithCode(formAccountOverview.budgetWants, formCurrency)}.`)
+      return
+    }
+
+    const previousRefund = editingTransaction?.incomeSourceId === formAccount.source.id ? editingTransaction.amount : 0
+    const availableAccountBalance = Number(formAccount.salary.balance ?? formAccount.salary.amount) + previousRefund
+    if (nextAmount > availableAccountBalance) {
+      setFormError(`Ese ingreso solo tiene ${formatMoneyWithCode(availableAccountBalance, formCurrency)} de saldo.`)
       return
     }
 
@@ -443,7 +476,9 @@ setCustomCategoryName('')
       type: 'want' as const,
       description: buildWantDescription(form.category, form.itemName, currentStatus),
       date: form.date || new Date().toISOString().slice(0, 10),
-      isCash: form.isCash,
+      isCash: formAccount.source.isCash !== false,
+      incomeSourceId: formAccount.source.id,
+      incomeSourceName: formAccount.source.name,
     }
 
     setIsSaving(true)
@@ -481,13 +516,19 @@ setCustomCategoryName('')
 
     const total = drafts.reduce((sum, draft) => sum + draft.amount, 0)
     if (total > availableToPlan) {
-      toast.error(`La lista necesita ${formatMoney(total)} y solo tienes ${formatMoney(availableToPlan)} disponibles.`)
+      toast.error(`La lista necesita ${formatAccountMoney(total)} y solo tienes ${formatAccountMoney(availableToPlan)} disponibles.`)
       return
     }
 
     setRestoringListId(entry.id)
     try {
-      await Promise.all(drafts.map((draft) => addTransaction(draft)))
+      if (!selectedAccount) throw new Error('Selecciona primero un ingreso.')
+      await Promise.all(drafts.map((draft) => addTransaction({
+        ...draft,
+        incomeSourceId: selectedAccount.source.id,
+        incomeSourceName: selectedAccount.source.name,
+        isCash: selectedAccount.source.isCash !== false,
+      })))
       toast.success(`Se reutilizaron ${drafts.length} artículo(s) de ${entry.label}.`)
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'No se pudo reutilizar la lista.')
@@ -520,13 +561,13 @@ setCustomCategoryName('')
     if (isTransferring) return
     if (isWantsDisabled) return
 
-    const nextAmount = moneyInput.toUsd(transferAmount)
+    const nextAmount = convertToUsd(Number(transferAmount), accountCurrency)
     if (!Number.isFinite(nextAmount) || nextAmount <= 0) {
       setTransferError('El monto debe ser mayor que cero.')
       return
     }
     if (nextAmount > remaining) {
-      setTransferError(`Solo puedes mover hasta ${formatMoney(Math.max(0, remaining))}.`)
+      setTransferError(`Solo puedes mover hasta ${formatAccountMoney(Math.max(0, remaining))}.`)
       return
     }
 
@@ -585,6 +626,15 @@ setCustomCategoryName('')
         </div>
       </header>
 
+      <Card className="border-graphite bg-surface p-4 shadow-vault-sm">
+        <IncomeAccountSelect
+          accounts={accounts}
+          value={selectedIncomeSourceId}
+          onValueChange={setSelectedIncomeSourceId}
+          label="Ver gustos del ingreso"
+        />
+      </Card>
+
       {isWantsDisabled ? (
         <Card className="border-warning/30 bg-warning/10 p-4 shadow-vault-sm">
           <div className="flex items-start gap-3">
@@ -609,12 +659,12 @@ setCustomCategoryName('')
                 {isWantsDisabled
                   ? 'Sección desactivada'
                   : remaining >= 0
-                    ? `${formatMoney(remaining)} disponible`
-                    : `${formatMoney(Math.abs(remaining))} excedido`}
+                    ? `${formatAccountMoney(remaining)} disponible`
+                    : `${formatAccountMoney(Math.abs(remaining))} excedido`}
               </Badge>
             </div>
             <h2 className="mb-3 break-words text-[28px] font-semibold leading-tight text-on-surface sm:text-[30px]">
-              {formatMoney(overview.totalWants)} <span className="text-base font-normal text-muted-gray">/ {formatMoney(overview.budgetWants)}</span>
+              {formatAccountMoney(accountOverview.totalWants)} <span className="text-base font-normal text-muted-gray">/ {formatAccountMoney(accountOverview.budgetWants)}</span>
             </h2>
             <div className="h-2 w-full overflow-hidden rounded-full bg-surface-container-highest">
               <div className="h-full rounded-full bg-secondary transition-all duration-1000" style={{ width: `${pct}%` }} />
@@ -694,7 +744,7 @@ setCustomCategoryName('')
                 <div className="grid grid-cols-1 gap-3 border-b border-graphite px-4 py-4 sm:grid-cols-2 sm:px-5">
                   <div className="rounded-xl bg-abyss p-3 shadow-vault-sm">
                     <p className="text-xs uppercase tracking-[0.16em] text-medium-gray">Total</p>
-                    <p className="mt-2 text-lg font-semibold text-on-surface">{formatMoney(total)}</p>
+                    <p className="mt-2 text-lg font-semibold text-on-surface">{formatAccountMoney(total)}</p>
                   </div>
                   <div className="rounded-xl bg-abyss p-3 shadow-vault-sm">
                     <p className="text-xs uppercase tracking-[0.16em] text-medium-gray">Completados</p>
@@ -757,7 +807,7 @@ setCustomCategoryName('')
                                     </div>
                                   </div>
                                   <span className={`text-sm font-semibold ${isChecked ? 'text-muted-gray' : 'text-secondary'} sm:text-right`}>
-                                    {formatMoney(item.amount)}
+                                    {formatAccountMoney(item.amount)}
                                   </span>
                                 </div>
 
@@ -799,13 +849,18 @@ setCustomCategoryName('')
           })}
       </div>
 
-      <Dialog open={open} onOpenChange={(nextOpen) => { if (!isSaving) setOpen(nextOpen) }}>
+      <Dialog open={open && !isWantsDisabled} onOpenChange={(nextOpen) => { if (!isSaving) setOpen(nextOpen) }}>
         <DialogContent className="max-h-[88dvh] overflow-y-auto border-graphite bg-surface sm:max-w-4xl">
           <DialogHeader>
             <DialogTitle className="text-on-surface">{editId ? 'Editar gusto' : 'Agregar gusto'}</DialogTitle>
             <DialogDescription>Guarda cada gusto como un item individual, organizado por categoría.</DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
+            <IncomeAccountSelect
+              accounts={accounts}
+              value={formIncomeSourceId}
+              onValueChange={(value) => { setFormError(null); setFormIncomeSourceId(value); setForm((current) => ({ ...current, amount: '' })) }}
+            />
             <div className="grid gap-4 lg:grid-cols-2">
               <div className="space-y-2">
                 <Label className="text-medium-gray">Categoría</Label>
@@ -843,7 +898,7 @@ setCustomCategoryName('')
                 <p className="text-xs text-muted-gray">Crea una categoría propia y quedará disponible con tus gustos guardados.</p>
               </div>
               <div className="space-y-2">
-                <Label className="text-medium-gray">Precio ({moneyInput.currency.code})</Label>
+                <Label className="text-medium-gray">Precio ({formCurrency.code})</Label>
                 <Input
                   type="number"
                   placeholder="35"
@@ -851,7 +906,7 @@ setCustomCategoryName('')
                   onChange={(e) => { setFormError(null); setForm((current) => ({ ...current, amount: e.target.value })) }}
                   className="bg-abyss border-graphite text-on-surface"
                 />
-                {liveBudgetError ? <p className="text-xs text-error">{liveBudgetError}</p> : <p className="text-xs text-muted-gray">Puedes planificar hasta {formatMoney(availableToPlan)} sin pasarte.</p>}
+                {liveBudgetError ? <p className="text-xs text-error">{liveBudgetError}</p> : <p className="text-xs text-muted-gray">Puedes planificar hasta {formatMoneyWithCode(availableToPlan, formCurrency)} sin pasarte.</p>}
               </div>
             </div>
 
@@ -873,7 +928,7 @@ setCustomCategoryName('')
                 onReuse={(suggestion) => {
                   setFormError(null)
                   setForm({
-                    amount: moneyInput.fromUsd(suggestion.amount),
+                    amount: convertUsdToInput(suggestion.amount, formCurrency),
                     itemName: suggestion.itemName,
                     isCash: true,
                     category: suggestion.category as WantCategory,
@@ -893,20 +948,11 @@ setCustomCategoryName('')
             <div className="space-y-2">
               <Label className="text-medium-gray">Forma de pago</Label>
               <div className="flex items-center justify-between rounded-xl border border-graphite bg-abyss px-3 py-2.5">
-                <span className={`inline-flex items-center gap-2 text-sm ${form.isCash ? 'text-emerald-300' : 'text-muted-gray'}`}>
-                  <Banknote className="size-4" aria-hidden="true" />
-                  Efectivo
+                <span className={`inline-flex items-center gap-2 text-sm ${formAccount?.source.isCash === false ? 'text-sky-300' : 'text-emerald-300'}`}>
+                  {formAccount?.source.isCash === false ? <ArrowLeftRight className="size-4" /> : <Banknote className="size-4" />}
+                  {formAccount?.source.isCash === false ? 'Transferencia' : 'Efectivo'}
                 </span>
-                <Switch
-                  // Checked means transfer, so cash stays the default.
-                  checked={!form.isCash}
-                  onCheckedChange={(checked) => setForm((current) => ({ ...current, isCash: !checked }))}
-                  aria-label={form.isCash ? 'Pagado en efectivo' : 'Pagado por transferencia'}
-                />
-                <span className={`inline-flex items-center gap-2 text-sm ${form.isCash ? 'text-muted-gray' : 'text-sky-300'}`}>
-                  <ArrowLeftRight className="size-4" aria-hidden="true" />
-                  Transferencia
-                </span>
+                <span className="text-xs text-muted-gray">Definido por el ingreso</span>
               </div>
             </div>
 
@@ -920,17 +966,17 @@ setCustomCategoryName('')
                   {getCategoryMeta(form.category).label}
                 </Badge>
                 <span className="text-sm text-muted-gray">
-                  {form.amount ? moneyInput.formatInput(Number(form.amount)) : 'Sin precio'}
+                  {form.amount ? formatMoneyInput(Number(form.amount), formCurrency) : 'Sin precio'}
                 </span>
                 <span className="text-sm text-muted-gray">
                   {form.date || 'Sin fecha'}
                 </span>
               </div>
               <p className="mt-3 text-sm text-muted-gray">
-                Disponible para planificar: {formatMoney(availableToPlan)}
+                Disponible para planificar: {formatMoneyWithCode(availableToPlan, formCurrency)}
               </p>
               <p className="mt-1 text-xs text-muted-gray">
-                El dinero solo se descuenta del presupuesto cuando marques el checkbox del gusto.
+                Al guardar, el dinero se descuenta del saldo de {formAccount?.source.name ?? 'ese ingreso'}.
               </p>
             </Card>
             {formError ? <p className="text-sm text-error">{formError}</p> : null}
@@ -980,7 +1026,7 @@ setCustomCategoryName('')
         />
       ) : null}
 
-      <Dialog open={transferOpen} onOpenChange={(nextOpen) => { if (!isTransferring) setTransferOpen(nextOpen) }}>
+      <Dialog open={transferOpen && !isWantsDisabled} onOpenChange={(nextOpen) => { if (!isTransferring) setTransferOpen(nextOpen) }}>
         <DialogContent className="border-graphite bg-surface sm:max-w-xl">
           <DialogHeader>
             <DialogTitle className="text-on-surface">Mover dinero a ahorros</DialogTitle>
@@ -990,7 +1036,7 @@ setCustomCategoryName('')
           </DialogHeader>
           <div className="space-y-4">
             <div className="space-y-2">
-              <Label className="text-medium-gray">Monto a mover ({moneyInput.currency.code})</Label>
+              <Label className="text-medium-gray">Monto a mover ({accountCurrency.code})</Label>
               <Input
                 type="number"
                 min="0"
@@ -1003,7 +1049,7 @@ setCustomCategoryName('')
                 className="bg-abyss border-graphite text-on-surface"
               />
               <p className="text-xs text-muted-gray">
-                Disponible para mover: {formatMoney(Math.max(0, remaining))}
+                Disponible para mover: {formatAccountMoney(Math.max(0, remaining))}
               </p>
             </div>
             {transferError ? <p className="text-sm text-error">{transferError}</p> : null}

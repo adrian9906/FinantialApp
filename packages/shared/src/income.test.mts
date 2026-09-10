@@ -105,4 +105,31 @@ const bonus = (id: string, amount: number, month: string, name = 'Bonus'): Salar
   console.log('PASS 7: no se duplica la misma fuente en un mes')
 }
 
+// --- A recurring account may exist next month but intentionally start at zero ---
+{
+  const exchangeAccount: Salary = {
+    ...job('exchange', 150, '2026-09', 'exchange-source', 'Cambio en moneda nacional'),
+    balanceMode: 'zero',
+  }
+  const carried = carrySalaryForwardToMonth([exchangeAccount], '2026-10', makeId)
+  const october = getIncomesForMonth(carried, '2026-10')
+  assert.equal(october.length, 1, 'la cuenta mensual debe seguir existiendo')
+  assert.equal(october[0].amount, 0, 'la cuenta debe comenzar el mes en cero')
+  assert.equal(getSalaryForMonth([exchangeAccount], '2026-10')?.amount, 0, 'el fallback tampoco debe repetir el saldo')
+  console.log('PASS 8: una cuenta mensual configurable comienza el mes en cero')
+}
+
+// --- Spending this month never reduces the starting balance of a fixed account next month ---
+{
+  const fixedAccount: Salary = {
+    ...job('fixed-spent', 100, '2026-09', 'salary-fixed', 'Salario fijo'),
+    balance: 35,
+    balanceMode: 'fixed',
+  }
+  const carried = carrySalaryForwardToMonth([fixedAccount], '2026-10', makeId)
+  const october = getIncomesForMonth(carried, '2026-10')
+  assert.equal(october[0].balance, 100)
+  console.log('PASS 9: una cuenta fija reinicia con su importe mensual, no con el sobrante')
+}
+
 console.log('\nIngresos multiples correctos.')

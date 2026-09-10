@@ -66,8 +66,14 @@ export function normalizeBootstrapPayload(payload?: Partial<BootstrapPayload> | 
     salaries: (payload?.salaries ?? []).map((salary) => ({
       ...salary,
       currencyCode: String(salary.currencyCode ?? 'USD').trim().toUpperCase() || 'USD',
+      balanceMode: salary.balanceMode === 'zero' ? 'zero' : 'fixed',
+      balance: Number(salary.balance ?? salary.amount ?? 0),
     })),
-    incomeSources: payload?.incomeSources ?? [],
+    incomeSources: (payload?.incomeSources ?? []).map((source) => ({
+      ...source,
+      balanceMode: source.balanceMode === 'zero' ? 'zero' : 'fixed',
+      isCash: source.isCash !== false,
+    })),
     transactions: payload?.transactions ?? [],
     debts: payload?.debts ?? [],
     wishlist: (payload?.wishlist ?? []).map((item): WishlistItem => ({

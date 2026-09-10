@@ -198,7 +198,9 @@ async function saveCurrencyPreferences(userId: string, body: JsonRecord) {
 function serializeSalary(entry: {
   id: string
   salario: number
+  saldo: number
   moneda: string
+  modoSaldo: string
   fecha: Date
   fuenteId?: string | null
   fuenteNombre?: string | null
@@ -207,8 +209,10 @@ function serializeSalary(entry: {
   return {
     id: entry.id,
     amount: entry.salario,
+    balance: entry.saldo,
     month: toMonthString(entry.fecha),
     currencyCode: entry.moneda || 'USD',
+    balanceMode: entry.modoSaldo === 'zero' ? 'zero' : 'fixed',
     ...(entry.fuenteId ? { sourceId: entry.fuenteId } : {}),
     ...(entry.fuenteNombre ? { sourceName: entry.fuenteNombre } : {}),
     ...(entry.tipo === 'one-off' || entry.tipo === 'recurring' ? { kind: entry.tipo } : {}),
@@ -219,12 +223,16 @@ function serializeIncomeSource(entry: {
   id: string
   nombre: string
   recurrente: boolean
+  modoSaldo: string
+  esEfectivo: boolean
   archivada: boolean
 }): IncomeSource {
   return {
     id: entry.id,
     name: entry.nombre,
     recurring: entry.recurrente,
+    balanceMode: entry.modoSaldo === 'zero' ? 'zero' : 'fixed',
+    isCash: entry.esEfectivo,
     ...(entry.archivada ? { archived: true } : {}),
   }
 }
@@ -234,6 +242,8 @@ function serializeAttachmentFields(entry: {
   lugar?: string | null
   adjuntos?: string[] | null
   esEfectivo?: boolean | null
+  fuenteIngresoId?: string | null
+  fuenteIngresoNombre?: string | null
 }) {
   const place = sanitizePlace(entry.lugar ?? undefined)
   const attachments = sanitizeAttachments(entry.adjuntos ?? [])
@@ -253,6 +263,8 @@ function serializeExpense(entry: {
   lugar?: string | null
   adjuntos?: string[] | null
   esEfectivo?: boolean | null
+  fuenteIngresoId?: string | null
+  fuenteIngresoNombre?: string | null
   items: Array<{ nombre: string; innecesario: boolean }>
 }): Transaction {
   const item = entry.items[0]
@@ -271,6 +283,8 @@ function serializeExpense(entry: {
     date: toDateString(entry.fecha),
     createdAt: entry.createdAt.toISOString(),
     ...serializeAttachmentFields(entry),
+    ...(entry.fuenteIngresoId ? { incomeSourceId: entry.fuenteIngresoId } : {}),
+    ...(entry.fuenteIngresoNombre ? { incomeSourceName: entry.fuenteIngresoNombre } : {}),
   }
 }
 
@@ -282,6 +296,8 @@ function serializeWant(entry: {
   lugar?: string | null
   adjuntos?: string[] | null
   esEfectivo?: boolean | null
+  fuenteIngresoId?: string | null
+  fuenteIngresoNombre?: string | null
   items: Array<{ nombre: string }>
 }): Transaction {
   return {
@@ -292,6 +308,8 @@ function serializeWant(entry: {
     date: toDateString(entry.fecha),
     createdAt: entry.createdAt.toISOString(),
     ...serializeAttachmentFields(entry),
+    ...(entry.fuenteIngresoId ? { incomeSourceId: entry.fuenteIngresoId } : {}),
+    ...(entry.fuenteIngresoNombre ? { incomeSourceName: entry.fuenteIngresoNombre } : {}),
   }
 }
 
@@ -505,10 +523,11 @@ async function loadBootstrap(userId: string, prisma: Prisma.TransactionClient, m
   if (materialize) {
   const currentMonth = toMonthString(new Date())
   const currentMonthDate = toMonthDate(currentMonth)
-  const latestSalary = await prisma.salario.findFirst({
+  const recurringSalaries = await prisma.salario.findMany({
     where: {
       usuarioId: userId,
       fecha: { lte: currentMonthDate },
+      OR: [{ tipo: null }, { tipo: 'recurring' }],
     },
     orderBy: [
       { fecha: 'desc' },
@@ -516,37 +535,29 @@ async function loadBootstrap(userId: string, prisma: Prisma.TransactionClient, m
     ],
   })
 
-  if (latestSalary && toMonthString(latestSalary.fecha) < currentMonth) {
-    const existingSalaryMonths = new Set(
-      (await prisma.salario.findMany({
-        where: {
-          usuarioId: userId,
-          fecha: {
-            gt: latestSalary.fecha,
-            lte: currentMonthDate,
-          },
-        },
-        select: { fecha: true },
-      })).map((salary) => toMonthString(salary.fecha)),
-    )
-    const carriedSalaries: Array<{
-      salario: number
-      moneda: string
-      fuenteId: string | null
-      fuenteNombre: string | null
-      tipo: string | null
-      fecha: Date
-      usuarioId: string
-    }> = []
+  const latestBySource = new Map<string, typeof recurringSalaries[number]>()
+  const covered = new Set<string>()
+  for (const salary of recurringSalaries) {
+    const sourceKey = salary.fuenteId ?? 'legacy'
+    covered.add(`${toMonthString(salary.fecha)}/${sourceKey}`)
+    if (!latestBySource.has(sourceKey)) latestBySource.set(sourceKey, salary)
+  }
+
+  const carriedSalaries: Array<Omit<typeof recurringSalaries[number], 'id' | 'createdAt' | 'updatedAt' | 'usuario'>> = []
+  for (const [sourceKey, latestSalary] of latestBySource) {
     let month = new Date(latestSalary.fecha)
     month.setUTCMonth(month.getUTCMonth() + 1)
 
     while (toMonthString(month) <= currentMonth) {
       const monthKey = toMonthString(month)
-      if (!existingSalaryMonths.has(monthKey)) {
+      const coverageKey = `${monthKey}/${sourceKey}`
+      if (!covered.has(coverageKey)) {
+        covered.add(coverageKey)
         carriedSalaries.push({
-          salario: latestSalary.salario,
+          salario: latestSalary.modoSaldo === 'zero' ? 0 : latestSalary.salario,
+          saldo: latestSalary.modoSaldo === 'zero' ? 0 : latestSalary.salario,
           moneda: latestSalary.moneda,
+          modoSaldo: latestSalary.modoSaldo,
           fuenteId: latestSalary.fuenteId,
           fuenteNombre: latestSalary.fuenteNombre,
           tipo: latestSalary.tipo,
@@ -556,10 +567,10 @@ async function loadBootstrap(userId: string, prisma: Prisma.TransactionClient, m
       }
       month.setUTCMonth(month.getUTCMonth() + 1)
     }
+  }
 
-    if (carriedSalaries.length > 0) {
-      await prisma.salario.createMany({ data: carriedSalaries })
-    }
+  if (carriedSalaries.length > 0) {
+    await prisma.salario.createMany({ data: carriedSalaries })
   }
 
   await ensureSubscriptionExpenses(userId, prisma)
@@ -721,7 +732,9 @@ async function writeSyncRecord(userId: string, operation: SyncOperation, tx: Pri
         data: {
           id: entry.id,
           salario: Number(entry.amount ?? 0),
+          saldo: Number(entry.balance ?? entry.amount ?? 0),
           moneda: String(entry.currencyCode ?? 'USD').trim().toUpperCase() || 'USD',
+          modoSaldo: entry.balanceMode === 'zero' ? 'zero' : 'fixed',
           fecha: toMonthDate(String(entry.month ?? toMonthString(new Date()))),
           fuenteId: entry.sourceId ?? null,
           fuenteNombre: entry.sourceName ?? null,
@@ -737,6 +750,8 @@ async function writeSyncRecord(userId: string, operation: SyncOperation, tx: Pri
           id: entry.id,
           nombre: entry.name,
           recurrente: entry.recurring,
+          modoSaldo: entry.balanceMode === 'zero' ? 'zero' : 'fixed',
+          esEfectivo: entry.isCash !== false,
           archivada: entry.archived ?? false,
           usuarioId: userId,
         },
@@ -754,6 +769,8 @@ async function writeSyncRecord(userId: string, operation: SyncOperation, tx: Pri
           lugar: sanitizePlace(entry.place) ?? null,
           adjuntos: sanitizeAttachments(entry.attachments),
           esEfectivo: entry.isCash !== false,
+          fuenteIngresoId: entry.incomeSourceId ?? null,
+          fuenteIngresoNombre: entry.incomeSourceName ?? null,
           usuarioId: userId,
           items: {
             create: {
@@ -778,6 +795,8 @@ async function writeSyncRecord(userId: string, operation: SyncOperation, tx: Pri
           lugar: sanitizePlace(entry.place) ?? null,
           adjuntos: sanitizeAttachments(entry.attachments),
           esEfectivo: entry.isCash !== false,
+          fuenteIngresoId: entry.incomeSourceId ?? null,
+          fuenteIngresoNombre: entry.incomeSourceName ?? null,
           usuarioId: userId,
           items: {
             create: {
@@ -1924,11 +1943,12 @@ export async function handleApiRequest(req: IncomingMessage, res: ServerResponse
       const saved = existingSalary
         ? await prisma.salario.update({
             where: { id: existingSalary.id },
-            data: { salario: Number(body.amount ?? 0) },
+            data: { salario: Number(body.amount ?? 0), saldo: Number(body.balance ?? body.amount ?? 0) },
           })
         : await prisma.salario.create({
             data: {
               salario: Number(body.amount ?? 0),
+              saldo: Number(body.balance ?? body.amount ?? 0),
               fecha: monthDate,
               usuarioId: authenticatedUser.id,
             },

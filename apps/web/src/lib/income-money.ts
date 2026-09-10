@@ -4,6 +4,8 @@ export interface IncomeMoneyDestination {
   sourceId?: string
   newSourceName?: string
   recurring?: boolean
+  balanceMode?: 'fixed' | 'zero'
+  isCash?: boolean
   currencyCode: string
 }
 
@@ -49,6 +51,8 @@ export function applyIncomeMoneyMovement(
       id: createId('income-source'),
       name,
       recurring: movement.destination.recurring !== false,
+      balanceMode: movement.destination.balanceMode === 'zero' ? 'zero' : 'fixed',
+      isCash: movement.destination.isCash !== false,
     }
     incomeSources = [...state.incomeSources, destinationSource]
   }
@@ -61,7 +65,7 @@ export function applyIncomeMoneyMovement(
   if (sourceSalary?.sourceId === destinationSource.id) {
     throw new Error('El ingreso de origen y el de destino deben ser diferentes.')
   }
-  if (sourceSalary && sourceSalary.amount + 1e-9 < amountUsd) {
+  if (sourceSalary && Number(sourceSalary.balance ?? sourceSalary.amount) + 1e-9 < amountUsd) {
     throw new Error('El ingreso de origen no tiene saldo suficiente.')
   }
 
@@ -69,8 +73,16 @@ export function applyIncomeMoneyMovement(
     (salary) => salary.month === movement.month && salary.sourceId === destinationSource.id,
   )
   const salaries = state.salaries.map((salary) => {
-    if (salary.id === sourceSalary?.id) return { ...salary, amount: Math.max(0, salary.amount - amountUsd) }
-    if (salary.id === target?.id) return { ...salary, amount: salary.amount + amountUsd }
+    if (salary.id === sourceSalary?.id) return {
+      ...salary,
+      amount: Math.max(0, salary.amount - amountUsd),
+      balance: Math.max(0, Number(salary.balance ?? salary.amount) - amountUsd),
+    }
+    if (salary.id === target?.id) return {
+      ...salary,
+      amount: salary.amount + amountUsd,
+      balance: Number(salary.balance ?? salary.amount) + amountUsd,
+    }
     return salary
   })
 
@@ -78,11 +90,13 @@ export function applyIncomeMoneyMovement(
     salaries.unshift({
       id: createId('salary'),
       amount: amountUsd,
+      balance: amountUsd,
       month: movement.month,
       currencyCode: normalizedCurrency,
       sourceId: destinationSource.id,
       sourceName: destinationSource.name,
       kind: destinationSource.recurring ? 'recurring' : 'one-off',
+      balanceMode: destinationSource.balanceMode === 'zero' ? 'zero' : 'fixed',
     })
   }
 
