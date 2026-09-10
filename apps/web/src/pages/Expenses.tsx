@@ -39,7 +39,7 @@ import { buildReceiptCategoryGroups, buildReceiptTransaction, getReceiptTotalsBy
 import { useAuthStore } from '@/store/authStore'
 import { usePreferencesStore } from '@/store/preferencesStore'
 import { IncomeAccountSelect } from '@/components/income/IncomeAccountSelect'
-import { getIncomeAccountOverview, getIncomeAccountsForMonth } from '@/lib/income-account-view'
+import { getIncomeAccountOverview, getIncomeAccountsForMonth, type IncomeAccountView } from '@/lib/income-account-view'
 
 interface ExpenseFormState {
   amount: string
@@ -242,6 +242,11 @@ export default function Expenses() {
     () => getIncomeAccountsForMonth(salaries, incomeSources, undefined, activeCurrencyCode),
     [activeCurrencyCode, incomeSources, salaries],
   )
+  // The receipt dialog chooses its own currency, so it needs every account.
+  const receiptAccounts = useMemo(
+    () => getIncomeAccountsForMonth(salaries, incomeSources),
+    [incomeSources, salaries],
+  )
   const [selectedIncomeSourcePreference, setSelectedIncomeSourceId] = useState('')
   const [formIncomeSourcePreference, setFormIncomeSourceId] = useState('')
   const selectedIncomeSourceId = accounts.some((account) => account.source.id === selectedIncomeSourcePreference)
@@ -339,29 +344,34 @@ export default function Expenses() {
     return Promise.resolve()
   }
 
-  async function handleConfirmReceiptItems(reviewed: ReceiptReviewResult[], date: string) {
-    if (!selectedAccount) {
-      toast.error('Selecciona primero el ingreso desde donde se descontará el recibo.')
-      throw new Error('missing-income-account')
-    }
+  async function handleConfirmReceiptItems(
+    reviewed: ReceiptReviewResult[],
+    date: string,
+    receiptAccount: IncomeAccountView,
+  ) {
+    // The dialog picks the account by currency and payment method, so budgets
+    // must be checked against that account and not the one selected on screen.
+    const receiptOverview = getIncomeAccountOverview(receiptAccount, overview.periodTransactions, formula)
+    const receiptCurrency = getCurrencyByCode(receiptAccount.salary.currencyCode)
+    const formatReceiptMoney = (value: number) => formatMoneyWithCode(value, receiptCurrency)
     const totals = getReceiptTotalsByType(reviewed)
-    const availableExpenses = Math.max(0, accountOverview.budgetExpenses - getPlannedExpenseTotal(accountOverview.periodTransactions))
-    const availableWants = Math.max(0, accountOverview.budgetWants - getPlannedWantTotal(accountOverview.periodTransactions))
+    const availableExpenses = Math.max(0, receiptOverview.budgetExpenses - getPlannedExpenseTotal(receiptOverview.periodTransactions))
+    const availableWants = Math.max(0, receiptOverview.budgetWants - getPlannedWantTotal(receiptOverview.periodTransactions))
 
     if (totals.expense > availableExpenses) {
-      toast.error(`Los gastos del recibo suman ${formatAccountMoney(totals.expense)} y solo tienes ${formatAccountMoney(availableExpenses)} disponibles para planificar.`)
+      toast.error(`Los gastos del recibo suman ${formatReceiptMoney(totals.expense)} y solo tienes ${formatReceiptMoney(availableExpenses)} disponibles para planificar.`)
       throw new Error('over-budget')
     }
     if (totals.want > availableWants) {
-      toast.error(`Los gustos del recibo suman ${formatAccountMoney(totals.want)} y solo tienes ${formatAccountMoney(availableWants)} disponibles para planificar.`)
+      toast.error(`Los gustos del recibo suman ${formatReceiptMoney(totals.want)} y solo tienes ${formatReceiptMoney(availableWants)} disponibles para planificar.`)
       throw new Error('over-budget')
     }
 
     await Promise.all(reviewed.map((item) => addTransaction({
       ...buildReceiptTransaction(item, date),
-      incomeSourceId: selectedAccount.source.id,
-      incomeSourceName: selectedAccount.source.name,
-      isCash: selectedAccount.source.isCash !== false,
+      incomeSourceId: receiptAccount.source.id,
+      incomeSourceName: receiptAccount.source.name,
+      isCash: receiptAccount.source.isCash !== false,
     })))
     reviewed.forEach((item) => {
       const learned = item.transactionType === 'expense'
@@ -1128,6 +1138,7 @@ export default function Expenses() {
         defaultTransactionType="expense"
         categoryGroups={receiptCategoryGroups}
         userRules={userRules}
+        accounts={receiptAccounts}
         onConfirm={handleConfirmReceiptItems}
       />
       ) : null}

@@ -23,7 +23,15 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Switch } from '@/components/ui/switch'
-import { formatMoneyInput, parseMoneyInputToUsd } from '@/lib/currency'
+import { formatMoneyInput, getCurrencyByCode, parseMoneyInputToUsd } from '@/lib/currency'
+import type { IncomeAccountView } from '@/lib/income-account-view'
+import {
+  getEligibleReceiptAccounts,
+  getMissingReceiptAccountMessage,
+  getReceiptCurrencyCodes,
+  resolveReceiptAccountId,
+  type ReceiptPaymentMethod,
+} from '@/lib/receipt-account'
 import {
   getDefaultReceiptCategory,
   type ReceiptReviewCategoryGroups,
@@ -42,7 +50,6 @@ interface ReviewRow {
   price: string
   transactionType: ReceiptOCRTransactionType
   category: string
-  isCash: boolean
 }
 
 interface ReceiptItemsReviewDialogProps {
@@ -53,7 +60,9 @@ interface ReceiptItemsReviewDialogProps {
   defaultTransactionType: ReceiptOCRTransactionType
   categoryGroups: ReceiptReviewCategoryGroups
   userRules?: readonly CategorizationRule[]
-  onConfirm: (items: ReceiptReviewResult[], date: string) => Promise<void>
+  /** Accounts available this month; the receipt is charged to one of them. */
+  accounts: IncomeAccountView[]
+  onConfirm: (items: ReceiptReviewResult[], date: string, account: IncomeAccountView) => Promise<void>
 }
 
 export function ReceiptItemsReviewDialog({
@@ -64,6 +73,7 @@ export function ReceiptItemsReviewDialog({
   defaultTransactionType,
   categoryGroups,
   userRules = [],
+  accounts,
   onConfirm,
 }: ReceiptItemsReviewDialogProps) {
   const currencies = usePreferencesStore((state) => state.currencies)
@@ -78,8 +88,15 @@ export function ReceiptItemsReviewDialog({
     return getDefaultReceiptCategory(transactionType)
   }
 
+  const currencyCodes = useMemo(() => getReceiptCurrencyCodes(accounts), [accounts])
   const [date, setDate] = useState(initialDate ?? getTodayDateKey())
-  const [currencyCode, setCurrencyCode] = useState(activeCurrencyCode)
+  const [currencyCode, setCurrencyCode] = useState(
+    () => currencyCodes.includes(activeCurrencyCode.trim().toUpperCase())
+      ? activeCurrencyCode.trim().toUpperCase()
+      : currencyCodes[0] ?? activeCurrencyCode.trim().toUpperCase(),
+  )
+  const [paymentMethod, setPaymentMethod] = useState<ReceiptPaymentMethod>('cash')
+  const [accountPreference, setAccountPreference] = useState('')
   const [rows, setRows] = useState<ReviewRow[]>(() => items.map((item, index) => ({
     key: `${index}-${item.name}`,
     quantity: String(item.quantity ?? 1),
@@ -87,17 +104,27 @@ export function ReceiptItemsReviewDialog({
     price: item.price ? String(item.price) : '',
     transactionType: defaultTransactionType,
     category: resolveCategory(item.name, defaultTransactionType, item.category),
-    isCash: true,
   })))
   const [activeRowKey, setActiveRowKey] = useState(() => items.length > 0 ? `0-${items[0].name}` : '')
   const [isSaving, setIsSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
+  const eligibleAccounts = useMemo(
+    () => getEligibleReceiptAccounts(accounts, currencyCode, paymentMethod),
+    [accounts, currencyCode, paymentMethod],
+  )
+  const selectedAccountId = resolveReceiptAccountId(eligibleAccounts, accountPreference)
+  const selectedAccount = eligibleAccounts.find((entry) => entry.source.id === selectedAccountId)
+
+  // The receipt is denominated by the account that receives it, so amounts are
+  // parsed with that currency instead of a free-floating pick.
   const currency = useMemo(
-    () => normalizeCurrencyPreference(
-      currencies.find((entry) => entry.code === String(currencyCode).trim().toUpperCase()) ?? USD_CURRENCY,
-    ),
-    [currencies, currencyCode],
+    () => selectedAccount
+      ? getCurrencyByCode(selectedAccount.salary.currencyCode)
+      : normalizeCurrencyPreference(
+          currencies.find((entry) => entry.code === String(currencyCode).trim().toUpperCase()) ?? USD_CURRENCY,
+        ),
+    [currencies, currencyCode, selectedAccount],
   )
 
   function updateRow(key: string, patch: Partial<ReviewRow>) {
@@ -129,6 +156,10 @@ export function ReceiptItemsReviewDialog({
       setError('Selecciona la fecha del recibo.')
       return
     }
+    if (!selectedAccount) {
+      setError(getMissingReceiptAccountMessage(currencyCode, paymentMethod))
+      return
+    }
     if (rows.length === 0) {
       setError('No queda ningún producto para agregar.')
       return
@@ -153,12 +184,14 @@ export function ReceiptItemsReviewDialog({
           name: row.name.trim(),
           quantity: Number(row.quantity.trim().replace(',', '.')),
           amount: parseMoneyInputToUsd(row.price, currency),
-          isCash: row.isCash,
+          // The account owns the payment rail; a transfer account can never
+          // receive a cash purchase.
+          isCash: paymentMethod === 'cash',
         }
         return row.transactionType === 'expense'
           ? { ...shared, transactionType: 'expense', category: row.category as ExpenseCategory }
           : { ...shared, transactionType: 'want', category: row.category as WantCategory }
-      }), date)
+      }), date, selectedAccount)
       onOpenChange(false)
     } catch {
       setError('No se pudieron agregar los productos. Revisa los presupuestos e intenta de nuevo.')
@@ -186,17 +219,80 @@ export function ReceiptItemsReviewDialog({
             />
             <div className="grid min-w-0 gap-1">
               <Label className="text-xs text-medium-gray">Moneda</Label>
-              <Select value={currencyCode} onValueChange={(value) => setCurrencyCode(value ?? activeCurrencyCode)}>
+              <Select
+                value={currencyCode}
+                onValueChange={(value) => {
+                  setCurrencyCode((value ?? currencyCode).trim().toUpperCase())
+                  setAccountPreference('')
+                  setError(null)
+                }}
+              >
                 <SelectTrigger className="min-w-0 border-graphite bg-surface">
-                  <SelectValue>{currency.code}</SelectValue>
+                  <SelectValue>{currencyCode}</SelectValue>
                 </SelectTrigger>
                 <SelectContent>
-                  {currencies.map((entry) => (
-                    <SelectItem key={entry.code} value={entry.code}>{entry.code} · {entry.name}</SelectItem>
+                  {(currencyCodes.length > 0 ? currencyCodes : [currencyCode]).map((code) => (
+                    <SelectItem key={code} value={code}>
+                      {code} · {currencies.find((entry) => entry.code === code)?.name ?? code}
+                    </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
             </div>
+
+            <div className="col-span-2 grid gap-1">
+              <Label className="text-xs text-medium-gray">Forma de pago</Label>
+              <Select
+                value={paymentMethod}
+                onValueChange={(value) => {
+                  setPaymentMethod(value === 'transfer' ? 'transfer' : 'cash')
+                  setAccountPreference('')
+                  setError(null)
+                }}
+              >
+                <SelectTrigger className="border-graphite bg-surface">
+                  <SelectValue>{paymentMethod === 'cash' ? 'Efectivo' : 'Transferencia'}</SelectValue>
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="cash">Efectivo</SelectItem>
+                  <SelectItem value="transfer">Transferencia</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            {eligibleAccounts.length > 1 ? (
+              <div className="col-span-2 grid gap-1">
+                <Label className="text-xs text-medium-gray">Cuenta</Label>
+                <Select
+                  value={selectedAccountId}
+                  onValueChange={(value) => { setAccountPreference(value ?? ''); setError(null) }}
+                >
+                  <SelectTrigger className="border-graphite bg-surface">
+                    <SelectValue>{selectedAccount?.source.name ?? 'Seleccionar cuenta'}</SelectValue>
+                  </SelectTrigger>
+                  <SelectContent>
+                    {eligibleAccounts.map((entry) => (
+                      <SelectItem key={entry.source.id} value={entry.source.id}>
+                        {entry.source.name} · {formatMoneyInput(Number(entry.salary.balance ?? entry.salary.amount), currency)}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            ) : null}
+
+            {selectedAccount ? (
+              eligibleAccounts.length === 1 ? (
+                <p className="col-span-2 text-[11px] text-muted-gray">
+                  Se cargará a <span className="text-on-surface">{selectedAccount.source.name}</span>.
+                </p>
+              ) : null
+            ) : (
+              <p className="col-span-2 rounded-lg border border-warning/40 bg-warning/10 p-2 text-xs leading-5 text-warning">
+                {getMissingReceiptAccountMessage(currencyCode, paymentMethod)}
+              </p>
+            )}
+
             <div className="col-span-2 flex items-center justify-between border-t border-graphite/70 pt-2">
               <p className="text-[11px] uppercase tracking-[0.14em] text-medium-gray">{rows.length} productos</p>
               <p className="text-base font-semibold tabular-nums text-on-surface">{formatMoneyInput(receiptTotal, currency)}</p>
@@ -220,7 +316,7 @@ export function ReceiptItemsReviewDialog({
                     </span>
                     <span className="min-w-0 flex-1">
                       <span className="block truncate text-sm font-medium text-on-surface">{row.quantity || '1'} × {row.name || 'Producto sin nombre'}</span>
-                      <span className="block truncate text-[11px] text-muted-gray">{row.transactionType === 'expense' ? 'Gasto' : 'Gusto'} · {row.isCash ? 'Efectivo' : 'Transferencia'}</span>
+                      <span className="block truncate text-[11px] text-muted-gray">{row.transactionType === 'expense' ? 'Gasto' : 'Gusto'} · {paymentMethod === 'cash' ? 'Efectivo' : 'Transferencia'}</span>
                     </span>
                     <span className="shrink-0 tabular-nums text-sm font-semibold text-on-surface">{row.price || '0'}</span>
                   </button>
@@ -273,14 +369,23 @@ export function ReceiptItemsReviewDialog({
                   </div>
                 </div> : null}
 
-                {isActive ? <div className="mx-3 mb-3 flex min-w-0 items-center justify-between gap-2 rounded-lg bg-surface px-3 py-2.5">
-                  <span className={`inline-flex items-center gap-2 text-sm ${row.isCash ? 'text-emerald-300' : 'text-muted-gray'}`}>
-                    <Banknote className="size-4 shrink-0" aria-hidden="true" /> <span className="hidden min-[360px]:inline">Efectivo</span>
-                  </span>
-                  <Switch checked={!row.isCash} onCheckedChange={(checked) => updateRow(row.key, { isCash: !checked })} aria-label={row.isCash ? `${row.name}: efectivo` : `${row.name}: transferencia`} />
-                  <span className={`inline-flex items-center gap-2 text-sm ${row.isCash ? 'text-muted-gray' : 'text-sky-300'}`}>
-                    <ArrowLeftRight className="size-4 shrink-0" aria-hidden="true" /> <span className="hidden min-[360px]:inline">Transferencia</span>
-                  </span>
+                {isActive ? <div className="mx-3 mb-3 min-w-0 rounded-lg bg-surface px-3 py-2.5">
+                  <div className="flex min-w-0 items-center justify-between gap-2 opacity-60">
+                    <span className={`inline-flex items-center gap-2 text-sm ${paymentMethod === 'cash' ? 'text-emerald-300' : 'text-muted-gray'}`}>
+                      <Banknote className="size-4 shrink-0" aria-hidden="true" /> <span className="hidden min-[360px]:inline">Efectivo</span>
+                    </span>
+                    <Switch
+                      checked={paymentMethod === 'transfer'}
+                      disabled
+                      aria-label={`${row.name}: ${paymentMethod === 'cash' ? 'efectivo' : 'transferencia'}`}
+                    />
+                    <span className={`inline-flex items-center gap-2 text-sm ${paymentMethod === 'transfer' ? 'text-sky-300' : 'text-muted-gray'}`}>
+                      <ArrowLeftRight className="size-4 shrink-0" aria-hidden="true" /> <span className="hidden min-[360px]:inline">Transferencia</span>
+                    </span>
+                  </div>
+                  <p className="mt-1.5 text-[11px] leading-4 text-muted-gray">
+                    La forma de pago la define la cuenta{selectedAccount ? ` ${selectedAccount.source.name}` : ''}; cámbiala arriba para todo el recibo.
+                  </p>
                 </div> : null}
               </article>
             )
@@ -292,7 +397,7 @@ export function ReceiptItemsReviewDialog({
 
         <DialogFooter className="-mx-3 -mb-3 shrink-0 px-3 py-3 sm:-mx-5 sm:-mb-5 sm:px-5">
           <Button variant="outline" disabled={isSaving} onClick={() => onOpenChange(false)}>Cancelar</Button>
-          <Button loading={isSaving} disabled={rows.length === 0} onClick={() => void handleConfirm()}>
+          <Button loading={isSaving} disabled={rows.length === 0 || !selectedAccount} onClick={() => void handleConfirm()}>
             Crear {rows.length > 0 ? `${rows.length} producto${rows.length === 1 ? '' : 's'}` : ''}
           </Button>
         </DialogFooter>
