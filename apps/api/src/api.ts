@@ -133,6 +133,24 @@ const USD_CURRENCY_PREFERENCE: CurrencyPreferencePayload = {
   exchangeRate: 1,
 }
 
+/**
+ * Savings percentage per income account. Stored alongside the currencies so a
+ * second device reproduces the same formulas instead of falling back to none.
+ */
+export function normalizeAccountSavingsFormulas(value: unknown): Record<string, number> {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return {}
+  const normalized: Record<string, number> = {}
+
+  for (const [sourceId, rawRate] of Object.entries(value as JsonRecord).slice(0, 200)) {
+    const id = String(sourceId).trim().slice(0, 64)
+    const rate = Math.round(Number(rawRate))
+    if (!id || !Number.isFinite(rate) || rate <= 0) continue
+    normalized[id] = Math.min(100, rate)
+  }
+
+  return normalized
+}
+
 function normalizeCurrencyPreferences(value: unknown): CurrencyPreferencePayload[] {
   const currencies = Array.isArray(value) ? value : []
   const normalized = new Map<string, CurrencyPreferencePayload>([['USD', USD_CURRENCY_PREFERENCE]])
@@ -160,7 +178,12 @@ async function loadCurrencyPreferences(userId: string) {
   const entry = await prisma.preferenciaUsuario.findUnique({ where: { usuarioId: userId } })
 
   if (!entry) {
-    return { exists: false, currencies: [USD_CURRENCY_PREFERENCE], activeCurrencyCode: 'USD' }
+    return {
+      exists: false,
+      currencies: [USD_CURRENCY_PREFERENCE],
+      activeCurrencyCode: 'USD',
+      accountSavingsFormulas: {},
+    }
   }
 
   const currencies = normalizeCurrencyPreferences(entry.monedas)
@@ -168,7 +191,12 @@ async function loadCurrencyPreferences(userId: string) {
     ? entry.monedaActiva
     : 'USD'
 
-  return { exists: true, currencies, activeCurrencyCode }
+  return {
+    exists: true,
+    currencies,
+    activeCurrencyCode,
+    accountSavingsFormulas: normalizeAccountSavingsFormulas(entry.ahorroPorCuenta),
+  }
 }
 
 async function saveCurrencyPreferences(userId: string, body: JsonRecord) {
@@ -178,21 +206,24 @@ async function saveCurrencyPreferences(userId: string, body: JsonRecord) {
   const activeCurrencyCode = currencies.some((currency) => currency.code === requestedActiveCode)
     ? requestedActiveCode
     : 'USD'
+  const accountSavingsFormulas = normalizeAccountSavingsFormulas(body.accountSavingsFormulas)
 
   await prisma.preferenciaUsuario.upsert({
     where: { usuarioId: userId },
     update: {
       monedas: currencies as unknown as Prisma.InputJsonValue,
       monedaActiva: activeCurrencyCode,
+      ahorroPorCuenta: accountSavingsFormulas as unknown as Prisma.InputJsonValue,
     },
     create: {
       usuarioId: userId,
       monedas: currencies as unknown as Prisma.InputJsonValue,
       monedaActiva: activeCurrencyCode,
+      ahorroPorCuenta: accountSavingsFormulas as unknown as Prisma.InputJsonValue,
     },
   })
 
-  return { exists: true, currencies, activeCurrencyCode }
+  return { exists: true, currencies, activeCurrencyCode, accountSavingsFormulas }
 }
 
 function serializeSalary(entry: {

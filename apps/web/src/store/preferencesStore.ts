@@ -107,6 +107,7 @@ interface CurrencyPreferencesResponse {
   exists: boolean
   currencies: CurrencyPreference[]
   activeCurrencyCode: string
+  accountSavingsFormulas?: Record<string, number>
 }
 
 let currencyRevision = 0
@@ -147,10 +148,10 @@ function syncCurrencyPreferencesToServer() {
       const userId = getAuthenticatedUserId()
       if (!userId) return
 
-      const { currencies, activeCurrencyCode } = usePreferencesStore.getState()
+      const { currencies, activeCurrencyCode, accountSavingsFormulas } = usePreferencesStore.getState()
       await requestJson<CurrencyPreferencesResponse>('/preferences/currencies', {
         method: 'PUT',
-        body: JSON.stringify({ currencies, activeCurrencyCode }),
+        body: JSON.stringify({ currencies, activeCurrencyCode, accountSavingsFormulas }),
       })
       if (!currencySyncQueued) markCurrencyPreferencesPending(userId, false)
     } while (currencySyncQueued)
@@ -216,13 +217,16 @@ export const usePreferencesStore = create<PreferencesStore>()(
         }
       }),
       setFormula: (formula) => set({ formula: normalizeFormula(formula) }),
-      setAccountSavingsRate: (sourceId, rate) => set((state) => {
-        const normalized = Math.min(100, Math.max(0, Math.round(Number(rate) || 0)))
-        const next = { ...state.accountSavingsFormulas }
-        if (normalized > 0) next[sourceId] = normalized
-        else delete next[sourceId]
-        return { accountSavingsFormulas: next }
-      }),
+      setAccountSavingsRate: (sourceId, rate) => {
+        set((state) => {
+          const normalized = Math.min(100, Math.max(0, Math.round(Number(rate) || 0)))
+          const next = { ...state.accountSavingsFormulas }
+          if (normalized > 0) next[sourceId] = normalized
+          else delete next[sourceId]
+          return { accountSavingsFormulas: next }
+        })
+        scheduleCurrencySync()
+      },
       setActiveCurrency: (code) => {
         set((state) => {
           const normalizedCode = code.trim().toUpperCase()
@@ -272,7 +276,11 @@ export const usePreferencesStore = create<PreferencesStore>()(
         const activeCurrencyCode = currencies.some((currency) => currency.code === remote.activeCurrencyCode)
           ? remote.activeCurrencyCode
           : 'USD'
-        set({ currencies, activeCurrencyCode })
+        set({
+          currencies,
+          activeCurrencyCode,
+          accountSavingsFormulas: remote.accountSavingsFormulas ?? {},
+        })
       },
       syncCurrencyPreferences: async () => {
         await syncCurrencyPreferencesToServer()
