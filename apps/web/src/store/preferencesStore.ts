@@ -28,6 +28,8 @@ interface PreferencesStore {
   iconPack: AppIconPack
   customFonts: CustomTypographyOption[]
   formula: AllocationFormula
+  /** Savings percentage per income account, keyed by income source id. */
+  accountSavingsFormulas: Record<string, number>
   currencies: CurrencyPreference[]
   activeCurrencyCode: string
   dashboardWidgetsByProfile: Record<string, DashboardWidgetId[]>
@@ -43,6 +45,7 @@ interface PreferencesStore {
   saveCustomFont: (font: CustomTypographyOption) => void
   removeCustomFont: (id: string) => void
   setFormula: (formula: AllocationFormula) => void
+  setAccountSavingsRate: (sourceId: string, rate: number) => void
   setActiveCurrency: (code: string) => void
   saveCurrency: (currency: CurrencyPreference) => void
   removeCurrency: (code: string) => void
@@ -175,6 +178,7 @@ const defaultState = {
   iconPack: 'lucide' as AppIconPack,
   customFonts: [] as CustomTypographyOption[],
   formula: defaultFormula,
+  accountSavingsFormulas: {} as Record<string, number>,
   currencies: [USD_CURRENCY],
   activeCurrencyCode: 'USD',
   dashboardWidgetsByProfile: {},
@@ -212,6 +216,13 @@ export const usePreferencesStore = create<PreferencesStore>()(
         }
       }),
       setFormula: (formula) => set({ formula: normalizeFormula(formula) }),
+      setAccountSavingsRate: (sourceId, rate) => set((state) => {
+        const normalized = Math.min(100, Math.max(0, Math.round(Number(rate) || 0)))
+        const next = { ...state.accountSavingsFormulas }
+        if (normalized > 0) next[sourceId] = normalized
+        else delete next[sourceId]
+        return { accountSavingsFormulas: next }
+      }),
       setActiveCurrency: (code) => {
         set((state) => {
           const normalizedCode = code.trim().toUpperCase()
@@ -317,6 +328,7 @@ export const usePreferencesStore = create<PreferencesStore>()(
           ...saved,
           currencies,
           customFonts: saved.customFonts ?? current.customFonts,
+          accountSavingsFormulas: saved.accountSavingsFormulas ?? current.accountSavingsFormulas,
           typography: (() => {
             const nextTypography = saved.typography ?? current.typography
             const hasPreset = ['inter', 'space-grotesk', 'manrope', 'ibm-plex-sans', 'playfair-display'].includes(nextTypography)

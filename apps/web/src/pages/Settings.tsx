@@ -29,6 +29,7 @@ import { parseExpenseDescription } from '@/lib/expense-utils'
 import { parseWantDescription } from '@/lib/want-utils'
 import { useFinanceStore } from '@/store/financeStore'
 import { useAuthStore } from '@/store/authStore'
+import { AccountSavingsSettings } from '@/components/settings/AccountSavingsSettings'
 import { AutomationSettings } from '@/components/settings/AutomationSettings'
 import { NotificationSettings } from '@/components/settings/NotificationSettings'
 import {
@@ -244,6 +245,9 @@ function FormulaInputs({
           }
           className="border-graphite bg-abyss text-on-surface"
         />
+        <p className="text-xs text-muted-gray">
+          Este es el objetivo general del ciclo. Cuánto sale de cada cuenta se define en «Ahorro por cuenta».
+        </p>
       </div>
     </div>
   )
@@ -1306,6 +1310,8 @@ export default function Settings() {
             total={total}
             formulaChanged={formulaChanged}
           />
+
+          <AccountSavingsSettings />
 
           <CurrencySettingsCard />
 

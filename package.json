@@ -35,6 +35,8 @@
     "test:monthly-overview": "tsx packages/shared/src/monthly-overview.test.mts",
     "test:currency": "tsx --tsconfig apps/web/tsconfig.app.json apps/web/src/lib/currency-registry.test.mts",
     "test:receipt-account": "tsx --tsconfig apps/web/tsconfig.app.json apps/web/src/lib/receipt-account.test.mts",
+    "test:account-savings": "tsx --tsconfig apps/web/tsconfig.app.json apps/web/src/lib/account-savings.test.mts",
+    "test:account-savings-flow": "tsx --tsconfig apps/web/tsconfig.app.json apps/web/src/lib/account-savings-flow.test.mts",
     "test:google": "tsx apps/api/src/google-auth.test.mts"
   },
   "devDependencies": {

@@ -16,6 +16,7 @@ import { exportSavingsReport } from '@/lib/reportExports'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { usePreferencesStore } from '@/store/preferencesStore'
 import { getTodayDateKey } from '@/lib/date'
+import { AccountSavingsPanel } from '@/components/savings/AccountSavingsPanel'
 
 const GOAL_CATEGORY_LABELS = {
   emergency: 'Emergencia',
@@ -348,6 +349,8 @@ export default function Savings() {
           </Button>
         </div>
       </header>
+
+      <AccountSavingsPanel />
 
       <section className="grid gap-4 xl:grid-cols-[1.35fr_0.65fr]">
         <Card className="relative overflow-hidden border-success/20 bg-surface p-6 shadow-vault md:p-8">
