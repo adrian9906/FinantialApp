@@ -108,3 +108,64 @@ export function getSavingsAccountBalance(salaries: Salary[], savingsSourceId: st
   if (!entry) return 0
   return Number(entry.balance ?? entry.amount) || 0
 }
+
+export interface AccountSavingsGoal {
+  sourceId: string
+  sourceName: string
+  currencyCode: string
+  isCash: boolean
+  rate: number
+  /** Goal for this account this cycle, in USD. */
+  goalUsd: number
+  /** Already sitting in this account's savings account, in USD. */
+  savedUsd: number
+  remainingUsd: number
+  progress: number
+  isComplete: boolean
+  savingsAccountName: string
+}
+
+/**
+ * Savings goals are per account: an account with 0% has no goal and must not
+ * appear, and each account's progress is measured against its own savings
+ * account so two currencies are never added together.
+ */
+export function getAccountSavingsGoals(
+  accounts: IncomeAccountView[],
+  formulas: AccountSavingsFormulas,
+  sources: IncomeSource[],
+  salaries: Salary[],
+  month: string,
+): AccountSavingsGoal[] {
+  return accounts.flatMap((account) => {
+    const rate = getAccountSavingsRate(formulas, account.source.id)
+    if (rate <= 0) return []
+
+    const currencyCode = (account.salary.currencyCode ?? account.source.currencyCode ?? 'USD').trim().toUpperCase()
+    const isCash = account.source.isCash !== false
+    const savingsAccount = findSavingsAccount(sources, currencyCode, isCash)
+
+    // The account's own savings account is not a source of new savings.
+    if (savingsAccount?.id === account.source.id) return []
+
+    const goalUsd = Math.max(0, Number(account.salary.amount) * (rate / 100))
+    const savedUsd = savingsAccount
+      ? getSavingsAccountBalance(salaries, savingsAccount.id, month)
+      : 0
+    const progress = goalUsd > 0 ? Math.min(100, Math.round((savedUsd / goalUsd) * 100)) : 0
+
+    return [{
+      sourceId: account.source.id,
+      sourceName: account.source.name,
+      currencyCode,
+      isCash,
+      rate,
+      goalUsd,
+      savedUsd,
+      remainingUsd: Math.max(0, goalUsd - savedUsd),
+      progress,
+      isComplete: savedUsd + 1e-9 >= goalUsd,
+      savingsAccountName: getSavingsAccountName(currencyCode, isCash),
+    }]
+  })
+}

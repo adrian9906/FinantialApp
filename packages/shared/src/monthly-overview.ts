@@ -1,4 +1,4 @@
-import type { AllocationFormula } from './preferences.js'
+import { getFormulaBudgets, type AllocationFormula } from './preferences.js'
 import type { Debt, MonthlyPlanningHistory, Salary, Transaction } from './types.js'
 import { getEffectiveExpenseTotal } from './expense-utils.js'
 import {
@@ -137,10 +137,12 @@ export function getMonthlyOverview(
   )
   const totalSalary = grossSalary
 
-  const baseBudgetExpenses = totalSalary * (formula.expenses / 100)
-  const baseBudgetSavings = totalSalary * (formula.savings / 100)
+  // Savings is taken off the income first; expenses and wants split the rest.
+  const baseBudgets = getFormulaBudgets(totalSalary, formula)
+  const baseBudgetExpenses = baseBudgets.expenses
+  const baseBudgetSavings = baseBudgets.savings
   const budgetExpenses = Math.max(0, baseBudgetExpenses - transferredFromExpenses + transferredToExpenses)
-  const baseWants = totalSalary * (formula.wants / 100)
+  const baseWants = baseBudgets.wants
   const budgetSavings = baseBudgetSavings + transferredFromExpenses + transferredFromWants
   const budgetWantsBeforeRollover = Math.max(0, baseWants - transferredFromWants + transferredToWants)
   const wantsEnabled = formula.wants > 0

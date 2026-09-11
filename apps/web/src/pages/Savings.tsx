@@ -177,7 +177,6 @@ export default function Savings() {
   }
 
   const savingsList = transactions.filter((transaction) => transaction.type === 'saving')
-  const pct = overview.budgetSavings > 0 ? Math.min(100, Math.round((overview.totalSavings / overview.budgetSavings) * 100)) : 0
   const remaining = overview.budgetSavings - overview.totalSavings
   const budgetFull = remaining <= 0
   const availableSavings = Math.max(0, overview.accumulatedSavings)
@@ -378,25 +377,17 @@ export default function Savings() {
         </Card>
 
         <Card className="border-primary/20 bg-surface p-5 shadow-vault md:p-6">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <p className="text-xs uppercase tracking-[0.22em] text-primary">Meta mensual de ahorro</p>
-            <Badge variant="secondary" className={budgetFull ? 'bg-success/10 text-success' : 'bg-primary/10 text-primary'}>
-              {budgetFull ? 'Meta cumplida' : `${pct}% completado`}
-            </Badge>
-          </div>
+          <p className="text-xs uppercase tracking-[0.22em] text-primary">Metas de ahorro</p>
           <p className="mt-5 text-2xl font-semibold tabular-nums text-on-surface">
-            {formatMoney(overview.totalSavings)}
-            <span className="text-sm font-normal text-muted-gray"> de {formatMoney(overview.budgetSavings)}</span>
+            {formatMoney(overview.accumulatedSavings)}
           </p>
           <p className="mt-2 text-sm text-muted-gray">
-            {budgetFull
-              ? 'La meta queda cumplida aunque uses después una parte de tus ahorros.'
-              : `Te faltan ${formatMoney(Math.max(0, remaining))} para cumplirla.`}
+            Cada cuenta tiene su propia meta según el porcentaje que le pusiste en Ajustes. Arriba las ves
+            por separado, con su moneda y su cuenta de ahorro.
           </p>
-          <div className="mt-5 h-2 overflow-hidden rounded-full bg-surface-container-highest">
-            <div className="h-full rounded-full bg-primary transition-[width] duration-1000" style={{ width: `${pct}%` }} />
-          </div>
-          <p className="mt-4 text-xs text-muted-gray">Objetivo configurado: 25% del presupuesto mensual.</p>
+          <p className="mt-4 text-xs text-muted-gray">
+            Las cuentas con 0% de ahorro no tienen meta y no aparecen.
+          </p>
         </Card>
       </section>
 

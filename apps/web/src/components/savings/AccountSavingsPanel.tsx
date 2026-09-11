@@ -5,7 +5,11 @@ import { getMonthKey } from '@plata/shared'
 
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
-import { getAccountSavingsPlans, type AccountSavingsPlan } from '@/lib/account-savings'
+import {
+  getAccountSavingsGoals,
+  getAccountSavingsPlans,
+  type AccountSavingsPlan,
+} from '@/lib/account-savings'
 import { formatMoneyWithCode, getCurrencyByCode } from '@/lib/currency'
 import { getIncomeAccountsForMonth } from '@/lib/income-account-view'
 import { useFinanceStore } from '@/store/financeStore'
@@ -19,13 +23,17 @@ export function AccountSavingsPanel() {
   const [applyingId, setApplyingId] = useState<string | null>(null)
 
   const month = getMonthKey()
+  const accounts = useMemo(
+    () => getIncomeAccountsForMonth(salaries, incomeSources, month),
+    [incomeSources, month, salaries],
+  )
   const plans = useMemo(
-    () => getAccountSavingsPlans(
-      getIncomeAccountsForMonth(salaries, incomeSources, month),
-      accountSavingsFormulas,
-      incomeSources,
-    ),
-    [accountSavingsFormulas, incomeSources, month, salaries],
+    () => getAccountSavingsPlans(accounts, accountSavingsFormulas, incomeSources),
+    [accounts, accountSavingsFormulas, incomeSources],
+  )
+  const goals = useMemo(
+    () => getAccountSavingsGoals(accounts, accountSavingsFormulas, incomeSources, salaries, month),
+    [accounts, accountSavingsFormulas, incomeSources, month, salaries],
   )
 
   async function handleApply(plan: AccountSavingsPlan) {
@@ -55,7 +63,7 @@ export function AccountSavingsPanel() {
     }
   }
 
-  if (plans.length === 0) return null
+  if (plans.length === 0 && goals.length === 0) return null
 
   return (
     <Card className="border-graphite bg-surface p-5 shadow-vault">
@@ -72,7 +80,48 @@ export function AccountSavingsPanel() {
         </div>
       </div>
 
+      {goals.length > 0 ? (
+        <div className="mt-4 space-y-2">
+          <p className="text-xs uppercase tracking-[0.14em] text-medium-gray">Meta por cuenta</p>
+          {goals.map((goal) => {
+            const currency = getCurrencyByCode(goal.currencyCode)
+            return (
+              <div key={goal.sourceId} className="rounded-2xl border border-graphite bg-surface-container-low p-3">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <p className="min-w-0 truncate text-sm font-medium text-on-surface">
+                    {goal.sourceName} · {goal.rate}%
+                  </p>
+                  <span className={`rounded-full px-2 py-0.5 text-[11px] ${goal.isComplete ? 'bg-success/10 text-success' : 'bg-primary/10 text-primary'}`}>
+                    {goal.isComplete ? 'Meta cumplida' : `${goal.progress}% completado`}
+                  </span>
+                </div>
+                <p className="mt-1.5 text-sm tabular-nums text-on-surface">
+                  {formatMoneyWithCode(goal.savedUsd, currency)}
+                  <span className="text-xs font-normal text-muted-gray">
+                    {' '}de {formatMoneyWithCode(goal.goalUsd, currency)}
+                  </span>
+                </p>
+                <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-surface-container-highest">
+                  <div
+                    className={`h-full rounded-full transition-[width] duration-700 ${goal.isComplete ? 'bg-success' : 'bg-primary'}`}
+                    style={{ width: `${goal.progress}%` }}
+                  />
+                </div>
+                <p className="mt-1.5 text-[11px] text-muted-gray">
+                  {goal.isComplete
+                    ? `Guardado en «${goal.savingsAccountName}».`
+                    : `Faltan ${formatMoneyWithCode(goal.remainingUsd, currency)} en «${goal.savingsAccountName}».`}
+                </p>
+              </div>
+            )
+          })}
+        </div>
+      ) : null}
+
       <div className="mt-4 space-y-2">
+        {plans.length > 0 ? (
+          <p className="text-xs uppercase tracking-[0.14em] text-medium-gray">Pendiente de aplicar</p>
+        ) : null}
         {plans.map((plan) => {
           const currency = getCurrencyByCode(plan.currencyCode)
           return (

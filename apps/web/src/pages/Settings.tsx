@@ -1,6 +1,6 @@
 import { useMemo, useState, type ChangeEvent, type Dispatch, type ReactNode, type SetStateAction } from 'react'
 import { toast } from 'sonner'
-import { getFinancialPeriodStart } from '@plata/shared'
+import { getFinancialPeriodStart, getFormulaBudgets } from '@plata/shared'
 
 import {
   AlertDialog,
@@ -157,7 +157,8 @@ function cloneFormula(formula: AllocationFormula): AllocationFormula {
 function parseDraftValue(value: string) {
   const parsed = Number(value)
   if (!Number.isFinite(parsed)) return 0
-  return Math.min(100, Math.max(0, Math.round(parsed)))
+  // One decimal, so splits like 62.5% are expressible.
+  return Math.min(100, Math.max(0, Math.round(parsed * 10) / 10))
 }
 
 function sanitizeFontName(value: string) {
@@ -197,6 +198,25 @@ function FormulaInputs({
   return (
     <div className="mt-6 grid gap-4 md:grid-cols-3">
       <div className="space-y-2">
+        <Label className="text-medium-gray">Ahorro</Label>
+        <Input
+          type="number"
+          min="0"
+          max="100"
+          step="0.1"
+          value={draftFormula.savings}
+          onChange={(event) =>
+            setDraftFormula((current) => ({
+              ...current,
+              savings: parseDraftValue(event.target.value),
+            }))
+          }
+          className="border-graphite bg-abyss text-on-surface"
+        />
+        <p className="text-xs text-muted-gray">Sale primero del ingreso.</p>
+      </div>
+
+      <div className="space-y-2">
         <Label className="text-medium-gray">Gastos</Label>
         <Input
           type="number"
@@ -230,25 +250,40 @@ function FormulaInputs({
         />
       </div>
 
-      <div className="space-y-2">
-        <Label className="text-medium-gray">Ahorros</Label>
-        <Input
-          type="number"
-          min="0"
-          max="100"
-          value={draftFormula.savings}
-          onChange={(event) =>
-            setDraftFormula((current) => ({
-              ...current,
-              savings: parseDraftValue(event.target.value),
-            }))
-          }
-          className="border-graphite bg-abyss text-on-surface"
-        />
-        <p className="text-xs text-muted-gray">
-          Este es el objetivo general del ciclo. Cuánto sale de cada cuenta se define en «Ahorro por cuenta».
-        </p>
+
+    </div>
+  )
+}
+
+/** Shows the real amounts the percentages produce for this month's income. */
+function FormulaPreview({ draftFormula }: { draftFormula: AllocationFormula }) {
+  const overview = useMonthlyOverview()
+  const income = overview.totalSalary
+  const budgets = getFormulaBudgets(income, draftFormula)
+
+  if (income <= 0) return null
+
+  return (
+    <div className="mt-5 grid gap-2 rounded-2xl border border-graphite bg-abyss p-4 sm:grid-cols-4">
+      <div>
+        <p className="text-xs uppercase tracking-[0.14em] text-medium-gray">Ingreso</p>
+        <p className="mt-1 text-lg font-semibold tabular-nums text-on-surface">{formatMoney(income)}</p>
       </div>
+      <div>
+        <p className="text-xs uppercase tracking-[0.14em] text-medium-gray">Ahorro</p>
+        <p className="mt-1 text-lg font-semibold tabular-nums text-success">{formatMoney(budgets.savings)}</p>
+      </div>
+      <div>
+        <p className="text-xs uppercase tracking-[0.14em] text-medium-gray">Gastos</p>
+        <p className="mt-1 text-lg font-semibold tabular-nums text-on-surface">{formatMoney(budgets.expenses)}</p>
+      </div>
+      <div>
+        <p className="text-xs uppercase tracking-[0.14em] text-medium-gray">Gustos</p>
+        <p className="mt-1 text-lg font-semibold tabular-nums text-on-surface">{formatMoney(budgets.wants)}</p>
+      </div>
+      <p className="text-xs text-muted-gray sm:col-span-4">
+        Quedan {formatMoney(budgets.spendable)} para repartir después de apartar el ahorro.
+      </p>
     </div>
   )
 }
@@ -273,7 +308,7 @@ function FormulaCard({
       <SectionIntro
         eyebrow="Formula"
         title="Distribucion del dinero"
-        description="Cambia como se reparte el salario mensual entre gastos esenciales, gustos y ahorro."
+        description="Primero se aparta el ahorro del ingreso. Lo que queda se reparte entre gastos y gustos, y esos dos deben sumar 100%."
         icon={
           <div className="flex size-11 items-center justify-center rounded-2xl bg-primary/10 text-primary shadow-vault-sm">
             <AppIcon name="sliders" className="size-5" />
@@ -309,11 +344,13 @@ function FormulaCard({
 
       <FormulaInputs draftFormula={draftFormula} setDraftFormula={setDraftFormula} />
 
+      <FormulaPreview draftFormula={draftFormula} />
+
       <div className="mt-5 rounded-2xl border border-graphite bg-surface-container-low p-4">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
-            <p className="text-sm font-medium text-on-surface">Total configurado</p>
-            <p className="mt-1 text-xs text-muted-gray">La suma debe dar exactamente 100%.</p>
+            <p className="text-sm font-medium text-on-surface">Gastos + gustos</p>
+            <p className="mt-1 text-xs text-muted-gray">Estos dos reparten lo que queda tras el ahorro y deben sumar 100%.</p>
           </div>
           <Badge
             variant="secondary"
@@ -356,7 +393,7 @@ function FormulaCard({
           </Button>
           {!isFormulaValid ? (
             <p className="self-center text-xs text-warning">
-              Ajusta los porcentajes hasta completar 100%.
+              Gastos y gustos deben sumar 100% entre los dos.
             </p>
           ) : null}
         </div>
@@ -1241,7 +1278,7 @@ export default function Settings() {
 
   function handleSaveFormula() {
     if (!isFormulaValid) {
-      toast.error('La formula debe sumar exactamente 100%.')
+      toast.error('Gastos y gustos deben sumar exactamente 100% entre los dos.')
       return
     }
 

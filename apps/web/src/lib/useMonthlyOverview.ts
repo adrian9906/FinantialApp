@@ -3,6 +3,7 @@ import { usePreferencesStore } from '@/store/preferencesStore'
 import { useMemo } from 'react'
 import {
   getFinancialPeriodStart,
+  getFormulaBudgets,
   getMonthlyOverview,
   getSavingsFundingBreakdown,
   getWishlistReservedAmount,
@@ -45,7 +46,7 @@ export function useMonthlyOverview() {
       ? Math.max(0, overview.budgetSavings - totalSavings)
       : 0
     const budgetWants = wantsEnabled
-      ? (overview.totalSalary * (formula.wants / 100)) + savingsRollover
+      ? getFormulaBudgets(overview.totalSalary, formula).wants + savingsRollover
       : 0
 
     return {

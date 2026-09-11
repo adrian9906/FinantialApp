@@ -86,3 +86,65 @@ assert.equal(getSavingsAccountBalance(salaries, 'savings-usd', '2026-08'), 0)
 console.log('PASS 8: se lee el saldo ya ahorrado del mes')
 
 console.log('Formulas de ahorro por cuenta correctas.')
+
+// --- Metas de ahorro por cuenta -------------------------------------------
+
+const { getAccountSavingsGoals } = await import('./account-savings.ts')
+
+const goalSalary = account('salary', 'USD', true, 400)
+const goalTransfer = account('transfer', 'CUP', false, 1000)
+const usdSavingsSource: IncomeSource = {
+  id: 'savings-usd', name: 'Ahorro USD Efectivo', recurring: true, isCash: true, currencyCode: 'USD',
+}
+const goalSalaries: Salary[] = [
+  { id: 'a', amount: 68, balance: 68, month: '2026-09', sourceId: 'savings-usd', currencyCode: 'USD' },
+]
+
+// Una cuenta en 0% no tiene meta y no debe aparecer.
+const goals = getAccountSavingsGoals(
+  [goalSalary, goalTransfer],
+  { salary: 50, transfer: 0 },
+  [goalSalary.source, goalTransfer.source, usdSavingsSource],
+  goalSalaries,
+  '2026-09',
+)
+assert.deepEqual(goals.map((goal) => goal.sourceId), ['salary'], 'la cuenta en 0% no se muestra')
+console.log('PASS 9: una cuenta en 0% no aparece en las metas')
+
+// Cada meta se mide contra SU cuenta de ahorro, sin sumar monedas distintas.
+assert.equal(goals[0].goalUsd, 200, 'el 50% de 400')
+assert.equal(goals[0].savedUsd, 68, 'solo lo que hay en su cuenta de ahorro')
+assert.equal(goals[0].remainingUsd, 132)
+assert.equal(goals[0].progress, 34)
+assert.equal(goals[0].isComplete, false)
+assert.equal(goals[0].currencyCode, 'USD')
+console.log('PASS 10: cada meta se mide contra su propia cuenta de ahorro')
+
+// Dos cuentas con formula generan dos metas separadas, cada una en su moneda.
+const both = getAccountSavingsGoals(
+  [goalSalary, goalTransfer],
+  { salary: 50, transfer: 10 },
+  [goalSalary.source, goalTransfer.source, usdSavingsSource],
+  goalSalaries,
+  '2026-09',
+)
+assert.equal(both.length, 2)
+assert.equal(both[1].currencyCode, 'CUP')
+assert.equal(both[1].savedUsd, 0, 'la cuenta CUP no hereda el saldo del ahorro USD')
+assert.equal(both[1].goalUsd, 100)
+console.log('PASS 11: las metas no mezclan monedas ni cuentas')
+
+// La meta se marca cumplida cuando su propia cuenta la alcanza.
+const complete = getAccountSavingsGoals(
+  [goalSalary],
+  { salary: 50 },
+  [goalSalary.source, usdSavingsSource],
+  [{ id: 'b', amount: 200, balance: 200, month: '2026-09', sourceId: 'savings-usd', currencyCode: 'USD' }],
+  '2026-09',
+)
+assert.equal(complete[0].isComplete, true)
+assert.equal(complete[0].progress, 100)
+assert.equal(complete[0].remainingUsd, 0)
+console.log('PASS 12: la meta se cumple con el saldo de su propia cuenta')
+
+console.log('Metas de ahorro por cuenta correctas.')
