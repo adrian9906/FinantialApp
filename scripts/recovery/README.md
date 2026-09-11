@@ -1,110 +1,130 @@
-# Recuperar los datos y pasar a un servidor propio
+# Recuperación de Plata en PostgreSQL autogestionado
 
-Neon corta las conexiones cuando se pasa la cuota de transferencia, con este
-error:
+El respaldo `plata-backup-2026-09-11.json` se importa a las tablas relacionales actuales, no como un único JSON. Se encontró un documento de sincronización: `f8228346-1a7d-4993-991d-a9117a3588ce`.
 
-```
-Your project has exceeded the data transfer quota. Upgrade your plan to increase limits.
-```
+| Datos revisados | Registros |
+| --- | ---: |
+| Salarios / fuentes de ingreso | 5 / 3 |
+| Transacciones / deudas | 57 / 2 |
+| Deseos / historial mensual | 24 / 7 |
+| Metas / suscripciones | 1 / 1 |
+| Eventos, proyecciones, recordatorios | 0 / 0 / 0 |
 
-El servidor rechaza la conexion antes de aceptar consultas, asi que **no se
-puede sacar nada con `pg_dump` ni con ninguna otra herramienta** mientras la
-cuota siga excedida. No es que los datos se hayan perdido: estan ahi, pero la
-puerta esta cerrada.
+La imagen incluida como `data:image/...` se conserva. El archivo no guarda correo, contraseña ni sesiones. La semilla crea por defecto `adriandfl99@gmail.com` con la contraseña temporal configurada para esta recuperación; cámbiala tras el primer acceso. Sí contiene en `localStorage` las monedas y fórmulas de ahorro, que la semilla transfiere a `PreferenciaUsuario`; los ajustes visuales y las reglas de categorías permanecen del lado del cliente.
 
-Hay dos caminos.
+Si en el futuro Neon vuelve a estar disponible, usa `pg_dump` con su URL directa para obtener también una copia SQL. Mientras un proyecto de Neon rechace conexiones por cuota, este JSON de IndexedDB es la fuente recuperable.
 
-## Camino A (recomendado): recuperar desde el navegador
+## PostgreSQL en Ubuntu
 
-La app guarda una copia completa de tus datos en el propio dispositivo
-(IndexedDB), justo para funcionar sin conexion. De ahi se puede sacar todo sin
-tocar Neon.
-
-1. Abre la app en el navegador donde la usas, **con tu sesion iniciada**.
-2. Pulsa `F12` y ve a la pestana **Console**.
-3. Pega el contenido de `exportar-datos-navegador.js` y pulsa Enter.
-4. Se descarga `plata-backup-<fecha>.json`. El script imprime un resumen
-   (cuantos gastos, ingresos, etc.) para que verifiques antes de confiar en el.
-
-Guarda ese archivo en un lugar seguro: es tu respaldo.
-
-> Si usas la app tambien en el movil, exporta en **los dos** y quedate con el
-> que tenga mas registros.
-
-## Camino B: esperar o pagar
-
-La cuota de transferencia de Neon se reinicia al empezar el nuevo ciclo de
-facturacion. Si puedes esperar, la base vuelve sola y entonces si funciona:
+Instala PostgreSQL nativo. Si la API también vive en este servidor, deja PostgreSQL escuchando solo en `127.0.0.1`; no abras 5432 a Internet.
 
 ```bash
-pg_dump "postgresql://usuario:clave@host/neondb?sslmode=require" \
-  --no-owner --no-privileges > neondb-dump.sql
+sudo apt update
+sudo apt install -y postgresql postgresql-contrib
+sudo systemctl enable --now postgresql
+sudo -u postgres psql
 ```
 
-Subir de plan un solo mes tambien reabre la conexion para hacer el dump.
+En `psql`, reemplaza las claves por secretos largos URL-seguros (sin `@`, `:`, `/` ni espacios):
 
-## Montar tu propio Postgres
+```sql
+CREATE ROLE plata_migrator LOGIN PASSWORD 'CLAVE_LARGA_DE_MIGRACIONES';
+CREATE ROLE plata_app LOGIN PASSWORD 'CLAVE_LARGA_DE_APLICACION';
+CREATE DATABASE plata OWNER plata_migrator;
+\c plata
+REVOKE ALL ON SCHEMA public FROM PUBLIC;
+GRANT USAGE ON SCHEMA public TO plata_app;
+```
 
-Con Docker, en el servidor:
+Comprueba el listener local:
+
+```bash
+sudo ss -ltnp | grep 5432
+```
+
+Si dejas la API en Vercel, una base local de Ubuntu no es accesible directamente. Aloja también la API en Ubuntu o usa VPN/red privada y TLS; no publiques PostgreSQL para resolverlo.
+
+### Alternativa con Docker
+
+Si prefieres Docker en vez del paquete nativo, usa un volumen persistente y publica solo en localhost:
 
 ```bash
 docker run -d --name plata-db \
-  -e POSTGRES_PASSWORD='una-clave-larga' \
+  -e POSTGRES_PASSWORD='CLAVE_LARGA_DE_MIGRACIONES' \
   -e POSTGRES_DB=plata \
-  -p 5432:5432 \
-  -v /ruta/segura/plata-data:/var/lib/postgresql/data \
-  --restart unless-stopped \
-  postgres:17-alpine
+  -p 127.0.0.1:5432:5432 \
+  -v /srv/plata/postgres:/var/lib/postgresql/data \
+  --restart unless-stopped postgres:17
 ```
 
-El volumen (`-v`) es lo que hace que los datos sobrevivan si el contenedor se
-borra. No lo omitas.
+## Configurar Prisma y aplicar migraciones
 
-Luego apunta el backend a esa base en `apps/api/.env`:
+En el checkout del proyecto, crea `apps/api/.env` a partir de `apps/api/.env.example`:
 
+```dotenv
+DATABASE_URL="postgresql://plata_app:CLAVE_LARGA_DE_APLICACION@127.0.0.1:5432/plata?schema=public"
+DIRECT_URL="postgresql://plata_migrator:CLAVE_LARGA_DE_MIGRACIONES@127.0.0.1:5432/plata?schema=public"
+SESSION_SECRET="secreto-aleatorio-de-al-menos-32-bytes"
+APP_URL="https://tu-dominio.example"
+CORS_ALLOWED_ORIGINS="https://tu-dominio.example"
 ```
-DATABASE_URL="postgresql://postgres:una-clave-larga@TU_SERVIDOR:5432/plata"
-DIRECT_URL="postgresql://postgres:una-clave-larga@TU_SERVIDOR:5432/plata"
-```
 
-Y crea las tablas:
+`DATABASE_URL` es la conexión de la API. `DIRECT_URL` usa el rol de migración y sirve para Prisma CLI y recuperación. Nunca copies estas variables al frontend/Vite.
 
 ```bash
-cd apps/api
-./node_modules/.bin/prisma migrate deploy
+corepack enable
+pnpm install --frozen-lockfile
+pnpm --dir apps/api db:generate
+pnpm --dir apps/api db:migrate:deploy
 ```
 
-## Restaurar el respaldo
-
-1. Registra tu usuario en la app apuntando ya al servidor nuevo (necesita
-   existir antes de restaurar).
-2. Comprueba primero que el archivo trae lo que esperas, sin escribir nada:
+Después de migrar, concede permisos mínimos al proceso de aplicación:
 
 ```bash
-cd apps/api
-./node_modules/.bin/tsx src/restaurar-backup.mts /ruta/plata-backup-2026-09-11.json --correo tu@correo
+sudo -u postgres psql -d plata
 ```
 
-3. Si el resumen cuadra, aplica:
-
-```bash
-./node_modules/.bin/tsx src/restaurar-backup.mts /ruta/plata-backup-2026-09-11.json --correo tu@correo --aplicar
+```sql
+GRANT USAGE ON SCHEMA public TO plata_app;
+GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO plata_app;
+GRANT USAGE, SELECT, UPDATE ON ALL SEQUENCES IN SCHEMA public TO plata_app;
+ALTER DEFAULT PRIVILEGES FOR ROLE plata_migrator IN SCHEMA public GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO plata_app;
+ALTER DEFAULT PRIVILEGES FOR ROLE plata_migrator IN SCHEMA public GRANT USAGE, SELECT, UPDATE ON SEQUENCES TO plata_app;
 ```
 
-Escribe por el mismo camino que usa la sincronizacion normal, asi que los datos
-quedan igual que si se hubieran sincronizado desde la app. Las filas que ya
-existan en el destino se omiten y se avisan, en vez de duplicarse.
+## Validar e importar
 
-## Si tienes un dump SQL (camino B)
+Primero valida el JSON sin conexión a PostgreSQL:
 
 ```bash
-psql "postgresql://postgres:clave@TU_SERVIDOR:5432/plata" < neondb-dump.sql
+pnpm --dir apps/api db:seed:recovery:check
 ```
 
-## Respaldos de aqui en adelante
-
-Para no volver a depender de esto, programa un dump periodico:
+La importación reemplaza solamente las colecciones recuperables del usuario elegido y no afecta a otros usuarios. Se requiere una confirmación explícita.
 
 ```bash
-docker exec plata-db pg_dump -U postgres plata > plata-$(date +%F).sql
+RECOVERY_CONFIRM=replace pnpm --dir apps/api db:seed:recovery
+```
+
+Puedes sustituir los valores predeterminados sin editar código mediante `RECOVERY_USER_EMAIL`, `RECOVERY_USER_PASSWORD` y `RECOVERY_USER_NAME`.
+
+Por defecto usa como usuario el ID del documento del respaldo. Para otro usuario existente, añade `RECOVERY_USER_ID='UUID_DEL_USUARIO'`. `RECOVERY_BACKUP_FILE` permite indicar una copia del JSON en otra ruta.
+
+Verifica:
+
+```bash
+psql "$DIRECT_URL" -c 'SELECT correo, nombre FROM usuarios;'
+psql "$DIRECT_URL" -c 'SELECT COUNT(*) AS gastos FROM gastos UNION ALL SELECT COUNT(*) FROM gustos UNION ALL SELECT COUNT(*) FROM ahorros;'
+```
+
+## Conexión de la API
+
+No necesitas cambiar el código para abandonar Neon: la API ya crea Prisma con el adaptador PostgreSQL y `DATABASE_URL`. En producción entrega `DATABASE_URL`, `SESSION_SECRET`, `APP_URL` y `CORS_ALLOWED_ORIGINS` como secretos del servicio; reserva `DIRECT_URL` para migraciones y la recuperación.
+
+## Respaldos a partir de ahora
+
+Programa una copia periódica en el servidor y guarda una segunda copia fuera de él:
+
+```bash
+pg_dump "$DIRECT_URL" --format=custom --file "/srv/plata/backups/plata-$(date +%F).dump"
 ```

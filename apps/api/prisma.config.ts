@@ -5,6 +5,7 @@ export default defineConfig({
   schema: 'prisma/schema.prisma',
   migrations: {
     path: 'prisma/migrations',
+    seed: 'tsx prisma/recovery.seed.ts',
   },
   datasource: {
     url: process.env.DIRECT_URL?.trim() || env('DATABASE_URL'),

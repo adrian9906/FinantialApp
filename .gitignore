@@ -46,3 +46,5 @@ docs/roadmap-funcionalidades-plata-app.md
 docs/landing-page-contexto-plata-app.md
 promo/
 .npm-cache/
+plata-backup-2026-09-11.json
+recovery.seed.ts
