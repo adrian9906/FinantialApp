@@ -13,9 +13,8 @@ import { Bar, BarChart, CartesianGrid, Line, LineChart, XAxis, YAxis } from 'rec
 import {
   getFinancialPeriodStart,
   getFinancialPeriodEnd,
-  getMonthlyOverview,
-  isInFinancialPeriod,
   getWishlistReservedAmount,
+  isInFinancialPeriod,
   isWishlistPurchased,
   parseExpenseDescription,
   parseWantDescription,
@@ -49,6 +48,9 @@ import { getCanonicalPlanningHistory } from '@/lib/planningHistory'
 import { buildMonthlySpendingTrend } from '@/lib/monthlySpendingTrend'
 import { useFinanceStore } from '@/store/financeStore'
 import { usePreferencesStore } from '@/store/preferencesStore'
+import { useActiveIncomeAccount } from '@/lib/useActiveIncomeAccount'
+import { getAccountAllocationFormula } from '@/lib/account-savings'
+import { useMonthlyOverview } from '@/lib/useMonthlyOverview'
 
 type ReportMetric = {
   label: string
@@ -102,9 +104,11 @@ function addUtcDays(value: string, days: number) {
   return new Date(dateKeyToUtc(value) + days * DAY_IN_MS).toISOString().slice(0, 10)
 }
 
-function sumCompletedCycle(cycle: MonthlyPlanningHistory, type: 'expenses' | 'wants') {
+function sumCompletedCycle(cycle: MonthlyPlanningHistory, type: 'expenses' | 'wants', incomeSourceId: string) {
   return cycle[type].reduce(
-    (sum, entry) => entry.status === 'checked' ? sum + Math.max(0, entry.amount) : sum,
+    (sum, entry) => entry.status === 'checked' && entry.incomeSourceId === incomeSourceId
+      ? sum + Math.max(0, entry.amount)
+      : sum,
     0,
   )
 }
@@ -204,13 +208,14 @@ function buildYearlyTrend(
   currentSavingsUsed: number,
   currentPeriodStart: string,
   wishlistEntries: SpendingTrendEntry[],
+  incomeSourceId: string,
 ) {
   const years = new Map<string, SpendingTrendPoint>()
   closedCycles.forEach((cycle) => {
     const year = cycle.month.slice(0, 4)
     const point = years.get(year) ?? emptyTrendPoint(year, `Año ${year}`)
-    point.gastos += sumCompletedCycle(cycle, 'expenses')
-    point.gustos += sumCompletedCycle(cycle, 'wants')
+    point.gastos += sumCompletedCycle(cycle, 'expenses', incomeSourceId)
+    point.gustos += sumCompletedCycle(cycle, 'wants', incomeSourceId)
     years.set(year, point)
   })
 
@@ -259,6 +264,24 @@ export default function Reports() {
   const events = useFinanceStore((state) => state.events)
   const monthlyPlanningHistory = useFinanceStore((state) => state.monthlyPlanningHistory)
   const formula = usePreferencesStore((state) => state.formula)
+  const accountSavingsFormulas = usePreferencesStore((state) => state.accountSavingsFormulas)
+  const { activeAccount, activeIncomeSourceId } = useActiveIncomeAccount()
+  const accountOverview = useMonthlyOverview()
+  const accountFormula = useMemo(
+    () => getAccountAllocationFormula(accountSavingsFormulas, activeIncomeSourceId, formula),
+    [accountSavingsFormulas, activeIncomeSourceId, formula],
+  )
+  const accountSalaries = useMemo(
+    () => salaries.filter((salary) => salary.sourceId === activeIncomeSourceId),
+    [activeIncomeSourceId, salaries],
+  )
+  const accountTransactions = useMemo(
+    () => transactions.filter((transaction) => transaction.incomeSourceId === activeIncomeSourceId),
+    [activeIncomeSourceId, transactions],
+  )
+  const accountDebts = useMemo(() => debts.filter((item) => item.incomeSourceId === activeIncomeSourceId), [activeIncomeSourceId, debts])
+  const accountWishlist = useMemo(() => wishlist.filter((item) => item.incomeSourceId === activeIncomeSourceId), [activeIncomeSourceId, wishlist])
+  const accountEvents = useMemo(() => events.filter((item) => item.incomeSourceId === activeIncomeSourceId), [activeIncomeSourceId, events])
   const [isExporting, setIsExporting] = useState(false)
   const [spendingTrendGranularity, setSpendingTrendGranularity] = useState<SpendingTrendGranularity>('monthly')
   const [comparePreviousTrend, setComparePreviousTrend] = useState(true)
@@ -283,11 +306,12 @@ export default function Reports() {
     const currentPeriodEnd = now.toISOString().slice(0, 10)
     const previousMonthKey = getPreviousMonthKey(currentMonthKey)
     const monthlySummaries = buildMonthlySummaries({
-      salaries,
-      transactions,
-      debts,
+      salaries: accountSalaries,
+      transactions: accountTransactions,
+      debts: accountDebts,
       monthlyPlanningHistory,
-      formula,
+      formula: accountFormula,
+      incomeSourceId: activeIncomeSourceId,
     })
     const calendarCurrentSummary = monthlySummaries.find((entry) => entry.month === currentMonthKey)
     const closedCycles = getCanonicalPlanningHistory(monthlyPlanningHistory)
@@ -300,18 +324,12 @@ export default function Reports() {
     const strictSameDayBoundary = Boolean(latestReset)
     const excludedTransactionIds = latestReset?.savingTransactionIds ?? []
     const excludedTransactionIdSet = new Set(excludedTransactionIds)
-    const currentCycleTransactions = transactions.filter((transaction) => (
+    const currentCycleTransactions = accountTransactions.filter((transaction) => (
       !excludedTransactionIdSet.has(transaction.id)
       && isInFinancialPeriod(transaction, currentPeriodStart, strictSameDayBoundary)
       && transaction.date.slice(0, 10) <= currentPeriodEnd
     ))
-    const currentOverview = getMonthlyOverview(salaries, transactions, debts, formula, {
-      periodStart: currentPeriodStart,
-      periodEnd: currentPeriodEnd,
-      salaryMonth: currentMonthKey,
-      strictSameDayBoundary,
-      excludedTransactionIds,
-    })
+    const currentOverview = accountOverview
     const cycleEndsAt = getFinancialPeriodEnd(currentPeriodStart)
     const startOfToday = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()))
     const daysRemainingInCycle = Math.max(0, Math.ceil((cycleEndsAt.getTime() - startOfToday.getTime()) / 86_400_000))
@@ -339,37 +357,33 @@ export default function Reports() {
       : calendarPreviousSummary
     const previousSummary = latestClosedCycle && previousSummaryBase ? {
       ...previousSummaryBase,
-      expenses: latestClosedCycle.expenses.filter((entry) => entry.status === 'checked').reduce((sum, entry) => sum + entry.amount, 0),
-      wants: latestClosedCycle.wants.filter((entry) => entry.status === 'checked').reduce((sum, entry) => sum + entry.amount, 0),
-      expenseItems: latestClosedCycle.expenses.length,
-      wantItems: latestClosedCycle.wants.length,
+      expenses: latestClosedCycle.expenses.filter((entry) => entry.status === 'checked' && entry.incomeSourceId === activeIncomeSourceId).reduce((sum, entry) => sum + entry.amount, 0),
+      wants: latestClosedCycle.wants.filter((entry) => entry.status === 'checked' && entry.incomeSourceId === activeIncomeSourceId).reduce((sum, entry) => sum + entry.amount, 0),
+      expenseItems: latestClosedCycle.expenses.filter((entry) => entry.incomeSourceId === activeIncomeSourceId).length,
+      wantItems: latestClosedCycle.wants.filter((entry) => entry.incomeSourceId === activeIncomeSourceId).length,
     } : calendarPreviousSummary
     const comparisonRows = buildMonthComparison(currentSummary, previousSummary)
 
-    const reservedForPurchasedWishlist = wishlist.reduce(
+    const reservedForPurchasedWishlist = accountWishlist.reduce(
       (sum, item) => sum + (isWishlistPurchased(item) ? getWishlistReservedAmount(item) : 0),
       0,
     )
-    const activeDebts = debts.filter((debt) => !debt.isSettled)
-    const totalDebtRemaining = activeDebts.reduce((sum, debt) => sum + debt.remainingAmount, 0)
-    const currentEvents = events.filter((event) => event.date >= currentPeriodStart.slice(0, 10) && event.date.slice(0, 10) <= currentPeriodEnd)
-    const previousCycleStart = cycleBeforeLatest?.createdAt ?? `${latestClosedCycle?.month ?? previousMonthKey}-01T00:00:00.000Z`
-    const previousEvents = latestClosedCycle
-      ? events.filter((event) => event.date >= previousCycleStart.slice(0, 10) && event.date < currentPeriodStart.slice(0, 10))
-      : events.filter((event) => event.date.slice(0, 7) === previousMonthKey)
-    const currentRankings = buildMonthlyRankings(transactions, currentMonthKey, currentPeriodStart, currentPeriodEnd)
+    const currentRankings = buildMonthlyRankings(accountTransactions, currentMonthKey, currentPeriodStart, currentPeriodEnd)
     const previousRankings = latestClosedCycle
-      ? buildMonthlyRankings(buildSnapshotTransactions(latestClosedCycle), latestClosedCycle.month)
-      : buildMonthlyRankings(transactions, previousMonthKey)
-    const unnecessaryInsights = buildUnnecessarySpendingInsights(transactions, currentMonthKey, currentPeriodStart, currentPeriodEnd)
+      ? buildMonthlyRankings(
+          buildSnapshotTransactions(latestClosedCycle).filter((entry) => entry.incomeSourceId === activeIncomeSourceId),
+          latestClosedCycle.month,
+        )
+      : buildMonthlyRankings(accountTransactions, previousMonthKey)
+    const unnecessaryInsights = buildUnnecessarySpendingInsights(accountTransactions, currentMonthKey, currentPeriodStart, currentPeriodEnd)
     const currentTimeline = buildFinancialTimeline({
       monthKey: currentMonthKey,
       periodStart: currentPeriodStart,
       periodEnd: currentPeriodEnd,
-      salaries,
-      transactions,
-      debts,
-      events,
+      salaries: accountSalaries,
+      transactions: accountTransactions,
+      debts: accountDebts,
+      events: accountEvents,
     })
 
     const metrics: ReportMetric[] = [
@@ -457,21 +471,6 @@ export default function Reports() {
       })
     }
 
-    if (activeDebts.length > 0) {
-      findings.push({
-        title: 'Las deudas siguen presionando la liquidez',
-        body: `Quedan ${formatCurrency(totalDebtRemaining)} pendientes repartidos en ${activeDebts.length} deuda(s) activas.`,
-        tone: 'warn',
-      })
-    }
-
-    if (currentEvents.length > previousEvents.length) {
-      findings.push({
-        title: 'Este ciclo tiene más movimiento en agenda',
-        body: `Hay ${currentEvents.length} evento(s) registrados frente a ${previousEvents.length} del ciclo anterior.`,
-        tone: 'neutral',
-      })
-    }
 
     if ((currentSummary?.daysRemainingInCycle ?? 0) > 0) {
       findings.push({
@@ -490,16 +489,16 @@ export default function Reports() {
     }
 
     const currentStartKey = currentPeriodStart.slice(0, 10)
-    const wishlistSpendingEntries = buildWishlistSpendingEntries(wishlist)
+    const wishlistSpendingEntries = buildWishlistSpendingEntries(accountWishlist)
     const currentSpendingEntries = [
       ...buildCurrentSpendingEntries(currentCycleTransactions),
       ...wishlistSpendingEntries.filter((entry) => entry.date >= currentStartKey && entry.date <= currentPeriodEnd),
     ]
     const previousCycleEntries: SpendingTrendEntry[] = latestClosedCycle ? [
-      ...latestClosedCycle.expenses.flatMap((entry) => entry.status === 'checked'
+      ...latestClosedCycle.expenses.flatMap((entry) => entry.status === 'checked' && entry.incomeSourceId === activeIncomeSourceId
         ? [{ date: entry.date.slice(0, 10), type: 'gastos' as const, amount: Math.max(0, entry.amount) }]
         : []),
-      ...latestClosedCycle.wants.flatMap((entry) => entry.status === 'checked'
+      ...latestClosedCycle.wants.flatMap((entry) => entry.status === 'checked' && entry.incomeSourceId === activeIncomeSourceId
         ? [{ date: entry.date.slice(0, 10), type: 'gustos' as const, amount: Math.max(0, entry.amount) }]
         : []),
     ] : []
@@ -521,8 +520,9 @@ export default function Reports() {
     )
     const monthlySpendingTrend = buildMonthlySpendingTrend({
       history: monthlyPlanningHistory,
-      transactions,
-      wishlist,
+      transactions: accountTransactions,
+      wishlist: [],
+      incomeSourceId: activeIncomeSourceId,
       currentPeriodStart,
       currentPeriodEnd,
       strictSameDayBoundary,
@@ -549,6 +549,7 @@ export default function Reports() {
               currentSavingsUsed,
               currentPeriodStart,
               wishlistSpendingEntries,
+              activeIncomeSourceId,
             ))
           : compareWithPreviousPeriod(monthlySpendingTrend.series)
 
@@ -578,7 +579,7 @@ export default function Reports() {
       spendingTrendSignals,
       hasPreviousTrend: Boolean(latestClosedCycle),
     }
-  }, [debts, events, formula, monthlyPlanningHistory, salaries, spendingTrendGranularity, transactions, wishlist])
+  }, [accountDebts, accountEvents, accountFormula, accountOverview, accountSalaries, accountTransactions, accountWishlist, activeIncomeSourceId, monthlyPlanningHistory, spendingTrendGranularity])
 
   const comparisonConfig = {
     actual: { label: 'Ciclo actual', color: 'var(--color-primary)' },
@@ -608,13 +609,14 @@ export default function Reports() {
     setIsExporting(true)
     try {
       await exportMonthlyReport({
-        salaries,
-        transactions,
-        debts,
-        wishlist,
-        events,
+        salaries: accountSalaries,
+        transactions: accountTransactions,
+        debts: accountDebts,
+        wishlist: accountWishlist,
+        events: accountEvents,
         monthlyPlanningHistory,
-        formula,
+        formula: accountFormula,
+        incomeSourceId: activeIncomeSourceId,
       })
     } finally {
       setIsExporting(false)
@@ -636,7 +638,7 @@ export default function Reports() {
                 Reportes
               </h1>
               <p className="mt-2 max-w-3xl text-sm leading-6 text-muted-gray">
-                Datos desde el último reset por cobro hasta hoy, con comparación contra el ciclo anterior.
+                Datos de {activeAccount?.source.name ?? 'la cuenta seleccionada'} desde el último reset, sin mezclar otras cuentas ni monedas.
               </p>
             </div>
           </div>
@@ -792,9 +794,10 @@ export default function Reports() {
       </section>
 
       <SpendingHistory
-        transactions={transactions}
+        transactions={accountTransactions}
         monthlyPlanningHistory={monthlyPlanningHistory}
-        wishlist={wishlist}
+        wishlist={[]}
+        incomeSourceId={activeIncomeSourceId}
         periodStart={report.currentPeriodStart}
       />
 

@@ -212,12 +212,12 @@ function buildTransactionRows(transactions: Transaction[], kind: 'expense' | 'wa
   })
 }
 
-function buildSnapshotRows(history: MonthlyPlanningHistory[], kind: 'expense' | 'want'): HistoryRow[] {
+function buildSnapshotRows(history: MonthlyPlanningHistory[], kind: 'expense' | 'want', incomeSourceId?: string): HistoryRow[] {
   return history.flatMap((snapshot) => {
     const entries = kind === 'expense' ? snapshot.expenses : snapshot.wants
 
     return entries.flatMap((entry, index) => {
-      if (entry.status !== 'checked') return []
+      if (entry.status !== 'checked' || (incomeSourceId && entry.incomeSourceId !== incomeSourceId)) return []
 
       return [{
         id: `${snapshot.id}-${kind}-${index}`,
@@ -249,9 +249,10 @@ interface SpendingHistoryProps {
   monthlyPlanningHistory: MonthlyPlanningHistory[]
   wishlist: WishlistItem[]
   periodStart: string
+  incomeSourceId?: string
 }
 
-export function SpendingHistory({ transactions, monthlyPlanningHistory, wishlist, periodStart }: SpendingHistoryProps) {
+export function SpendingHistory({ transactions, monthlyPlanningHistory, wishlist, periodStart, incomeSourceId }: SpendingHistoryProps) {
   const [kind, setKind] = useState<HistoryKind>('expense')
   const [dateFilter, setDateFilter] = useState<DateFilterPreset>('cycle')
   const [searchText, setSearchText] = useState('')
@@ -273,14 +274,14 @@ export function SpendingHistory({ transactions, monthlyPlanningHistory, wishlist
   const histories = useMemo(() => ({
     expense: [
       ...buildTransactionRows(transactions, 'expense'),
-      ...buildSnapshotRows(monthlyPlanningHistory, 'expense'),
+      ...buildSnapshotRows(monthlyPlanningHistory, 'expense', incomeSourceId),
     ],
     want: [
       ...buildTransactionRows(transactions, 'want'),
-      ...buildSnapshotRows(monthlyPlanningHistory, 'want'),
+      ...buildSnapshotRows(monthlyPlanningHistory, 'want', incomeSourceId),
     ],
     saving: buildSavingRows(transactions, wishlist),
-  }), [monthlyPlanningHistory, transactions, wishlist])
+  }), [incomeSourceId, monthlyPlanningHistory, transactions, wishlist])
 
   const rows = useMemo(
     () => [...histories[kind]].sort((left, right) => right.date.localeCompare(left.date)),

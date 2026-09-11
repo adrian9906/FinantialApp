@@ -126,6 +126,7 @@ export function SpendingTrendCard({
   currentPeriodStart,
   strictSameDayBoundary,
   excludedTransactionIds = EMPTY_TRANSACTION_IDS,
+  incomeSourceId,
 }: {
   history: MonthlyPlanningHistory[]
   transactions: Transaction[]
@@ -133,6 +134,7 @@ export function SpendingTrendCard({
   currentPeriodStart: string
   strictSameDayBoundary: boolean
   excludedTransactionIds?: string[]
+  incomeSourceId?: string
 }) {
   const { currency } = useCurrencyInput()
   const [granularity, setGranularity] = useState<Granularity>('weekly')
@@ -169,10 +171,10 @@ export function SpendingTrendCard({
 
     const previousEntries: SpendingEntry[] = previousCycle ? [
       ...previousCycle.expenses
-        .filter((entry) => entry.status === 'checked')
+        .filter((entry) => entry.status === 'checked' && (!incomeSourceId || entry.incomeSourceId === incomeSourceId))
         .map((entry) => ({ date: entry.date, category: 'gastos' as const, amount: Math.max(0, entry.amount) })),
       ...previousCycle.wants
-        .filter((entry) => entry.status === 'checked')
+        .filter((entry) => entry.status === 'checked' && (!incomeSourceId || entry.incomeSourceId === incomeSourceId))
         .map((entry) => ({ date: entry.date, category: 'gustos' as const, amount: Math.max(0, entry.amount) })),
     ] : []
 
@@ -196,6 +198,7 @@ export function SpendingTrendCard({
       currentPeriodEnd: currentEnd,
       strictSameDayBoundary,
       excludedTransactionIds,
+      incomeSourceId,
     })
 
     return {
@@ -209,7 +212,7 @@ export function SpendingTrendCard({
       currentEntries,
       previousEntries,
     }
-  }, [currentPeriodStart, excludedTransactionIds, history, strictSameDayBoundary, transactions, wishlist])
+  }, [currentPeriodStart, excludedTransactionIds, history, incomeSourceId, strictSameDayBoundary, transactions, wishlist])
 
   const alignedSeries = useMemo(() => granularity === 'monthly' ? [] : buildAlignedSeries({
     currentEntries: analysis.currentEntries,

@@ -94,13 +94,17 @@ function getStoreLabel(store?: string) {
 }
 
 export default function Wishlist() {
-  const wishlist = useFinanceStore((state) => state.wishlist)
+  const allWishlist = useFinanceStore((state) => state.wishlist)
   const transactions = useFinanceStore((state) => state.transactions)
   const salaries = useFinanceStore((state) => state.salaries)
   const addWishlistItem = useFinanceStore((state) => state.addWishlistItem)
   const updateWishlistItem = useFinanceStore((state) => state.updateWishlistItem)
   const removeWishlistItem = useFinanceStore((state) => state.removeWishlistItem)
   const overview = useMonthlyOverview()
+  const wishlist = useMemo(
+    () => allWishlist.filter((item) => item.incomeSourceId === overview.activeIncomeSourceId),
+    [allWishlist, overview.activeIncomeSourceId],
+  )
   const moneyInput = useCurrencyInput()
   const [open, setOpen] = useState(false)
   const [editId, setEditId] = useState<string | null>(null)
@@ -133,21 +137,22 @@ export default function Wishlist() {
 
   const averageMonthlySavings = useMemo(() => {
     const totalSaved = transactions
-      .filter((transaction) => transaction.type === 'saving')
+      .filter((transaction) => transaction.type === 'saving' && transaction.incomeSourceId === overview.activeIncomeSourceId)
       .reduce((sum, transaction) => sum + transaction.amount, 0)
 
-    const trackedMonths = salaries.length > 0
-      ? new Set(salaries.map((salary) => salary.month)).size
+    const accountSalaries = salaries.filter((salary) => salary.sourceId === overview.activeIncomeSourceId)
+    const trackedMonths = accountSalaries.length > 0
+      ? new Set(accountSalaries.map((salary) => salary.month)).size
       : new Set(
         transactions
-          .filter((transaction) => transaction.type === 'saving')
+          .filter((transaction) => transaction.type === 'saving' && transaction.incomeSourceId === overview.activeIncomeSourceId)
           .map((transaction) => transaction.date.slice(0, 7)),
       ).size
 
     if (trackedMonths === 0) return 0
 
     return totalSaved / trackedMonths
-  }, [salaries, transactions])
+  }, [overview.activeIncomeSourceId, salaries, transactions])
 
   const currentFreeSavedAmount = Math.max(0, overview.freeSavings)
   const purchasedCount = wishlist.filter((item) => isWishlistPurchased(item)).length
@@ -289,6 +294,8 @@ export default function Wishlist() {
       sourceStore: form.sourceStore,
       sourceUrl: form.sourceUrl,
       sourceCurrency: form.sourceCurrency,
+      incomeSourceId: overview.activeIncomeSourceId,
+      incomeSourceName: overview.activeAccount?.source.name,
     }
 
     setIsSaving(true)

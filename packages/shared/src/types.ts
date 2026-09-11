@@ -65,6 +65,8 @@ export interface DebtPayment {
 
 export interface Debt {
   id: string
+  incomeSourceId?: string
+  incomeSourceName?: string
   direction?: 'payable' | 'receivable'
   counterparty?: string
   amount: number
@@ -81,6 +83,8 @@ export interface Debt {
 
 export interface WishlistItem {
   id: string
+  incomeSourceId?: string
+  incomeSourceName?: string
   name: string
   price: number
   priority: 'low' | 'medium' | 'high'
@@ -116,6 +120,8 @@ export interface MonthlyPlanningItem {
   status: 'pending' | 'checked'
   date: string
   unnecessary?: boolean
+  incomeSourceId?: string
+  incomeSourceName?: string
 }
 
 export interface MonthlyPlanningHistory {
@@ -130,6 +136,8 @@ export interface MonthlyPlanningHistory {
 
 export interface AppEvent {
   id: string
+  incomeSourceId?: string
+  incomeSourceName?: string
   name: string
   date: string
   amount: number
@@ -138,11 +146,15 @@ export interface AppEvent {
 
 export interface Projection {
   id: string
+  incomeSourceId?: string
+  incomeSourceName?: string
   targetSalary: number
 }
 
 export interface SavingsGoal {
   id: string
+  incomeSourceId?: string
+  incomeSourceName?: string
   name: string
   category: 'emergency' | 'travel' | 'rent' | 'phone' | 'custom'
   targetAmount: number
@@ -167,6 +179,8 @@ export interface AuthUser {
 /** A recurring monthly commitment. It is planned spending, not a posted expense. */
 export interface Subscription {
   id: string
+  incomeSourceId?: string
+  incomeSourceName?: string
   name: string
   amount: number
   billingDay: number

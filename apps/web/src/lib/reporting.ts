@@ -74,6 +74,8 @@ export function buildSnapshotTransactions(snapshot?: MonthlyPlanningHistory): Tr
       date: entry.date,
       createdAt: snapshot.createdAt,
       description: buildExpenseDescription(entry.category as Parameters<typeof buildExpenseDescription>[0], entry.itemName, entry.status, entry.unnecessary),
+      incomeSourceId: entry.incomeSourceId,
+      incomeSourceName: entry.incomeSourceName,
     })),
     ...snapshot.wants.map((entry, index): Transaction => ({
       id: `${snapshot.id}:want:${index}`,
@@ -82,6 +84,8 @@ export function buildSnapshotTransactions(snapshot?: MonthlyPlanningHistory): Tr
       date: entry.date,
       createdAt: snapshot.createdAt,
       description: `${entry.category}::${entry.status}::${entry.itemName}`,
+      incomeSourceId: entry.incomeSourceId,
+      incomeSourceName: entry.incomeSourceName,
     })),
   ]
 }
@@ -230,21 +234,29 @@ export function buildMonthlySummaries(params: {
   debts: Debt[]
   monthlyPlanningHistory: MonthlyPlanningHistory[]
   formula: AllocationFormula
+  incomeSourceId?: string
 }) {
-  const { salaries, transactions, debts, monthlyPlanningHistory, formula } = params
+  const { salaries, transactions, debts, monthlyPlanningHistory, formula, incomeSourceId } = params
+  const accountHistory = incomeSourceId
+    ? monthlyPlanningHistory.map((entry) => ({
+        ...entry,
+        expenses: entry.expenses.filter((item) => item.incomeSourceId === incomeSourceId),
+        wants: entry.wants.filter((item) => item.incomeSourceId === incomeSourceId),
+      })).filter((entry) => entry.expenses.length > 0 || entry.wants.length > 0)
+    : monthlyPlanningHistory
   const monthKeys = new Set<string>([getMonthKey()])
   const salaryMap = getMonthSalaryMap(salaries)
 
   salaries.forEach((salary) => monthKeys.add(salary.month))
   transactions.forEach((transaction) => monthKeys.add(transaction.date.slice(0, 7)))
-  monthlyPlanningHistory.forEach((entry) => monthKeys.add(entry.month))
+  accountHistory.forEach((entry) => monthKeys.add(entry.month))
   debts.forEach((debt) => {
     monthKeys.add(debt.startDate.slice(0, 7))
     monthKeys.add(debt.endDate.slice(0, 7))
     ;(debt.payments ?? []).forEach((payment) => monthKeys.add(payment.date.slice(0, 7)))
   })
 
-  const historyByMonth = new Map(monthlyPlanningHistory.map((entry) => [entry.month, entry]))
+  const historyByMonth = new Map(accountHistory.map((entry) => [entry.month, entry]))
   const sortedMonths = [...monthKeys].sort((left, right) => left.localeCompare(right))
 
   return sortedMonths.map<ReportMonthSummary>((monthKey) => {

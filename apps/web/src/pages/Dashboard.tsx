@@ -9,7 +9,7 @@ import { useNavigate } from 'react-router-dom'
 import { AlertTriangle, ArrowRight, Bell, Building2, Calendar, CheckCircle2, ChevronRight, Coffee, FileDown, Landmark, PiggyBank, Plus, ShieldAlert, Sparkles, TrendingDown, TrendingUp, Wallet } from 'lucide-react'
 import { buildFinancialScore, buildSmartAlerts } from '@/lib/financialInsights'
 import { useMonthlyOverview } from '@/lib/useMonthlyOverview'
-import { formatFormulaLabel, usePreferencesStore } from '@/store/preferencesStore'
+import { formatFormulaLabel } from '@/store/preferencesStore'
 import { Bar, BarChart, CartesianGrid, LabelList, Line, LineChart, Pie, PieChart, XAxis, YAxis } from 'recharts'
 import { buildReceivableReminder, getFinancialPeriodEnd, getFinancialPeriodStart, getPlannedExpenseTotal, getPlannedWantTotal, isInFinancialPeriod, isReceivable } from '@plata/shared'
 import { QuickExpenseEntry } from '@/components/dashboard/QuickExpenseEntry'
@@ -66,22 +66,39 @@ export default function Dashboard() {
   const debts = useFinanceStore((state) => state.debts)
   const wishlist = useFinanceStore((state) => state.wishlist)
   const monthlyPlanningHistory = useFinanceStore((state) => state.monthlyPlanningHistory)
-  const formula = usePreferencesStore((state) => state.formula)
+  const formula = overview.accountFormula
+  const activeIncomeSourceId = overview.activeIncomeSourceId
+  const accountTransactions = useMemo(
+    () => transactions.filter((transaction) => transaction.incomeSourceId === activeIncomeSourceId),
+    [activeIncomeSourceId, transactions],
+  )
+  const accountSalaries = useMemo(
+    () => salaries.filter((salary) => salary.sourceId === activeIncomeSourceId),
+    [activeIncomeSourceId, salaries],
+  )
 
 
   const [isDownloadingPdf, setIsDownloadingPdf] = useState(false)
 
-  const payableDebts = useMemo(() => debts.filter((debt) => !isReceivable(debt)), [debts])
+  const accountDebts = useMemo(
+    () => debts.filter((debt) => debt.incomeSourceId === activeIncomeSourceId),
+    [activeIncomeSourceId, debts],
+  )
+  const accountWishlist = useMemo(
+    () => wishlist.filter((item) => item.incomeSourceId === activeIncomeSourceId),
+    [activeIncomeSourceId, wishlist],
+  )
   const receivableReminders = useMemo(
-    () => debts.flatMap((debt) => isReceivable(debt) && !debt.isSettled ? [buildReceivableReminder(debt, formatMoney)] : []),
-    [debts],
+    () => accountDebts.flatMap((debt) => isReceivable(debt) && !debt.isSettled ? [buildReceivableReminder(debt, formatMoney)] : []),
+    [accountDebts],
   )
   const effectiveReminders = useMemo(() => [...reminders, ...receivableReminders], [receivableReminders, reminders])
   const pendingReminders = effectiveReminders.filter((r) => !r.completed)
-  const upcomingEvents = events
+  const accountEvents = events.filter((event) => event.incomeSourceId === activeIncomeSourceId)
+  const upcomingEvents = accountEvents
     .filter((event) => new Date(event.date).getTime() >= new Date().setHours(0, 0, 0, 0))
     .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
-  const activeDebts = payableDebts.filter((debt) => !debt.isSettled)
+  const activeDebts = accountDebts.filter((debt) => debt.direction !== 'receivable' && !debt.isSettled)
   const totalDebt = activeDebts.reduce((sum, debt) => sum + debt.remainingAmount, 0)
   const allocationData = [
     { bucket: 'Ingresos', amount: overview.totalSalary, value: convertFromUsd(overview.totalSalary) },
@@ -109,37 +126,38 @@ export default function Dashboard() {
     ahorros: { label: 'Ahorros', color: 'var(--color-tertiary-container)' },
   } satisfies ChartConfig
   const smartAlerts = useMemo(
-    () => buildSmartAlerts({ overview, debts: payableDebts, reminders: effectiveReminders, wishlist }),
-    [effectiveReminders, overview, payableDebts, wishlist],
+    () => buildSmartAlerts({ overview, debts: accountDebts, reminders: [], wishlist: accountWishlist }),
+    [accountDebts, accountWishlist, overview],
   )
   const currentMonthKey = new Date().toISOString().slice(0, 7)
   const currentPeriodStart = overview.periodStart
   const currentPeriodEnd = new Date().toISOString().slice(0, 10)
   const unnecessaryInsights = useMemo(
-    () => buildUnnecessarySpendingInsights(transactions, currentMonthKey, currentPeriodStart, currentPeriodEnd),
-    [currentMonthKey, currentPeriodEnd, currentPeriodStart, transactions],
+    () => buildUnnecessarySpendingInsights(accountTransactions, currentMonthKey, currentPeriodStart, currentPeriodEnd),
+    [accountTransactions, currentMonthKey, currentPeriodEnd, currentPeriodStart],
   )
   const financialScore = useMemo(
     () => buildFinancialScore({
       overview,
-      debts: payableDebts,
-      reminders: effectiveReminders,
+      debts: [],
+      reminders: [],
       unnecessarySpending: unnecessaryInsights,
     }),
-    [effectiveReminders, overview, payableDebts, unnecessaryInsights],
+    [overview, unnecessaryInsights],
   )
   const financialScoreHistory = useMemo(
     () => buildFinancialScoreHistory({
       history: monthlyPlanningHistory,
-      salaries,
-      transactions,
-      debts: payableDebts,
-      reminders: effectiveReminders,
+      salaries: accountSalaries,
+      transactions: accountTransactions,
+      debts: [],
+      reminders: [],
       formula,
       currentScore: financialScore,
       currentPeriodEnd,
+      incomeSourceId: activeIncomeSourceId,
     }),
-    [currentPeriodEnd, effectiveReminders, financialScore, formula, monthlyPlanningHistory, payableDebts, salaries, transactions],
+    [accountSalaries, accountTransactions, activeIncomeSourceId, currentPeriodEnd, financialScore, formula, monthlyPlanningHistory],
   )
   const unnecessaryAlerts = useMemo(
     () => buildUnnecessarySpendingAlerts(unnecessaryInsights).map((alert) => ({
@@ -158,7 +176,7 @@ export default function Dashboard() {
   )
   const forecast = useMemo(() => {
     const nextReset = getFinancialPeriodEnd(currentPeriodStart).toISOString().slice(0, 10)
-    const periodTransactions = transactions.filter((transaction) => (
+    const periodTransactions = accountTransactions.filter((transaction) => (
       isInFinancialPeriod(transaction, currentPeriodStart, overview.strictSameDayBoundary)
       && transaction.date.slice(0, 10) < nextReset
     ))
@@ -176,7 +194,7 @@ export default function Dashboard() {
       budgetSavings: overview.budgetSavings,
       periodStart: currentPeriodStart,
     })
-  }, [currentPeriodStart, overview, transactions])
+  }, [accountTransactions, currentPeriodStart, overview])
 
   async function handleDownloadCurrentReport() {
     if (isDownloadingPdf) return
@@ -184,13 +202,17 @@ export default function Dashboard() {
     try {
       await downloadMonthlyPdfReport({
         overview,
-        transactions,
-        wishlist,
-        debts: payableDebts,
-        reminders: effectiveReminders,
-        salaries,
-        events,
-        monthlyPlanningHistory,
+        transactions: accountTransactions,
+        wishlist: accountWishlist,
+        debts: accountDebts,
+        reminders: [],
+        salaries: accountSalaries,
+        events: accountEvents,
+        monthlyPlanningHistory: monthlyPlanningHistory.map((history) => ({
+          ...history,
+          expenses: history.expenses.filter((entry) => entry.incomeSourceId === activeIncomeSourceId),
+          wants: history.wants.filter((entry) => entry.incomeSourceId === activeIncomeSourceId),
+        })),
         periodStart: getFinancialPeriodStart(monthlyPlanningHistory),
         userName: authMode === 'guest' ? 'Invitado local' : user?.name ?? 'Usuario',
         mode: 'current',
@@ -226,7 +248,7 @@ export default function Dashboard() {
             Resumen Mensual
           </h1>
           <p className="text-sm text-muted-gray mt-1">
-            Vista consolidada de ingresos, gastos, gustos y ahorro.
+            Vista de {overview.activeAccount?.source.name ?? 'la cuenta seleccionada'}, sin mezclar monedas ni otras cuentas.
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-3">
@@ -251,11 +273,12 @@ export default function Dashboard() {
 
       <SpendingTrendCard
         history={monthlyPlanningHistory}
-        transactions={transactions}
-        wishlist={wishlist}
+        transactions={accountTransactions}
+        wishlist={accountWishlist}
         currentPeriodStart={currentPeriodStart}
         strictSameDayBoundary={overview.strictSameDayBoundary}
         excludedTransactionIds={overview.excludedTransactionIds}
+        incomeSourceId={activeIncomeSourceId}
       />
 
 

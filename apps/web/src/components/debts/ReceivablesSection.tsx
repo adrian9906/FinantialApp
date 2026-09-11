@@ -12,6 +12,7 @@ import { Label } from '@/components/ui/label'
 import { formatMoney, useCurrencyInput } from '@/lib/currency'
 import { getTodayDateKey } from '@/lib/date'
 import { useReceivablesStore } from '@/store/receivablesStore'
+import { useActiveIncomeAccount } from '@/lib/useActiveIncomeAccount'
 
 interface ReceivableFormState {
   counterparty: string
@@ -43,7 +44,9 @@ function getDueStatus(debt: Debt) {
 
 export function ReceivablesSection() {
   const hydrate = useReceivablesStore((state) => state.hydrate)
-  const receivables = useReceivablesStore((state) => state.receivables)
+  const allReceivables = useReceivablesStore((state) => state.receivables)
+  const { activeAccount, activeIncomeSourceId } = useActiveIncomeAccount()
+  const receivables = allReceivables.filter((debt) => debt.incomeSourceId === activeIncomeSourceId)
   const addReceivable = useReceivablesStore((state) => state.addReceivable)
   const updateReceivable = useReceivablesStore((state) => state.updateReceivable)
   const markCollected = useReceivablesStore((state) => state.markCollected)
@@ -98,6 +101,8 @@ export function ReceivablesSection() {
     }
 
     const payload = {
+      incomeSourceId: activeIncomeSourceId,
+      incomeSourceName: activeAccount?.source.name,
       counterparty: form.counterparty.trim(),
       history: form.history.trim(),
       amount,

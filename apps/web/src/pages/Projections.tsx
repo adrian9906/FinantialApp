@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { useFinanceStore } from '@/store/financeStore'
 import { formatMoney, useCurrencyInput } from '@/lib/currency'
 import { Card } from '@/components/ui/card'
@@ -8,10 +8,14 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog'
 import { TrendingUp, PlusCircle, Pencil, Trash2, Target } from 'lucide-react'
+import { useActiveIncomeAccount } from '@/lib/useActiveIncomeAccount'
 
 export default function Projections() {
-  const projections = useFinanceStore((state) => state.projections)
-  const salaries = useFinanceStore((state) => state.salaries)
+  const allProjections = useFinanceStore((state) => state.projections)
+  const allSalaries = useFinanceStore((state) => state.salaries)
+  const { activeAccount, activeIncomeSourceId } = useActiveIncomeAccount()
+  const projections = useMemo(() => allProjections.filter((entry) => entry.incomeSourceId === activeIncomeSourceId), [activeIncomeSourceId, allProjections])
+  const salaries = useMemo(() => allSalaries.filter((entry) => entry.sourceId === activeIncomeSourceId), [activeIncomeSourceId, allSalaries])
   const addProjection = useFinanceStore((state) => state.addProjection)
   const updateProjection = useFinanceStore((state) => state.updateProjection)
   const removeProjection = useFinanceStore((state) => state.removeProjection)
@@ -43,7 +47,7 @@ export default function Projections() {
 
   async function handleSave() {
     if (!targetSalary || isSaving) return
-    const payload = { targetSalary: moneyInput.toUsd(targetSalary) }
+    const payload = { targetSalary: moneyInput.toUsd(targetSalary), incomeSourceId: activeIncomeSourceId, incomeSourceName: activeAccount?.source.name }
     setIsSaving(true)
     try {
       if (editId) {

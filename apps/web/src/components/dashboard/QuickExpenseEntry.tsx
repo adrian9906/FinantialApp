@@ -22,10 +22,11 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { useFinanceStore } from '@/store/financeStore'
-import { formatMoney, formatMoneyInput, useCurrencyInput } from '@/lib/currency'
+import { formatMoney, useCurrencyInput } from '@/lib/currency'
 import { getTodayDateKey } from '@/lib/date'
 import { useAuthStore } from '@/store/authStore'
-import { USD_CURRENCY, usePreferencesStore } from '@/store/preferencesStore'
+import { usePreferencesStore } from '@/store/preferencesStore'
+import { useActiveIncomeAccount } from '@/lib/useActiveIncomeAccount'
 
 const targets: Array<{ value: string; label: string; target: CategorizationTarget }> = [
   { value: 'expense:food', label: 'Alimentación · Gasto', target: { transactionType: 'expense', category: 'food' } },
@@ -80,18 +81,19 @@ export function QuickExpenseEntry() {
   const userRules = usePreferencesStore(useShallow((state) => state.categoryRulesByProfile[profileId] ?? []))
   const saveCategoryRule = usePreferencesStore((state) => state.saveCategoryRule)
   const moneyInput = useCurrencyInput()
+  const { activeAccount, activeIncomeSourceId } = useActiveIncomeAccount()
   const recentTransactions = useMemo(
     () => transactions
-      .filter((transaction) => transaction.type === 'expense' || transaction.type === 'want')
+      .filter((transaction) => transaction.incomeSourceId === activeIncomeSourceId
+        && (transaction.type === 'expense' || transaction.type === 'want'))
       .slice(0, 40),
-    [transactions],
+    [activeIncomeSourceId, transactions],
   )
   const [entry, setEntry] = useState('')
   const [selectedTargetKey, setSelectedTargetKey] = useState('expense:essentials')
   const [targetWasChanged, setTargetWasChanged] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
   const parsed = useMemo(() => parseQuickEntry(entry), [entry])
-  const parsedAmountInUsd = moneyInput.toUsd(parsed.amount)
   const suggestion = useMemo(
     () => suggestCategory(parsed.itemName, recentTransactions, userRules),
     [parsed.itemName, recentTransactions, userRules],
@@ -106,6 +108,10 @@ export function QuickExpenseEntry() {
       toast.error('Escribe un concepto y un monto. Ejemplo: Supermercado 42.50')
       return
     }
+    if (!activeAccount) {
+      toast.error('Selecciona una cuenta de ingreso antes de registrar el movimiento.')
+      return
+    }
 
     setIsSaving(true)
     try {
@@ -117,6 +123,9 @@ export function QuickExpenseEntry() {
           ? buildWantDescription(activeTarget.category as WantCategory, parsed.itemName, 'checked')
           : buildExpenseDescription(activeTarget.category as ExpenseCategory, parsed.itemName, 'checked'),
         date: getTodayDateKey(),
+        incomeSourceId: activeAccount.source.id,
+        incomeSourceName: activeAccount.source.name,
+        isCash: activeAccount.source.isCash !== false,
       })
       if (targetWasChanged && activeTargetKey !== targetKey(suggestion.target)) {
         const learnedRule = createLearnedCategorizationRule(parsed.itemName, activeTarget)
@@ -124,7 +133,7 @@ export function QuickExpenseEntry() {
       }
       const savedAmountLabel = moneyInput.currency.code === 'USD'
         ? formatMoney(amountInUsd)
-        : `${moneyInput.formatInput(parsed.amount)} (${formatMoneyInput(amountInUsd, USD_CURRENCY)})`
+        : moneyInput.formatInput(parsed.amount)
       toast.success(`${parsed.itemName} registrado por ${savedAmountLabel}.`)
       setEntry('')
       setSelectedTargetKey('expense:essentials')
@@ -199,7 +208,6 @@ export function QuickExpenseEntry() {
           {parsed.amount > 0 ? (
             <Badge variant="secondary" className="bg-primary/10 text-primary">
               {moneyInput.formatInput(parsed.amount)}
-              {moneyInput.currency.code !== 'USD' ? ` ≈ ${formatMoneyInput(parsedAmountInUsd, USD_CURRENCY)}` : ''}
               {' · '}{activeCategoryLabel}
             </Badge>
           ) : null}

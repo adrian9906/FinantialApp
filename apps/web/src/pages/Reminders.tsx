@@ -11,6 +11,7 @@ import { DatePickerField } from '@/components/ui/date-picker-field'
 import { Plus, Trash2, Bell, BellOff, Calendar, Pencil } from 'lucide-react'
 import { getTodayDateKey } from '@/lib/date'
 import { formatMoney } from '@/lib/currency'
+import { useActiveIncomeAccount } from '@/lib/useActiveIncomeAccount'
 
 interface FormState { title: string; description: string; date: string }
 
@@ -24,7 +25,9 @@ function getStartOfTodayMs() {
 
 export default function Reminders() {
   const reminders = useFinanceStore((state) => state.reminders)
-  const debts = useFinanceStore((state) => state.debts)
+  const allDebts = useFinanceStore((state) => state.debts)
+  const { activeIncomeSourceId } = useActiveIncomeAccount()
+  const debts = useMemo(() => allDebts.filter((debt) => debt.incomeSourceId === activeIncomeSourceId), [activeIncomeSourceId, allDebts])
   const addReminder = useFinanceStore((state) => state.addReminder)
   const updateReminder = useFinanceStore((state) => state.updateReminder)
   const toggleReminder = useFinanceStore((state) => state.toggleReminder)

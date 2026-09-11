@@ -56,6 +56,7 @@ export function buildFinancialScoreHistory({
   formula,
   currentScore,
   currentPeriodEnd,
+  incomeSourceId,
 }: {
   history: MonthlyPlanningHistory[]
   salaries: Salary[]
@@ -65,6 +66,7 @@ export function buildFinancialScoreHistory({
   formula: AllocationFormula
   currentScore: FinancialScoreSummary
   currentPeriodEnd: string
+  incomeSourceId?: string
 }): FinancialScoreHistoryPoint[] {
   const sortedHistory = [...history].sort((left, right) => left.createdAt.localeCompare(right.createdAt))
   const closedCycles = sortedHistory.map((snapshot, index): FinancialScoreHistoryPoint => {
@@ -72,8 +74,8 @@ export function buildFinancialScoreHistory({
     const periodEnd = snapshot.createdAt
     const savingIds = new Set(snapshot.savingTransactionIds ?? [])
     const snapshotTransactions = [
-      ...buildSnapshotTransactions(snapshot),
-      ...transactions.filter((transaction) => savingIds.has(transaction.id)),
+      ...buildSnapshotTransactions(snapshot).filter((transaction) => !incomeSourceId || transaction.incomeSourceId === incomeSourceId),
+      ...transactions.filter((transaction) => savingIds.has(transaction.id) && (!incomeSourceId || transaction.incomeSourceId === incomeSourceId)),
     ]
     const historicalDebts = debts.flatMap((debt) => {
       const state = getDebtStateAt(debt, periodEnd)

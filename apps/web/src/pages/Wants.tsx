@@ -40,6 +40,7 @@ import { useAuthStore } from '@/store/authStore'
 import { IncomeAccountSelect } from '@/components/income/IncomeAccountSelect'
 import { getIncomeAccountOverview, getIncomeAccountsForMonth, type IncomeAccountView } from '@/lib/income-account-view'
 import { getAccountAllocationFormula } from '@/lib/account-savings'
+import { useActiveIncomeAccount } from '@/lib/useActiveIncomeAccount'
 
 interface WantFormState {
   amount: string
@@ -203,7 +204,6 @@ export default function Wants() {
   const overview = useMonthlyOverview()
   const formula = usePreferencesStore((state) => state.formula)
   const accountSavingsFormulas = usePreferencesStore((state) => state.accountSavingsFormulas)
-  const activeCurrencyCode = usePreferencesStore((state) => state.activeCurrencyCode)
   const profileId = useAuthStore((state) => state.user?.id) ?? 'guest'
   const userRules = usePreferencesStore(useShallow((state) => state.categoryRulesByProfile[profileId] ?? []))
   const saveCategoryRule = usePreferencesStore((state) => state.saveCategoryRule)
@@ -225,20 +225,13 @@ export default function Wants() {
   const [receiptReviewOpen, setReceiptReviewOpen] = useState(false)
   const [receiptScanOpen, setReceiptScanOpen] = useState(false)
   const [receiptScanId, setReceiptScanId] = useState(0)
-  const accounts = useMemo(
-    () => getIncomeAccountsForMonth(salaries, incomeSources, undefined, activeCurrencyCode),
-    [activeCurrencyCode, incomeSources, salaries],
-  )
+  const { accounts, activeIncomeSourceId: selectedIncomeSourceId, selectAccount: setSelectedIncomeSourceId } = useActiveIncomeAccount()
   // The receipt dialog chooses its own currency, so it needs every account.
   const receiptAccounts = useMemo(
     () => getIncomeAccountsForMonth(salaries, incomeSources),
     [incomeSources, salaries],
   )
-  const [selectedIncomeSourcePreference, setSelectedIncomeSourceId] = useState('')
   const [formIncomeSourcePreference, setFormIncomeSourceId] = useState('')
-  const selectedIncomeSourceId = accounts.some((account) => account.source.id === selectedIncomeSourcePreference)
-    ? selectedIncomeSourcePreference
-    : accounts[0]?.source.id ?? ''
   const formIncomeSourceId = accounts.some((account) => account.source.id === formIncomeSourcePreference)
     ? formIncomeSourcePreference
     : accounts[0]?.source.id ?? ''

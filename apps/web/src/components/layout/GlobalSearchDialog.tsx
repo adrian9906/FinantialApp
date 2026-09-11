@@ -20,6 +20,7 @@ import {
   type SearchSection,
 } from '@/lib/productivity'
 import { useFinanceStore } from '@/store/financeStore'
+import { useActiveIncomeAccount } from '@/lib/useActiveIncomeAccount'
 
 const SECTION_LABELS: Record<SearchSection, string> = {
   expense: 'Gastos',
@@ -31,9 +32,13 @@ const SECTION_LABELS: Record<SearchSection, string> = {
 
 export function GlobalSearchDialog() {
   const navigate = useNavigate()
-  const transactions = useFinanceStore((state) => state.transactions)
-  const wishlist = useFinanceStore((state) => state.wishlist)
-  const debts = useFinanceStore((state) => state.debts)
+  const allTransactions = useFinanceStore((state) => state.transactions)
+  const allWishlist = useFinanceStore((state) => state.wishlist)
+  const allDebts = useFinanceStore((state) => state.debts)
+  const { activeIncomeSourceId } = useActiveIncomeAccount()
+  const transactions = useMemo(() => allTransactions.filter((item) => item.incomeSourceId === activeIncomeSourceId), [activeIncomeSourceId, allTransactions])
+  const wishlist = useMemo(() => allWishlist.filter((item) => item.incomeSourceId === activeIncomeSourceId), [activeIncomeSourceId, allWishlist])
+  const debts = useMemo(() => allDebts.filter((item) => item.incomeSourceId === activeIncomeSourceId), [activeIncomeSourceId, allDebts])
   const reminders = useFinanceStore((state) => state.reminders)
   const [open, setOpen] = useState(false)
   const [query, setQuery] = useState('')
@@ -205,7 +210,7 @@ export function GlobalSearchDialog() {
                 </Badge>
               ) : (
                 <Badge variant="secondary" className="bg-surface-container-high text-on-surface">
-                  Vista global
+                  Cuenta activa
                 </Badge>
               )}
             </div>

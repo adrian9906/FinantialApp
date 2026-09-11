@@ -83,6 +83,25 @@ function sendError(res: ServerResponse, error: unknown) {
 }
 
 async function readJsonBody(req: IncomingMessage) {
+  const parsedBody = (req as IncomingMessage & { body?: unknown }).body
+
+  // Vercel Functions exposes an already parsed body while the standalone
+  // node:http server provides the body as a stream. Supporting both keeps the
+  // API portable without changing any route handlers.
+  if (parsedBody !== undefined && parsedBody !== null) {
+    if (Buffer.isBuffer(parsedBody)) {
+      return JSON.parse(parsedBody.toString('utf8')) as JsonRecord
+    }
+
+    if (typeof parsedBody === 'string') {
+      return JSON.parse(parsedBody) as JsonRecord
+    }
+
+    if (typeof parsedBody === 'object') {
+      return parsedBody as JsonRecord
+    }
+  }
+
   const chunks: Uint8Array[] = []
 
   for await (const chunk of req) {
@@ -369,7 +388,7 @@ function serializeWant(entry: {
   }
 }
 
-function serializeSaving(entry: { id: string; cantidad: number; descripcion: string | null; fecha: Date; createdAt: Date; lugar?: string | null; adjuntos?: string[] | null; esEfectivo?: boolean | null }): Transaction {
+function serializeSaving(entry: { id: string; cantidad: number; descripcion: string | null; fecha: Date; createdAt: Date; lugar?: string | null; adjuntos?: string[] | null; esEfectivo?: boolean | null; fuenteIngresoId?: string | null; fuenteIngresoNombre?: string | null }): Transaction {
   return {
     id: entry.id,
     amount: entry.cantidad,
@@ -378,11 +397,15 @@ function serializeSaving(entry: { id: string; cantidad: number; descripcion: str
     date: toDateString(entry.fecha),
     createdAt: entry.createdAt.toISOString(),
     ...serializeAttachmentFields(entry),
+    ...(entry.fuenteIngresoId ? { incomeSourceId: entry.fuenteIngresoId } : {}),
+    ...(entry.fuenteIngresoNombre ? { incomeSourceName: entry.fuenteIngresoNombre } : {}),
   }
 }
 
 function serializeWishlist(entry: {
   id: string
+  fuenteIngresoId?: string | null
+  fuenteIngresoNombre?: string | null
   cantidad: number
   aportado: number
   comprado: boolean
@@ -394,6 +417,8 @@ function serializeWishlist(entry: {
 
   return {
     id: entry.id,
+    ...(entry.fuenteIngresoId ? { incomeSourceId: entry.fuenteIngresoId } : {}),
+    ...(entry.fuenteIngresoNombre ? { incomeSourceName: entry.fuenteIngresoNombre } : {}),
     name: item?.nombre ?? 'Deseo',
     price: item?.precio ?? 0,
     priority: normalizePriority(item?.prioridad),
@@ -410,6 +435,8 @@ function serializeWishlist(entry: {
 
 function serializeDebt(entry: {
   id: string
+  fuenteIngresoId?: string | null
+  fuenteIngresoNombre?: string | null
   tipo: string
   contraparte: string | null
   cantidad: number
@@ -423,6 +450,8 @@ function serializeDebt(entry: {
   const remainingAmount = Math.max(0, entry.cantidad - paidAmount)
   return {
     id: entry.id,
+    ...(entry.fuenteIngresoId ? { incomeSourceId: entry.fuenteIngresoId } : {}),
+    ...(entry.fuenteIngresoNombre ? { incomeSourceName: entry.fuenteIngresoNombre } : {}),
     direction: entry.tipo === 'receivable' ? 'receivable' : 'payable',
     counterparty: entry.contraparte ?? undefined,
     amount: entry.cantidad,
@@ -459,6 +488,8 @@ function parseMonthlyPlanningItems(value: unknown): MonthlyPlanningItem[] {
       status: item.status === 'pending' ? 'pending' : 'checked',
       date: String(item.date ?? toDateString(new Date())),
       unnecessary: Boolean(item.unnecessary),
+      ...(item.incomeSourceId ? { incomeSourceId: String(item.incomeSourceId) } : {}),
+      ...(item.incomeSourceName ? { incomeSourceName: String(item.incomeSourceName) } : {}),
     }
   })
 }
@@ -491,6 +522,8 @@ function serializeMonthlyPlanningHistory(entry: {
 
 function serializeEvent(entry: {
   id: string
+  fuenteIngresoId?: string | null
+  fuenteIngresoNombre?: string | null
   nombre: string
   fecha: Date
   cantidad: number
@@ -498,6 +531,8 @@ function serializeEvent(entry: {
 }): AppEvent {
   return {
     id: entry.id,
+    ...(entry.fuenteIngresoId ? { incomeSourceId: entry.fuenteIngresoId } : {}),
+    ...(entry.fuenteIngresoNombre ? { incomeSourceName: entry.fuenteIngresoNombre } : {}),
     name: entry.nombre,
     date: toDateString(entry.fecha),
     amount: entry.cantidad,
@@ -505,9 +540,11 @@ function serializeEvent(entry: {
   }
 }
 
-function serializeProjection(entry: { id: string; salarioMeta: number }): Projection {
+function serializeProjection(entry: { id: string; salarioMeta: number; fuenteIngresoId?: string | null; fuenteIngresoNombre?: string | null }): Projection {
   return {
     id: entry.id,
+    ...(entry.fuenteIngresoId ? { incomeSourceId: entry.fuenteIngresoId } : {}),
+    ...(entry.fuenteIngresoNombre ? { incomeSourceName: entry.fuenteIngresoNombre } : {}),
     targetSalary: entry.salarioMeta,
   }
 }
@@ -522,6 +559,8 @@ function normalizeSavingsGoalCategory(value: unknown): SavingsGoal['category'] {
 
 function serializeSavingsGoal(entry: {
   id: string
+  fuenteIngresoId?: string | null
+  fuenteIngresoNombre?: string | null
   nombre: string
   categoria: string
   montoObjetivo: number
@@ -530,6 +569,8 @@ function serializeSavingsGoal(entry: {
 }): SavingsGoal {
   return {
     id: entry.id,
+    ...(entry.fuenteIngresoId ? { incomeSourceId: entry.fuenteIngresoId } : {}),
+    ...(entry.fuenteIngresoNombre ? { incomeSourceName: entry.fuenteIngresoNombre } : {}),
     name: entry.nombre,
     category: normalizeSavingsGoalCategory(entry.categoria),
     targetAmount: entry.montoObjetivo,
@@ -700,8 +741,8 @@ async function loadBootstrap(userId: string, prisma: Prisma.TransactionClient, m
   }
 }
 
-function serializeSubscription(entry: { id: string; nombre: string; cantidad: number; diaCobro: number; estado: string; fechaInicio: Date; fechaCancelacion: Date | null }): Subscription {
-  return { id: entry.id, name: entry.nombre, amount: entry.cantidad, billingDay: entry.diaCobro, status: entry.estado === 'cancelled' ? 'cancelled' : 'active', startedAt: toDateString(entry.fechaInicio), cancelledAt: entry.fechaCancelacion ? toDateString(entry.fechaCancelacion) : undefined }
+function serializeSubscription(entry: { id: string; nombre: string; cantidad: number; diaCobro: number; estado: string; fechaInicio: Date; fechaCancelacion: Date | null; fuenteIngresoId?: string | null; fuenteIngresoNombre?: string | null }): Subscription {
+  return { id: entry.id, name: entry.nombre, amount: entry.cantidad, billingDay: entry.diaCobro, status: entry.estado === 'cancelled' ? 'cancelled' : 'active', startedAt: toDateString(entry.fechaInicio), cancelledAt: entry.fechaCancelacion ? toDateString(entry.fechaCancelacion) : undefined, ...(entry.fuenteIngresoId ? { incomeSourceId: entry.fuenteIngresoId } : {}), ...(entry.fuenteIngresoNombre ? { incomeSourceName: entry.fuenteIngresoNombre } : {}) }
 }
 
 function getSubscriptionExpenseMarker(subscriptionId: string, month: string) {
@@ -742,6 +783,8 @@ async function ensureSubscriptionExpenses(userId: string, prisma: Prisma.Transac
           data: {
             cantidad: subscription.cantidad,
             fecha: date,
+            fuenteIngresoId: subscription.fuenteIngresoId,
+            fuenteIngresoNombre: subscription.fuenteIngresoNombre,
             usuarioId: userId,
             items: {
               create: {
@@ -878,6 +921,8 @@ async function writeSyncRecord(userId: string, operation: SyncOperation, tx: Pri
           lugar: sanitizePlace(entry.place) ?? null,
           adjuntos: sanitizeAttachments(entry.attachments),
           esEfectivo: entry.isCash !== false,
+          fuenteIngresoId: entry.incomeSourceId ?? null,
+          fuenteIngresoNombre: entry.incomeSourceName ?? null,
           usuarioId: userId,
         },
       })
@@ -894,6 +939,8 @@ async function writeSyncRecord(userId: string, operation: SyncOperation, tx: Pri
           fechaInicio: entry.startDate ? new Date(entry.startDate) : new Date(),
           fechaTerminacion: entry.endDate ? new Date(entry.endDate) : new Date(),
           interes: entry.interest === undefined ? null : Number(entry.interest),
+          fuenteIngresoId: entry.incomeSourceId ?? null,
+          fuenteIngresoNombre: entry.incomeSourceName ?? null,
           usuarioId: userId,
           pagos: {
             create: (entry.payments ?? []).map((payment) => ({
@@ -913,6 +960,8 @@ async function writeSyncRecord(userId: string, operation: SyncOperation, tx: Pri
           cantidad: Number(entry.savedAmount ?? 0),
           aportado: Number(entry.externalContribution ?? 0),
           comprado: Boolean(entry.isPurchased),
+          fuenteIngresoId: entry.incomeSourceId ?? null,
+          fuenteIngresoNombre: entry.incomeSourceName ?? null,
           usuarioId: userId,
           items: {
             create: {
@@ -954,6 +1003,8 @@ async function writeSyncRecord(userId: string, operation: SyncOperation, tx: Pri
           cantidad: Number(entry.amount ?? 0),
           fecha: entry.date ? new Date(entry.date) : new Date(),
           isNotificacion: Boolean(entry.isNotification),
+          fuenteIngresoId: entry.incomeSourceId ?? null,
+          fuenteIngresoNombre: entry.incomeSourceName ?? null,
           usuarioId: userId,
         },
       })
@@ -964,6 +1015,8 @@ async function writeSyncRecord(userId: string, operation: SyncOperation, tx: Pri
         data: {
           id: entry.id,
           salarioMeta: Number(entry.targetSalary ?? 0),
+          fuenteIngresoId: entry.incomeSourceId ?? null,
+          fuenteIngresoNombre: entry.incomeSourceName ?? null,
           usuarioId: userId,
         },
       })
@@ -978,6 +1031,8 @@ async function writeSyncRecord(userId: string, operation: SyncOperation, tx: Pri
           montoObjetivo: Number(entry.targetAmount ?? 0),
           montoActual: Number(entry.currentAmount ?? 0),
           aporteMensual: Number(entry.monthlyContribution ?? 0),
+          fuenteIngresoId: entry.incomeSourceId ?? null,
+          fuenteIngresoNombre: entry.incomeSourceName ?? null,
           usuarioId: userId,
         },
       })
@@ -1005,6 +1060,8 @@ async function writeSyncRecord(userId: string, operation: SyncOperation, tx: Pri
         estado: entry.status === 'cancelled' ? 'cancelled' : 'active',
         fechaInicio: entry.startedAt ? new Date(entry.startedAt) : new Date(),
         fechaCancelacion: entry.cancelledAt ? new Date(entry.cancelledAt) : null,
+        fuenteIngresoId: entry.incomeSourceId ?? null,
+        fuenteIngresoNombre: entry.incomeSourceName ?? null,
         usuarioId: userId,
       } })
     }
@@ -1106,6 +1163,8 @@ async function restoreMonthlyReset(
           data: {
             cantidad: entry.amount,
             fecha: transactionDate,
+            fuenteIngresoId: entry.incomeSourceId ?? null,
+            fuenteIngresoNombre: entry.incomeSourceName ?? null,
             usuarioId: userId,
             items: {
               create: {
@@ -1133,6 +1192,8 @@ async function restoreMonthlyReset(
           data: {
             cantidad: entry.amount,
             fecha: transactionDate,
+            fuenteIngresoId: entry.incomeSourceId ?? null,
+            fuenteIngresoNombre: entry.incomeSourceName ?? null,
             usuarioId: userId,
             items: {
               create: {
@@ -1164,6 +1225,8 @@ async function saveDebt(userId: string, body: JsonRecord, id?: string) {
   const direction = body.direction === 'receivable' ? 'receivable' : 'payable'
   const counterparty = body.counterparty === undefined ? null : String(body.counterparty).trim() || null
   const initialPayment = Math.max(0, Number(body.initialPayment ?? 0))
+  const incomeSourceId = body.incomeSourceId ? String(body.incomeSourceId) : null
+  const incomeSourceName = body.incomeSourceName ? String(body.incomeSourceName) : null
 
   if (!id) {
     if (!history) {
@@ -1183,6 +1246,8 @@ async function saveDebt(userId: string, body: JsonRecord, id?: string) {
         fechaInicio: startDate,
         fechaTerminacion: endDate,
         interes: interest,
+        fuenteIngresoId: incomeSourceId,
+        fuenteIngresoNombre: incomeSourceName,
         usuarioId: userId,
         pagos: paidAmount > 0
           ? {
@@ -1239,6 +1304,8 @@ async function saveDebt(userId: string, body: JsonRecord, id?: string) {
         fechaInicio: body.startDate === undefined ? existing.fechaInicio : startDate,
         fechaTerminacion: body.endDate === undefined ? existing.fechaTerminacion : endDate,
         interes: body.interest === undefined ? existing.interes : interest,
+        fuenteIngresoId: body.incomeSourceId === undefined ? existing.fuenteIngresoId : incomeSourceId,
+        fuenteIngresoNombre: body.incomeSourceName === undefined ? existing.fuenteIngresoNombre : incomeSourceName,
       }
     })(),
     where: { id },
@@ -1298,6 +1365,13 @@ async function saveTransaction(
   const description = String(body.description ?? '').trim()
   const date = body.date ? new Date(String(body.date)) : new Date()
   const expenseMetadata = kind === 'expense' ? parseExpenseDescription(description) : null
+  const accountFields = {
+    lugar: sanitizePlace(body.place) ?? null,
+    adjuntos: sanitizeAttachments(body.attachments),
+    esEfectivo: body.isCash !== false,
+    fuenteIngresoId: body.incomeSourceId ? String(body.incomeSourceId) : null,
+    fuenteIngresoNombre: body.incomeSourceName ? String(body.incomeSourceName) : null,
+  }
 
   if (!description) {
     throw new Error('La descripcion es obligatoria.')
@@ -1319,6 +1393,7 @@ async function saveTransaction(
         data: {
           cantidad: amount,
           fecha: date,
+          ...accountFields,
           items: existing.items[0]
             ? {
                 update: {
@@ -1352,6 +1427,7 @@ async function saveTransaction(
       data: {
         cantidad: amount,
         fecha: date,
+        ...accountFields,
         usuarioId: userId,
         items: {
           create: {
@@ -1384,6 +1460,7 @@ async function saveTransaction(
       data: {
         cantidad: amount,
         fecha: date,
+        ...accountFields,
         items: existing.items[0]
           ? {
               update: {
@@ -1415,6 +1492,7 @@ async function saveTransaction(
     data: {
       cantidad: amount,
       fecha: date,
+      ...accountFields,
       usuarioId: userId,
       items: {
         create: {
@@ -1456,6 +1534,11 @@ async function saveSaving(userId: string, body: JsonRecord, id?: string) {
     cantidad: amount,
     descripcion: String(body.description ?? '').trim() || null,
     fecha: date,
+    lugar: sanitizePlace(body.place) ?? null,
+    adjuntos: sanitizeAttachments(body.attachments),
+    esEfectivo: body.isCash !== false,
+    fuenteIngresoId: body.incomeSourceId ? String(body.incomeSourceId) : null,
+    fuenteIngresoNombre: body.incomeSourceName ? String(body.incomeSourceName) : null,
   }
 
   const entry = id
@@ -1488,6 +1571,8 @@ async function saveWishlist(userId: string, body: JsonRecord, id?: string) {
   const isPurchased = typeof body.isPurchased === 'boolean' ? body.isPurchased : inferredPurchased
   const savedAmount = isPurchased ? Math.max(0, rawSavedAmount) : 0
   const purchasedAt = body.purchasedAt ? new Date(String(body.purchasedAt)) : null
+  const incomeSourceId = body.incomeSourceId ? String(body.incomeSourceId) : null
+  const incomeSourceName = body.incomeSourceName ? String(body.incomeSourceName) : null
 
   if (!name) {
     throw new Error('El nombre del deseo es obligatorio.')
@@ -1510,6 +1595,8 @@ async function saveWishlist(userId: string, body: JsonRecord, id?: string) {
         aportado: externalContribution,
         comprado: isPurchased,
         fecha: purchasedAt ?? existing.fecha,
+        fuenteIngresoId: body.incomeSourceId === undefined ? existing.fuenteIngresoId : incomeSourceId,
+        fuenteIngresoNombre: body.incomeSourceName === undefined ? existing.fuenteIngresoNombre : incomeSourceName,
         items: existing.items[0]
           ? {
               update: {
@@ -1549,6 +1636,8 @@ async function saveWishlist(userId: string, body: JsonRecord, id?: string) {
       aportado: externalContribution,
       comprado: isPurchased,
       fecha: purchasedAt ?? new Date(),
+      fuenteIngresoId: incomeSourceId,
+      fuenteIngresoNombre: incomeSourceName,
       usuarioId: userId,
       items: {
         create: {
@@ -1576,6 +1665,8 @@ async function saveEvent(userId: string, body: JsonRecord, id?: string) {
     cantidad: Number(body.amount ?? 0),
     fecha: body.date ? new Date(String(body.date)) : new Date(),
     isNotificacion: Boolean(body.isNotification),
+    fuenteIngresoId: body.incomeSourceId ? String(body.incomeSourceId) : null,
+    fuenteIngresoNombre: body.incomeSourceName ? String(body.incomeSourceName) : null,
   }
 
   if (!payload.nombre) {
@@ -1601,6 +1692,8 @@ async function saveProjection(userId: string, body: JsonRecord, id?: string) {
   const prisma = await getPrisma()
   const payload = {
     salarioMeta: Number(body.targetSalary ?? 0),
+    fuenteIngresoId: body.incomeSourceId ? String(body.incomeSourceId) : null,
+    fuenteIngresoNombre: body.incomeSourceName ? String(body.incomeSourceName) : null,
   }
 
   const entry = id
@@ -1626,6 +1719,8 @@ async function saveSavingsGoal(userId: string, body: JsonRecord, id?: string) {
     montoObjetivo: Number(body.targetAmount ?? 0),
     montoActual: Number(body.currentAmount ?? 0),
     aporteMensual: Number(body.monthlyContribution ?? 0),
+    fuenteIngresoId: body.incomeSourceId ? String(body.incomeSourceId) : null,
+    fuenteIngresoNombre: body.incomeSourceName ? String(body.incomeSourceName) : null,
   }
 
   if (!payload.nombre) {
@@ -1688,6 +1783,8 @@ async function saveSubscription(userId: string, body: JsonRecord, id?: string) {
     estado: body.status === 'cancelled' ? 'cancelled' : 'active',
     fechaInicio: body.startedAt ? new Date(String(body.startedAt)) : new Date(),
     fechaCancelacion: body.cancelledAt ? new Date(String(body.cancelledAt)) : null,
+    fuenteIngresoId: body.incomeSourceId ? String(body.incomeSourceId) : null,
+    fuenteIngresoNombre: body.incomeSourceName ? String(body.incomeSourceName) : null,
   }
   if (!payload.nombre) throw new Error('El nombre de la suscripción es obligatorio.')
   if (payload.cantidad <= 0) throw new Error('El importe debe ser mayor que cero.')

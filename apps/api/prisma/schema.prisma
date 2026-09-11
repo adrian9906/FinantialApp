@@ -102,11 +102,14 @@ model Ahorro {
   lugar     String?
   adjuntos  String[] @default([])
   esEfectivo Boolean @default(true)
+  fuenteIngresoId String?
+  fuenteIngresoNombre String?
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
   usuarioId   String
   usuario     Usuario  @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
 
+  @@index([usuarioId, fuenteIngresoId, fecha])
   @@map("ahorros")
 }
 
@@ -157,12 +160,15 @@ model Deuda {
   fechaInicio      DateTime
   fechaTerminacion DateTime
   interes          Float?
+  fuenteIngresoId     String?
+  fuenteIngresoNombre String?
   createdAt        DateTime    @default(now())
   updatedAt        DateTime    @updatedAt
   usuarioId        String
   usuario          Usuario     @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
   pagos            DeudaPago[]
 
+  @@index([usuarioId, fuenteIngresoId])
   @@map("deudas")
 }
 
@@ -213,12 +219,15 @@ model Evento {
   nombre         String
   cantidad       Float
   isNotificacion Boolean  @default(false)
+  fuenteIngresoId     String?
+  fuenteIngresoNombre String?
   fecha          DateTime
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
   usuarioId      String
   usuario        Usuario  @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
 
+  @@index([usuarioId, fuenteIngresoId, fecha])
   @@map("eventos")
 }
 
@@ -227,6 +236,8 @@ model Deseo {
   cantidad  Float
   aportado  Float       @default(0)
   comprado  Boolean     @default(false)
+  fuenteIngresoId     String?
+  fuenteIngresoNombre String?
   fecha     DateTime    @default(now())
   createdAt DateTime    @default(now())
   updatedAt DateTime    @updatedAt
@@ -234,6 +245,7 @@ model Deseo {
   usuario   Usuario     @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
   items     DeseoItem[]
 
+  @@index([usuarioId, fuenteIngresoId])
   @@map("deseos")
 }
 
@@ -273,11 +285,14 @@ model HistorialMensual {
 model Proyeccion {
   id          String   @id @default(uuid())
   salarioMeta Float
+  fuenteIngresoId     String?
+  fuenteIngresoNombre String?
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
   usuarioId   String
   usuario     Usuario  @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
 
+  @@index([usuarioId, fuenteIngresoId])
   @@map("proyecciones")
 }
 
@@ -288,11 +303,14 @@ model MetaAhorro {
   montoObjetivo Float
   montoActual   Float
   aporteMensual Float
+  fuenteIngresoId     String?
+  fuenteIngresoNombre String?
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
   usuarioId     String
   usuario       Usuario  @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
 
+  @@index([usuarioId, fuenteIngresoId])
   @@map("metas_ahorro")
 }
 
@@ -318,12 +336,14 @@ model Suscripcion {
   estado            String   @default("active")
   fechaInicio       DateTime @default(now())
   fechaCancelacion  DateTime?
+  fuenteIngresoId     String?
+  fuenteIngresoNombre String?
   createdAt         DateTime @default(now())
   updatedAt         DateTime @updatedAt
   usuarioId         String
   usuario           Usuario  @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
 
-  @@index([usuarioId, estado])
+  @@index([usuarioId, fuenteIngresoId, estado])
   @@map("suscripciones")
 }
 

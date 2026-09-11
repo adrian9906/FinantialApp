@@ -33,6 +33,8 @@ interface PreferencesStore {
   accountSavingsFormulas: AccountSavingsFormulas
   currencies: CurrencyPreference[]
   activeCurrencyCode: string
+  /** Globally selected income account. Every financial view scopes itself to it. */
+  activeIncomeSourceId: string
   dashboardWidgetsByProfile: Record<string, DashboardWidgetId[]>
   categoryRulesByProfile: Record<string, CategorizationRule[]>
   systemNotificationsEnabled: boolean
@@ -48,6 +50,7 @@ interface PreferencesStore {
   setFormula: (formula: AllocationFormula) => void
   setAccountFormula: (sourceId: string, formula: AllocationFormula) => void
   setActiveCurrency: (code: string) => void
+  setActiveIncomeSource: (sourceId: string) => void
   saveCurrency: (currency: CurrencyPreference) => void
   removeCurrency: (code: string) => void
   hydrateCurrencyPreferences: (userId: string) => Promise<void>
@@ -183,6 +186,7 @@ const defaultState = {
   accountSavingsFormulas: {} as AccountSavingsFormulas,
   currencies: [USD_CURRENCY],
   activeCurrencyCode: 'USD',
+  activeIncomeSourceId: '',
   dashboardWidgetsByProfile: {},
   categoryRulesByProfile: {},
   systemNotificationsEnabled: false,
@@ -236,6 +240,7 @@ export const usePreferencesStore = create<PreferencesStore>()(
         })
         scheduleCurrencySync()
       },
+      setActiveIncomeSource: (activeIncomeSourceId) => set({ activeIncomeSourceId }),
       saveCurrency: (currency) => {
         set((state) => {
           const normalized = normalizeCurrencyPreference(currency)

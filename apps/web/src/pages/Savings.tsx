@@ -18,8 +18,8 @@ import { usePreferencesStore } from '@/store/preferencesStore'
 import { getTodayDateKey } from '@/lib/date'
 import { AccountSavingsPanel } from '@/components/savings/AccountSavingsPanel'
 import { IncomeAccountSelect } from '@/components/income/IncomeAccountSelect'
-import { getIncomeAccountsForMonth } from '@/lib/income-account-view'
-import { findSavingsAccount, getAccountAllocationFormula, getSavingsAccountBalance, isSavingsIncomeSource } from '@/lib/account-savings'
+import { findSavingsAccount, getAccountAllocationFormula, getSavingsAccountBalance } from '@/lib/account-savings'
+import { useActiveIncomeAccount } from '@/lib/useActiveIncomeAccount'
 
 const GOAL_CATEGORY_LABELS = {
   emergency: 'Emergencia',
@@ -34,7 +34,7 @@ export default function Savings() {
   const addTransaction = useFinanceStore((state) => state.addTransaction)
   const updateTransaction = useFinanceStore((state) => state.updateTransaction)
   const removeTransaction = useFinanceStore((state) => state.removeTransaction)
-  const savingsGoals = useFinanceStore((state) => state.savingsGoals)
+  const allSavingsGoals = useFinanceStore((state) => state.savingsGoals)
   const salaries = useFinanceStore((state) => state.salaries)
   const incomeSources = useFinanceStore((state) => state.incomeSources)
   const addSavingsGoal = useFinanceStore((state) => state.addSavingsGoal)
@@ -44,17 +44,16 @@ export default function Savings() {
   const moneyInput = useCurrencyInput()
   const formula = usePreferencesStore((state) => state.formula)
   const accountSavingsFormulas = usePreferencesStore((state) => state.accountSavingsFormulas)
-  const activeCurrencyCode = usePreferencesStore((state) => state.activeCurrencyCode)
-  const accounts = useMemo(
-    () => getIncomeAccountsForMonth(salaries, incomeSources, undefined, activeCurrencyCode)
-      .filter((account) => !isSavingsIncomeSource(account.source)),
-    [activeCurrencyCode, incomeSources, salaries],
+  const {
+    accounts,
+    activeAccount: selectedAccount,
+    activeIncomeSourceId: selectedAccountId,
+    selectAccount: setSelectedAccountPreference,
+  } = useActiveIncomeAccount()
+  const savingsGoals = useMemo(
+    () => allSavingsGoals.filter((goal) => goal.incomeSourceId === selectedAccountId),
+    [allSavingsGoals, selectedAccountId],
   )
-  const [selectedAccountPreference, setSelectedAccountPreference] = useState('')
-  const selectedAccountId = accounts.some((account) => account.source.id === selectedAccountPreference)
-    ? selectedAccountPreference
-    : accounts[0]?.source.id ?? ''
-  const selectedAccount = accounts.find((account) => account.source.id === selectedAccountId)
   const selectedFormula = getAccountAllocationFormula(accountSavingsFormulas, selectedAccountId, formula)
   const wantsEnabled = selectedFormula.wants > 0
   const [open, setOpen] = useState(false)
@@ -270,6 +269,8 @@ export default function Savings() {
       targetAmount,
       currentAmount,
       monthlyContribution,
+      incomeSourceId: selectedAccountId,
+      incomeSourceName: selectedAccount?.source.name,
     }
 
     setIsGoalSaving(true)
@@ -357,7 +358,7 @@ export default function Savings() {
   async function handleExport() {
     setIsExporting(true)
     try {
-      await exportSavingsReport(transactions)
+      await exportSavingsReport(savingsList)
     } finally {
       setIsExporting(false)
     }

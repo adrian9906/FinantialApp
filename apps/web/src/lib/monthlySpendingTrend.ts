@@ -9,7 +9,7 @@ import {
   type WishlistItem,
 } from '@plata/shared'
 
-import { getCanonicalPlanningHistory } from '@/lib/planningHistory'
+import { getCanonicalPlanningHistory } from './planningHistory.ts'
 
 export type MonthlySpendingCategory = 'gastos' | 'gustos' | 'ahorroUsado'
 
@@ -40,9 +40,11 @@ function formatMonth(monthKey: string, showYear: boolean) {
   return showYear ? `${label} ${year}` : label
 }
 
-function sumCompletedCycle(cycle: MonthlyPlanningHistory, type: 'expenses' | 'wants') {
+function sumCompletedCycle(cycle: MonthlyPlanningHistory, type: 'expenses' | 'wants', incomeSourceId?: string) {
   return cycle[type].reduce(
-    (sum, entry) => entry.status === 'checked' ? sum + Math.max(0, entry.amount) : sum,
+    (sum, entry) => entry.status === 'checked' && (!incomeSourceId || entry.incomeSourceId === incomeSourceId)
+      ? sum + Math.max(0, entry.amount)
+      : sum,
     0,
   )
 }
@@ -55,6 +57,7 @@ export function buildMonthlySpendingTrend({
   currentPeriodEnd,
   strictSameDayBoundary,
   excludedTransactionIds = [],
+  incomeSourceId,
 }: {
   history: MonthlyPlanningHistory[]
   transactions: Transaction[]
@@ -63,6 +66,7 @@ export function buildMonthlySpendingTrend({
   currentPeriodEnd: string
   strictSameDayBoundary: boolean
   excludedTransactionIds?: string[]
+  incomeSourceId?: string
 }) {
   const currentStartKey = currentPeriodStart.slice(0, 10)
   const currentEndKey = currentPeriodEnd.slice(0, 10)
@@ -81,8 +85,8 @@ export function buildMonthlySpendingTrend({
 
   closedCycles.forEach((cycle) => {
     const month = ensureMonth(cycle.month, cycle.label)
-    month.gastos += sumCompletedCycle(cycle, 'expenses')
-    month.gustos += sumCompletedCycle(cycle, 'wants')
+    month.gastos += sumCompletedCycle(cycle, 'expenses', incomeSourceId)
+    month.gustos += sumCompletedCycle(cycle, 'wants', incomeSourceId)
   })
 
   const currentTotals: Record<MonthlySpendingCategory, number> = {
@@ -93,6 +97,8 @@ export function buildMonthlySpendingTrend({
 
   transactions.forEach((transaction) => {
     if (
+      (incomeSourceId && transaction.incomeSourceId !== incomeSourceId)
+      ||
       excludedIds.has(transaction.id)
       || !isInFinancialPeriod(transaction, currentPeriodStart, strictSameDayBoundary)
       || transaction.date.slice(0, 10) > currentEndKey
@@ -107,6 +113,7 @@ export function buildMonthlySpendingTrend({
   })
 
   wishlist.forEach((item) => {
+    if (incomeSourceId && item.incomeSourceId !== incomeSourceId) return
     if (!isWishlistPurchased(item) || !item.purchasedAt) return
     const amount = getWishlistReservedAmount(item)
     if (amount <= 0) return

@@ -20,6 +20,7 @@ import { formatFormulaLabel, usePreferencesStore } from '@/store/preferencesStor
 import { AppTour } from '@/components/onboarding/AppTour'
 import { InstallAppPrompt } from '@/components/onboarding/InstallAppPrompt'
 import { CurrencySwitcher } from '@/components/layout/CurrencySwitcher'
+import { AccountSwitcher } from '@/components/layout/AccountSwitcher'
 import { ReceivableDueNotifier } from '@/components/debts/ReceivableDueNotifier'
 
 const navItems = [
@@ -225,6 +226,9 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
             </div>
             <div className="min-w-0">
               <CurrencySwitcher />
+            </div>
+            <div className="col-span-2 min-w-0 sm:col-span-1">
+              <AccountSwitcher />
             </div>
             <AppTour />
           </div>

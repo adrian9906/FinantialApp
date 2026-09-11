@@ -102,6 +102,8 @@ function normalizeDebt(entry: Partial<Debt>): Debt {
 
   return {
     id: String(entry.id ?? makeId('debt')),
+    incomeSourceId: entry.incomeSourceId,
+    incomeSourceName: entry.incomeSourceName,
     direction: entry.direction === 'receivable' ? 'receivable' : 'payable',
     counterparty: entry.counterparty ? String(entry.counterparty) : undefined,
     amount,
@@ -131,10 +133,30 @@ function normalizeBootstrapSnapshot(payload?: Partial<BootstrapPayload> | null):
   snapshot.incomeSources.forEach((source) => ensureCurrencyPreference(source.currencyCode))
   snapshot.salaries.forEach((salary) => ensureCurrencyPreference(salary.currencyCode))
 
-  return ensureCurrentSubscriptionExpenses({
+  const defaultAccount = snapshot.incomeSources.find((source) => !source.archived && !source.name.toLocaleLowerCase('es').startsWith('ahorro '))
+  const accountFields = defaultAccount
+    ? { incomeSourceId: defaultAccount.id, incomeSourceName: defaultAccount.name }
+    : {}
+  const withLegacyAccounts = {
     ...snapshot,
-    debts: snapshot.debts.map(normalizeDebt),
-  })
+    transactions: snapshot.transactions.map((entry) => entry.incomeSourceId ? entry : { ...entry, ...accountFields }),
+    debts: snapshot.debts.map((entry) => {
+      const normalized = normalizeDebt(entry)
+      return normalized.incomeSourceId ? normalized : { ...normalized, ...accountFields }
+    }),
+    wishlist: snapshot.wishlist.map((entry) => entry.incomeSourceId ? entry : { ...entry, ...accountFields }),
+    events: snapshot.events.map((entry) => entry.incomeSourceId ? entry : { ...entry, ...accountFields }),
+    projections: snapshot.projections.map((entry) => entry.incomeSourceId ? entry : { ...entry, ...accountFields }),
+    savingsGoals: snapshot.savingsGoals.map((entry) => entry.incomeSourceId ? entry : { ...entry, ...accountFields }),
+    subscriptions: snapshot.subscriptions.map((entry) => entry.incomeSourceId ? entry : { ...entry, ...accountFields }),
+    monthlyPlanningHistory: snapshot.monthlyPlanningHistory.map((history) => ({
+      ...history,
+      expenses: history.expenses.map((entry) => entry.incomeSourceId ? entry : { ...entry, ...accountFields }),
+      wants: history.wants.map((entry) => entry.incomeSourceId ? entry : { ...entry, ...accountFields }),
+    })),
+  }
+
+  return ensureCurrentSubscriptionExpenses(withLegacyAccounts)
 }
 
 function getSubscriptionExpenseMarker(subscriptionId: string, month = getMonthKey()) {
@@ -156,6 +178,8 @@ function createSubscriptionExpense(subscription: Subscription, month = getMonthK
     description: `services::checked::0::Suscripción · ${subscription.name} ${getSubscriptionExpenseMarker(subscription.id, month)}`,
     date: getSubscriptionExpenseDate(subscription, month),
     createdAt: new Date().toISOString(),
+    incomeSourceId: subscription.incomeSourceId,
+    incomeSourceName: subscription.incomeSourceName,
   }
 }
 
@@ -185,6 +209,8 @@ function buildMonthlyPlanningHistory(transactions: Transaction[]): MonthlyPlanni
       status: parsed.status,
       date: transaction.date,
       unnecessary: parsed.unnecessary,
+      incomeSourceId: transaction.incomeSourceId,
+      incomeSourceName: transaction.incomeSourceName,
     }]
   })
 
@@ -198,6 +224,8 @@ function buildMonthlyPlanningHistory(transactions: Transaction[]): MonthlyPlanni
       category: parsed.category,
       status: parsed.status,
       date: transaction.date,
+      incomeSourceId: transaction.incomeSourceId,
+      incomeSourceName: transaction.incomeSourceName,
     }]
   })
 
@@ -235,6 +263,8 @@ function buildTransactionsFromHistory(
           entry.unnecessary,
         ),
         date: today,
+        incomeSourceId: entry.incomeSourceId,
+        incomeSourceName: entry.incomeSourceName,
       })),
     )
   }
@@ -246,6 +276,8 @@ function buildTransactionsFromHistory(
         type: 'want' as const,
         description: `${entry.category}::${entry.status}::${entry.itemName.trim()}`,
         date: today,
+        incomeSourceId: entry.incomeSourceId,
+        incomeSourceName: entry.incomeSourceName,
       })),
     )
   }

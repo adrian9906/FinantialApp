@@ -29,7 +29,6 @@ interface DebtFormState {
 
 export default function Debts() {
   const allDebts = useFinanceStore((state) => state.debts)
-  const debts = useMemo(() => allDebts.filter((debt) => debt.direction !== 'receivable'), [allDebts])
   const addDebt = useFinanceStore((state) => state.addDebt)
   const updateDebt = useFinanceStore((state) => state.updateDebt)
   const payDebt = useFinanceStore((state) => state.payDebt)
@@ -38,6 +37,11 @@ export default function Debts() {
   const addTransaction = useFinanceStore((state) => state.addTransaction)
   const removeTransaction = useFinanceStore((state) => state.removeTransaction)
   const overview = useMonthlyOverview()
+  const accountDebts = useMemo(
+    () => allDebts.filter((debt) => debt.incomeSourceId === overview.activeIncomeSourceId),
+    [allDebts, overview.activeIncomeSourceId],
+  )
+  const debts = useMemo(() => accountDebts.filter((debt) => debt.direction !== 'receivable'), [accountDebts])
   const moneyInput = useCurrencyInput()
 
   const [open, setOpen] = useState(false)
@@ -144,6 +148,8 @@ export default function Debts() {
       startDate: form.startDate,
       endDate: form.endDate,
       interest: form.interest === '' ? undefined : Number(form.interest),
+      incomeSourceId: overview.activeIncomeSourceId,
+      incomeSourceName: overview.activeAccount?.source.name,
     }
 
     setIsSaving(true)

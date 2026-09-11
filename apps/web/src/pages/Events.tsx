@@ -56,11 +56,15 @@ function buildMonthMatrix(visibleMonth: Date) {
 }
 
 export default function Events() {
-  const events = useFinanceStore((state) => state.events)
+  const allEvents = useFinanceStore((state) => state.events)
   const addEvent = useFinanceStore((state) => state.addEvent)
   const updateEvent = useFinanceStore((state) => state.updateEvent)
   const removeEvent = useFinanceStore((state) => state.removeEvent)
   const overview = useMonthlyOverview()
+  const events = useMemo(
+    () => allEvents.filter((event) => event.incomeSourceId === overview.activeIncomeSourceId),
+    [allEvents, overview.activeIncomeSourceId],
+  )
   const moneyInput = useCurrencyInput()
   const [open, setOpen] = useState(false)
   const [editId, setEditId] = useState<string | null>(null)
@@ -143,6 +147,8 @@ export default function Events() {
       date: form.date,
       amount: typedAmount,
       isNotification: form.isNotification,
+      incomeSourceId: overview.activeIncomeSourceId,
+      incomeSourceName: overview.activeAccount?.source.name,
     }
 
     setIsSaving(true)

@@ -176,8 +176,9 @@ export async function exportMonthlyReport(params: {
   events: AppEvent[]
   monthlyPlanningHistory: MonthlyPlanningHistory[]
   formula: import('@plata/shared').AllocationFormula
+  incomeSourceId?: string
 }) {
-  const { salaries, transactions, debts, wishlist, events, monthlyPlanningHistory, formula } = params
+  const { salaries, transactions, debts, wishlist, events, monthlyPlanningHistory, formula, incomeSourceId } = params
   const currentMonthKey = getMonthKey(new Date())
   const currentPeriodEnd = new Date().toISOString().slice(0, 10)
   const previousMonthKey = getPreviousMonthKey(currentMonthKey)
@@ -189,6 +190,7 @@ export async function exportMonthlyReport(params: {
   const previousPeriodStart = closedCycles[1]?.createdAt ?? `${latestClosedCycle?.month ?? previousMonthKey}-01T00:00:00.000Z`
   const currentTransactions = transactions.filter((transaction) => isInFinancialPeriod(transaction, currentPeriodStart, true) && transaction.date.slice(0, 10) <= currentPeriodEnd)
   const previousTransactions = buildSnapshotTransactions(latestClosedCycle)
+    .filter((transaction) => !incomeSourceId || transaction.incomeSourceId === incomeSourceId)
 
   const currentOverview = getMonthlyOverview(salaries, transactions, debts, formula, {
     periodStart: currentPeriodStart,
@@ -206,6 +208,7 @@ export async function exportMonthlyReport(params: {
     debts,
     monthlyPlanningHistory,
     formula,
+    incomeSourceId,
   })
   const currentSummaryBase = monthlySummaries.find((entry) => entry.month === currentMonthKey)
   const previousSummaryBase = monthlySummaries.find((entry) => entry.month === (latestClosedCycle?.month ?? previousMonthKey))
@@ -217,7 +220,11 @@ export async function exportMonthlyReport(params: {
   const previousRankings = buildMonthlyRankings(previousTransactions, latestClosedCycle?.month ?? previousMonthKey)
   const filteredTransactions = [...previousTransactions, ...currentTransactions]
   const filteredEvents = events.filter((event) => event.date >= previousPeriodStart.slice(0, 10))
-  const filteredHistory = closedCycles.slice(0, 2)
+  const filteredHistory = closedCycles.slice(0, 2).map((entry) => ({
+    ...entry,
+    expenses: entry.expenses.filter((item) => !incomeSourceId || item.incomeSourceId === incomeSourceId),
+    wants: entry.wants.filter((item) => !incomeSourceId || item.incomeSourceId === incomeSourceId),
+  }))
   const reservedForPurchasedWishlist = wishlist.reduce(
     (sum, item) => sum + (isWishlistPurchased(item) ? getWishlistReservedAmount(item) : 0),
     0,

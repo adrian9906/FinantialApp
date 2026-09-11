@@ -7,17 +7,18 @@ import { ExportExcelButton } from '@/components/reports/ExportExcelButton'
 import { formatMoneyWithCode, getCurrencyByCode } from '@/lib/currency'
 import { exportSalariesReport } from '@/lib/reportExports'
 import { useFinanceStore } from '@/store/financeStore'
-import { formatFormulaLabel, usePreferencesStore } from '@/store/preferencesStore'
+import { usePreferencesStore } from '@/store/preferencesStore'
 import { normalizeSalaryHistory } from '@plata/shared'
+import { useActiveIncomeAccount } from '@/lib/useActiveIncomeAccount'
 
 export default function Salary() {
   const salaries = useFinanceStore((state) => state.salaries)
-  const formula = usePreferencesStore((state) => state.formula)
   const activeCurrencyCode = usePreferencesStore((state) => state.activeCurrencyCode)
+  const { activeAccount, activeIncomeSourceId } = useActiveIncomeAccount()
   const [isExporting, setIsExporting] = useState(false)
 
   const salaryHistory = normalizeSalaryHistory(salaries).filter(
-    (entry) => (entry.currencyCode ?? 'USD').trim().toUpperCase() === activeCurrencyCode.trim().toUpperCase(),
+    (entry) => entry.sourceId === activeIncomeSourceId,
   )
 
   async function handleExport() {
@@ -37,7 +38,7 @@ export default function Salary() {
             Cuentas de ingresos
           </h1>
           <p className="max-w-2xl text-sm text-muted-gray">
-            Crea cada cuenta con su saldo y moneda. La fórmula {formatFormulaLabel(formula)} se aplica por cuenta.
+            Crea cada cuenta con su saldo y moneda. El historial y la fórmula corresponden solo a la cuenta activa.
           </p>
         </div>
         <ExportExcelButton loading={isExporting} onClick={handleExport} />
@@ -54,7 +55,7 @@ export default function Salary() {
             <div className="flex items-center justify-between border-b border-graphite pb-3">
               <h3 className="flex items-center gap-2 text-lg font-semibold text-on-surface">
                 <Receipt className="size-8 text-secondary" />
-                Historial en {activeCurrencyCode}
+                Historial de {activeAccount?.source.name ?? activeCurrencyCode}
               </h3>
             </div>
             {salaryHistory.length === 0 ? (

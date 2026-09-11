@@ -8,12 +8,15 @@ import { Card } from '@/components/ui/card'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { useActiveIncomeAccount } from '@/lib/useActiveIncomeAccount'
 
 type FormState = { name: string; amount: string; billingDay: string }
 const emptyForm: FormState = { name: '', amount: '', billingDay: '1' }
 
 export default function Subscriptions() {
-  const subscriptions = useFinanceStore((state) => state.subscriptions)
+  const allSubscriptions = useFinanceStore((state) => state.subscriptions)
+  const { activeAccount, activeIncomeSourceId } = useActiveIncomeAccount()
+  const subscriptions = useMemo(() => allSubscriptions.filter((item) => item.incomeSourceId === activeIncomeSourceId), [activeIncomeSourceId, allSubscriptions])
   const addSubscription = useFinanceStore((state) => state.addSubscription)
   const updateSubscription = useFinanceStore((state) => state.updateSubscription)
   const removeSubscription = useFinanceStore((state) => state.removeSubscription)
@@ -39,7 +42,7 @@ export default function Subscriptions() {
     if (!form.name.trim() || !Number.isFinite(amount) || amount <= 0 || saving) return
     setSaving(true)
     try {
-      const data = { name: form.name.trim(), amount, billingDay, status: 'active' as const, startedAt: new Date().toISOString().slice(0, 10) }
+      const data = { name: form.name.trim(), amount, billingDay, status: 'active' as const, startedAt: new Date().toISOString().slice(0, 10), incomeSourceId: activeIncomeSourceId, incomeSourceName: activeAccount?.source.name }
       if (editId) await updateSubscription(editId, data)
       else await addSubscription(data)
       setOpen(false)
