@@ -40,6 +40,7 @@ import { useAuthStore } from '@/store/authStore'
 import { usePreferencesStore } from '@/store/preferencesStore'
 import { IncomeAccountSelect } from '@/components/income/IncomeAccountSelect'
 import { getIncomeAccountOverview, getIncomeAccountsForMonth, type IncomeAccountView } from '@/lib/income-account-view'
+import { getAccountAllocationFormula } from '@/lib/account-savings'
 
 interface ExpenseFormState {
   amount: string
@@ -215,6 +216,7 @@ export default function Expenses() {
   const incomeSources = useFinanceStore((state) => state.incomeSources)
   const overview = useMonthlyOverview()
   const formula = usePreferencesStore((state) => state.formula)
+  const accountSavingsFormulas = usePreferencesStore((state) => state.accountSavingsFormulas)
   const activeCurrencyCode = usePreferencesStore((state) => state.activeCurrencyCode)
   const profileId = useAuthStore((state) => state.user?.id) ?? 'guest'
   const userRules = usePreferencesStore(useShallow((state) => state.categoryRulesByProfile[profileId] ?? []))
@@ -259,8 +261,10 @@ export default function Expenses() {
   const formAccount = accounts.find((account) => account.source.id === formIncomeSourceId)
   const accountCurrency = getCurrencyByCode(selectedAccount?.salary.currencyCode)
   const formCurrency = getCurrencyByCode(formAccount?.salary.currencyCode)
-  const accountOverview = getIncomeAccountOverview(selectedAccount, overview.periodTransactions, formula)
-  const formAccountOverview = getIncomeAccountOverview(formAccount, overview.periodTransactions, formula)
+  const accountFormula = getAccountAllocationFormula(accountSavingsFormulas, selectedIncomeSourceId, formula)
+  const formAccountFormula = getAccountAllocationFormula(accountSavingsFormulas, formIncomeSourceId, formula)
+  const accountOverview = getIncomeAccountOverview(selectedAccount, overview.periodTransactions, accountFormula)
+  const formAccountOverview = getIncomeAccountOverview(formAccount, overview.periodTransactions, formAccountFormula)
   const formatAccountMoney = (value: number) => formatMoneyWithCode(value, accountCurrency)
   const receiptCategoryGroups = useMemo(() => buildReceiptCategoryGroups(transactions), [transactions])
   const categoryWasChanged = useRef(false)
@@ -852,6 +856,7 @@ export default function Expenses() {
                                   </span>
                                   <div className="flex gap-1">
                                     <Button
+                                      aria-label={`Editar gasto ${item.itemName}`}
                                       variant="ghost"
                                       size="icon"
                                       disabled={isChecked}
@@ -861,6 +866,7 @@ export default function Expenses() {
                                       <Pencil data-icon="inline-start" />
                                     </Button>
                                     <Button
+                                      aria-label={`Eliminar gasto ${item.itemName}`}
                                       variant="ghost"
                                       size="icon"
                                       disabled={isChecked}

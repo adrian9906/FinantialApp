@@ -12,8 +12,8 @@ export interface AllocationFormula {
 }
 
 export const defaultFormula: AllocationFormula = {
-  expenses: 65,
-  wants: 35,
+  expenses: 50,
+  wants: 25,
   savings: 25,
   rolloverSavings: true,
 }
@@ -26,21 +26,21 @@ export const formulaPresets: Array<{
 }> = [
     {
       id: 'balanced',
-      label: 'Ahorro 25% · 65/35',
-      description: 'Aparta un cuarto y reparte el resto entre gastos y gustos.',
-      formula: { expenses: 65, wants: 35, savings: 25, rolloverSavings: true },
+      label: '25% ahorro · 50% gastos · 25% gustos',
+      description: 'Una distribución equilibrada de toda la cuenta.',
+      formula: { expenses: 50, wants: 25, savings: 25, rolloverSavings: true },
     },
     {
       id: 'focused-growth',
-      label: 'Ahorro 25% · 80/20',
+      label: '25% ahorro · 60% gastos · 15% gustos',
       description: 'Da más espacio a gastos fijos y mantiene ahorro estable.',
-      formula: { expenses: 80, wants: 20, savings: 25, rolloverSavings: true },
+      formula: { expenses: 60, wants: 15, savings: 25, rolloverSavings: true },
     },
     {
       id: 'save-first',
-      label: 'Ahorro 50% · 100/0',
-      description: 'Aparta la mitad y destina todo lo demás a gastos.',
-      formula: { expenses: 100, wants: 0, savings: 50, rolloverSavings: false },
+      label: '50% ahorro · 50% gastos · 0% gustos',
+      description: 'Aparta la mitad de la cuenta y destina el resto a gastos.',
+      formula: { expenses: 50, wants: 0, savings: 50, rolloverSavings: false },
     },
   ]
 
@@ -63,12 +63,10 @@ export function normalizeFormula(formula: AllocationFormula): AllocationFormula 
 }
 
 /**
- * Savings is taken off the income first; expenses and wants then split whatever
- * is left. So only those two have to add up to 100%, and either may be 0% to
- * hand the whole remainder to the other.
+ * The three envelopes divide the complete balance of one income account.
  */
-export function getFormulaTotal(formula: Pick<AllocationFormula, 'expenses' | 'wants'>) {
-  return formula.expenses + formula.wants
+export function getFormulaTotal(formula: Pick<AllocationFormula, 'expenses' | 'wants' | 'savings'>) {
+  return formula.expenses + formula.wants + formula.savings
 }
 
 export interface FormulaBudgets {
@@ -84,16 +82,17 @@ export function getFormulaBudgets(
 ): FormulaBudgets {
   const base = Number.isFinite(income) && income > 0 ? income : 0
   const savings = base * (clampPercentage(formula.savings) / 100)
-  const spendable = Math.max(0, base - savings)
+  const expenses = base * (clampPercentage(formula.expenses) / 100)
+  const wants = base * (clampPercentage(formula.wants) / 100)
 
   return {
     savings,
-    spendable,
-    expenses: spendable * (clampPercentage(formula.expenses) / 100),
-    wants: spendable * (clampPercentage(formula.wants) / 100),
+    spendable: expenses + wants,
+    expenses,
+    wants,
   }
 }
 
 export function formatFormulaLabel(formula: Pick<AllocationFormula, 'expenses' | 'wants' | 'savings'>) {
-  return `${formula.savings}% · ${formula.expenses}/${formula.wants}`
+  return `${formula.savings}% ahorro · ${formula.expenses}% gastos · ${formula.wants}% gustos`
 }

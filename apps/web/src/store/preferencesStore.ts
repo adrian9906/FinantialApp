@@ -17,6 +17,7 @@ import {
   normalizeFormula,
 } from '@plata/shared'
 import type { CustomTypographyOption } from '@/lib/typography'
+import type { AccountSavingsFormulas } from '@/lib/account-savings'
 import { requestJson } from '@/lib/api'
 import { useAuthStore } from '@/store/authStore'
 
@@ -29,7 +30,7 @@ interface PreferencesStore {
   customFonts: CustomTypographyOption[]
   formula: AllocationFormula
   /** Savings percentage per income account, keyed by income source id. */
-  accountSavingsFormulas: Record<string, number>
+  accountSavingsFormulas: AccountSavingsFormulas
   currencies: CurrencyPreference[]
   activeCurrencyCode: string
   dashboardWidgetsByProfile: Record<string, DashboardWidgetId[]>
@@ -45,7 +46,7 @@ interface PreferencesStore {
   saveCustomFont: (font: CustomTypographyOption) => void
   removeCustomFont: (id: string) => void
   setFormula: (formula: AllocationFormula) => void
-  setAccountSavingsRate: (sourceId: string, rate: number) => void
+  setAccountFormula: (sourceId: string, formula: AllocationFormula) => void
   setActiveCurrency: (code: string) => void
   saveCurrency: (currency: CurrencyPreference) => void
   removeCurrency: (code: string) => void
@@ -107,7 +108,7 @@ interface CurrencyPreferencesResponse {
   exists: boolean
   currencies: CurrencyPreference[]
   activeCurrencyCode: string
-  accountSavingsFormulas?: Record<string, number>
+  accountSavingsFormulas?: AccountSavingsFormulas
 }
 
 let currencyRevision = 0
@@ -179,7 +180,7 @@ const defaultState = {
   iconPack: 'lucide' as AppIconPack,
   customFonts: [] as CustomTypographyOption[],
   formula: defaultFormula,
-  accountSavingsFormulas: {} as Record<string, number>,
+  accountSavingsFormulas: {} as AccountSavingsFormulas,
   currencies: [USD_CURRENCY],
   activeCurrencyCode: 'USD',
   dashboardWidgetsByProfile: {},
@@ -217,14 +218,13 @@ export const usePreferencesStore = create<PreferencesStore>()(
         }
       }),
       setFormula: (formula) => set({ formula: normalizeFormula(formula) }),
-      setAccountSavingsRate: (sourceId, rate) => {
-        set((state) => {
-          const normalized = Math.min(100, Math.max(0, Math.round(Number(rate) || 0)))
-          const next = { ...state.accountSavingsFormulas }
-          if (normalized > 0) next[sourceId] = normalized
-          else delete next[sourceId]
-          return { accountSavingsFormulas: next }
-        })
+      setAccountFormula: (sourceId, formula) => {
+        set((state) => ({
+          accountSavingsFormulas: {
+            ...state.accountSavingsFormulas,
+            [sourceId]: normalizeFormula(formula),
+          },
+        }))
         scheduleCurrencySync()
       },
       setActiveCurrency: (code) => {

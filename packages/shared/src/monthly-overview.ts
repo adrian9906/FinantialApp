@@ -137,7 +137,7 @@ export function getMonthlyOverview(
   )
   const totalSalary = grossSalary
 
-  // Savings is taken off the income first; expenses and wants split the rest.
+  // The configured percentages divide the full income among the three envelopes.
   const baseBudgets = getFormulaBudgets(totalSalary, formula)
   const baseBudgetExpenses = baseBudgets.expenses
   const baseBudgetSavings = baseBudgets.savings

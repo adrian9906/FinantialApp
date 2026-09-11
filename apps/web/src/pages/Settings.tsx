@@ -1,4 +1,4 @@
-import { useMemo, useState, type ChangeEvent, type Dispatch, type ReactNode, type SetStateAction } from 'react'
+import { useEffect, useMemo, useState, type ChangeEvent, type Dispatch, type ReactNode, type SetStateAction } from 'react'
 import { toast } from 'sonner'
 import { getFinancialPeriodStart, getFormulaBudgets } from '@plata/shared'
 
@@ -21,7 +21,7 @@ import { AppIcon, getIconPackLabel, type AppIconName } from '@/components/icons/
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { CURRENCY_CATALOG, formatMoney } from '@/lib/currency'
+import { CURRENCY_CATALOG, formatMoney, formatMoneyWithCode, getCurrencyByCode } from '@/lib/currency'
 import { downloadMonthlyPdfReport } from '@/lib/monthlyPdfReport'
 import { getTypographyFamily, inferFontFormat, isTypographyPreset, typographyPresets } from '@/lib/typography'
 import { useMonthlyOverview } from '@/lib/useMonthlyOverview'
@@ -29,9 +29,11 @@ import { parseExpenseDescription } from '@/lib/expense-utils'
 import { parseWantDescription } from '@/lib/want-utils'
 import { useFinanceStore } from '@/store/financeStore'
 import { useAuthStore } from '@/store/authStore'
-import { AccountSavingsSettings } from '@/components/settings/AccountSavingsSettings'
 import { AutomationSettings } from '@/components/settings/AutomationSettings'
 import { NotificationSettings } from '@/components/settings/NotificationSettings'
+import { IncomeAccountSelect } from '@/components/income/IncomeAccountSelect'
+import { getAccountAllocationFormula, isSavingsIncomeSource } from '@/lib/account-savings'
+import { getIncomeAccountsForMonth, type IncomeAccountView } from '@/lib/income-account-view'
 import {
   defaultFormula,
   type AllocationFormula,
@@ -256,10 +258,11 @@ function FormulaInputs({
 }
 
 /** Shows the real amounts the percentages produce for this month's income. */
-function FormulaPreview({ draftFormula }: { draftFormula: AllocationFormula }) {
-  const overview = useMonthlyOverview()
-  const income = overview.totalSalary
+function FormulaPreview({ draftFormula, account }: { draftFormula: AllocationFormula; account?: IncomeAccountView }) {
+  const income = Number(account?.salary.amount ?? 0)
   const budgets = getFormulaBudgets(income, draftFormula)
+  const currency = getCurrencyByCode(account?.salary.currencyCode)
+  const formatAccountMoney = (value: number) => formatMoneyWithCode(value, currency)
 
   if (income <= 0) return null
 
@@ -267,22 +270,22 @@ function FormulaPreview({ draftFormula }: { draftFormula: AllocationFormula }) {
     <div className="mt-5 grid gap-2 rounded-2xl border border-graphite bg-abyss p-4 sm:grid-cols-4">
       <div>
         <p className="text-xs uppercase tracking-[0.14em] text-medium-gray">Ingreso</p>
-        <p className="mt-1 text-lg font-semibold tabular-nums text-on-surface">{formatMoney(income)}</p>
+        <p className="mt-1 text-lg font-semibold tabular-nums text-on-surface">{formatAccountMoney(income)}</p>
       </div>
       <div>
         <p className="text-xs uppercase tracking-[0.14em] text-medium-gray">Ahorro</p>
-        <p className="mt-1 text-lg font-semibold tabular-nums text-success">{formatMoney(budgets.savings)}</p>
+        <p className="mt-1 text-lg font-semibold tabular-nums text-success">{formatAccountMoney(budgets.savings)}</p>
       </div>
       <div>
         <p className="text-xs uppercase tracking-[0.14em] text-medium-gray">Gastos</p>
-        <p className="mt-1 text-lg font-semibold tabular-nums text-on-surface">{formatMoney(budgets.expenses)}</p>
+        <p className="mt-1 text-lg font-semibold tabular-nums text-on-surface">{formatAccountMoney(budgets.expenses)}</p>
       </div>
       <div>
         <p className="text-xs uppercase tracking-[0.14em] text-medium-gray">Gustos</p>
-        <p className="mt-1 text-lg font-semibold tabular-nums text-on-surface">{formatMoney(budgets.wants)}</p>
+        <p className="mt-1 text-lg font-semibold tabular-nums text-on-surface">{formatAccountMoney(budgets.wants)}</p>
       </div>
       <p className="text-xs text-muted-gray sm:col-span-4">
-        Quedan {formatMoney(budgets.spendable)} para repartir después de apartar el ahorro.
+        La cuenta completa queda distribuida entre los tres destinos.
       </p>
     </div>
   )
@@ -295,6 +298,9 @@ function FormulaCard({
   isFormulaValid,
   total,
   formulaChanged,
+  accounts,
+  selectedAccountId,
+  onAccountChange,
 }: {
   draftFormula: AllocationFormula
   setDraftFormula: Dispatch<SetStateAction<AllocationFormula>>
@@ -302,19 +308,32 @@ function FormulaCard({
   isFormulaValid: boolean
   total: number
   formulaChanged: boolean
+  accounts: IncomeAccountView[]
+  selectedAccountId: string
+  onAccountChange: (sourceId: string) => void
 }) {
+  const selectedAccount = accounts.find((account) => account.source.id === selectedAccountId)
   return (
     <Card className="border-graphite bg-surface p-6 shadow-vault">
       <SectionIntro
-        eyebrow="Formula"
-        title="Distribucion del dinero"
-        description="Primero se aparta el ahorro del ingreso. Lo que queda se reparte entre gastos y gustos, y esos dos deben sumar 100%."
+        eyebrow="Fórmula"
+        title="Distribución del dinero"
+        description="Elige una cuenta y distribuye todo su ingreso entre ahorro, gastos y gustos. Los tres deben sumar 100%."
         icon={
           <div className="flex size-11 items-center justify-center rounded-2xl bg-primary/10 text-primary shadow-vault-sm">
             <AppIcon name="sliders" className="size-5" />
           </div>
         }
       />
+
+      <div className="mt-6 rounded-2xl border border-primary/20 bg-primary/5 p-4">
+        <IncomeAccountSelect
+          accounts={accounts}
+          value={selectedAccountId}
+          onValueChange={onAccountChange}
+          label="Cuenta cuya fórmula quieres configurar"
+        />
+      </div>
 
       <div className="mt-6 grid gap-3 md:grid-cols-3">
         {formulaPresets.map((preset) => {
@@ -344,13 +363,13 @@ function FormulaCard({
 
       <FormulaInputs draftFormula={draftFormula} setDraftFormula={setDraftFormula} />
 
-      <FormulaPreview draftFormula={draftFormula} />
+      <FormulaPreview draftFormula={draftFormula} account={selectedAccount} />
 
       <div className="mt-5 rounded-2xl border border-graphite bg-surface-container-low p-4">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
-            <p className="text-sm font-medium text-on-surface">Gastos + gustos</p>
-            <p className="mt-1 text-xs text-muted-gray">Estos dos reparten lo que queda tras el ahorro y deben sumar 100%.</p>
+            <p className="text-sm font-medium text-on-surface">Distribución completa</p>
+            <p className="mt-1 text-xs text-muted-gray">Ahorro, gastos y gustos deben sumar exactamente 100% de esta cuenta.</p>
           </div>
           <Badge
             variant="secondary"
@@ -386,14 +405,14 @@ function FormulaCard({
         <div className="mt-4 flex flex-wrap gap-3">
           <Button
             onClick={onSaveFormula}
-            disabled={!isFormulaValid || !formulaChanged}
+            disabled={!selectedAccountId || !isFormulaValid || !formulaChanged}
             className="bg-primary-container text-primary-foreground shadow-vault hover:brightness-110"
           >
             Guardar fórmula
           </Button>
           {!isFormulaValid ? (
             <p className="self-center text-xs text-warning">
-              Gastos y gustos deben sumar 100% entre los dos.
+              Ahorro, gastos y gustos deben sumar 100%.
             </p>
           ) : null}
         </div>
@@ -1259,26 +1278,57 @@ export default function Settings() {
   const background = usePreferencesStore((state) => state.background)
   const iconPack = usePreferencesStore((state) => state.iconPack)
   const formula = usePreferencesStore((state) => state.formula)
+  const accountSavingsFormulas = usePreferencesStore((state) => state.accountSavingsFormulas)
+  const activeCurrencyCode = usePreferencesStore((state) => state.activeCurrencyCode)
   const setAppearance = usePreferencesStore((state) => state.setAppearance)
   const setTheme = usePreferencesStore((state) => state.setTheme)
   const setBackground = usePreferencesStore((state) => state.setBackground)
   const setIconPack = usePreferencesStore((state) => state.setIconPack)
-  const setFormula = usePreferencesStore((state) => state.setFormula)
+  const setAccountFormula = usePreferencesStore((state) => state.setAccountFormula)
   const resetPreferences = usePreferencesStore((state) => state.resetPreferences)
+  const salaries = useFinanceStore((state) => state.salaries)
+  const incomeSources = useFinanceStore((state) => state.incomeSources)
 
-  const [draftFormula, setDraftFormula] = useState<AllocationFormula>(() => cloneFormula(formula))
+  const accounts = useMemo(
+    () => getIncomeAccountsForMonth(salaries, incomeSources, undefined, activeCurrencyCode)
+      .filter((account) => !isSavingsIncomeSource(account.source)),
+    [activeCurrencyCode, incomeSources, salaries],
+  )
+  const [selectedAccountPreference, setSelectedAccountPreference] = useState('')
+  const selectedAccountId = accounts.some((account) => account.source.id === selectedAccountPreference)
+    ? selectedAccountPreference
+    : accounts[0]?.source.id ?? ''
+  const selectedFormula = useMemo(
+    () => getAccountAllocationFormula(accountSavingsFormulas, selectedAccountId, formula),
+    [accountSavingsFormulas, formula, selectedAccountId],
+  )
+
+  const [draftFormula, setDraftFormula] = useState<AllocationFormula>(() => cloneFormula(selectedFormula))
+
+  useEffect(() => {
+    setDraftFormula(cloneFormula(selectedFormula))
+  }, [selectedFormula])
 
   const total = useMemo(() => getFormulaTotal(draftFormula), [draftFormula])
   const isFormulaValid = total === 100
   const formulaChanged =
-    draftFormula.expenses !== formula.expenses ||
-    draftFormula.wants !== formula.wants ||
-    draftFormula.savings !== formula.savings ||
-    draftFormula.rolloverSavings !== formula.rolloverSavings
+    draftFormula.expenses !== selectedFormula.expenses ||
+    draftFormula.wants !== selectedFormula.wants ||
+    draftFormula.savings !== selectedFormula.savings ||
+    draftFormula.rolloverSavings !== selectedFormula.rolloverSavings
+
+  function handleAccountChange(sourceId: string) {
+    setSelectedAccountPreference(sourceId)
+    setDraftFormula(cloneFormula(getAccountAllocationFormula(accountSavingsFormulas, sourceId, formula)))
+  }
 
   function handleSaveFormula() {
     if (!isFormulaValid) {
-      toast.error('Gastos y gustos deben sumar exactamente 100% entre los dos.')
+      toast.error('Ahorro, gastos y gustos deben sumar exactamente 100%.')
+      return
+    }
+    if (!selectedAccountId) {
+      toast.error('Selecciona una cuenta de ingreso.')
       return
     }
 
@@ -1286,9 +1336,9 @@ export default function Settings() {
     if (nextFormula.wants === 0) {
       nextFormula.rolloverSavings = false
     }
-    setFormula(nextFormula)
+    setAccountFormula(selectedAccountId, nextFormula)
     setDraftFormula(nextFormula)
-    toast.success('La formula financiera fue actualizada.')
+    toast.success('La fórmula de la cuenta fue actualizada.')
   }
 
   function handleResetPreferences() {
@@ -1326,7 +1376,7 @@ export default function Settings() {
         description="Revisa de un vistazo la fórmula activa y el estilo visual que está usando la app en este momento."
       >
         <SummaryCard
-          formula={formula}
+          formula={selectedFormula}
           appearance={appearance}
           theme={theme}
           background={background}
@@ -1346,9 +1396,10 @@ export default function Settings() {
             isFormulaValid={isFormulaValid}
             total={total}
             formulaChanged={formulaChanged}
+            accounts={accounts}
+            selectedAccountId={selectedAccountId}
+            onAccountChange={handleAccountChange}
           />
-
-          <AccountSavingsSettings />
 
           <CurrencySettingsCard />
 

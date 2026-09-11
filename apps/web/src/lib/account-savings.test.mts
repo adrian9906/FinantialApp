@@ -4,6 +4,7 @@ import type { IncomeSource, Salary } from '@plata/shared'
 import {
   findSavingsAccount,
   getAccountSavingsAmount,
+  getAccountAllocationFormula,
   getAccountSavingsPlan,
   getAccountSavingsPlans,
   getAccountSavingsRate,
@@ -25,6 +26,16 @@ assert.equal(getAccountSavingsRate({ salary: 50 }, 'salary'), 50)
 assert.equal(getAccountSavingsRate({ salary: 50 }, 'transfer'), 0, 'una cuenta sin formula no ahorra')
 assert.equal(getAccountSavingsRate({ salary: 150 }, 'salary'), 100, 'se limita a 100')
 assert.equal(getAccountSavingsRate({ salary: -5 }, 'salary'), 0, 'no acepta negativos')
+assert.deepEqual(
+  getAccountAllocationFormula({ salary: 50 }, 'salary', { savings: 25, expenses: 50, wants: 25, rolloverSavings: true }),
+  { savings: 50, expenses: 33.3, wants: 16.7, rolloverSavings: true },
+  'la preferencia antigua conserva el ahorro y reparte el resto',
+)
+assert.deepEqual(
+  getAccountAllocationFormula({}, 'new-account', { savings: 25, expenses: 65, wants: 35, rolloverSavings: true }),
+  { savings: 25, expenses: 48.8, wants: 26.2, rolloverSavings: true },
+  'convierte automáticamente la antigua fórmula secuencial al reparto directo',
+)
 console.log('PASS 1: el porcentaje de ahorro se define por cuenta')
 
 // El 50% del salario de 400 son 200 USD.

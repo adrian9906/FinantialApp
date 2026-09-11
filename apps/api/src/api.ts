@@ -137,15 +137,38 @@ const USD_CURRENCY_PREFERENCE: CurrencyPreferencePayload = {
  * Savings percentage per income account. Stored alongside the currencies so a
  * second device reproduces the same formulas instead of falling back to none.
  */
-export function normalizeAccountSavingsFormulas(value: unknown): Record<string, number> {
+export function normalizeAccountSavingsFormulas(value: unknown): Record<string, number | {
+  expenses: number
+  wants: number
+  savings: number
+  rolloverSavings: boolean
+}> {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return {}
-  const normalized: Record<string, number> = {}
+  const normalized: Record<string, number | {
+    expenses: number
+    wants: number
+    savings: number
+    rolloverSavings: boolean
+  }> = {}
 
-  for (const [sourceId, rawRate] of Object.entries(value as JsonRecord).slice(0, 200)) {
+  for (const [sourceId, rawEntry] of Object.entries(value as JsonRecord).slice(0, 200)) {
     const id = String(sourceId).trim().slice(0, 64)
-    const rate = Math.round(Number(rawRate))
-    if (!id || !Number.isFinite(rate) || rate <= 0) continue
-    normalized[id] = Math.min(100, rate)
+    if (!id) continue
+
+    if (rawEntry && typeof rawEntry === 'object' && !Array.isArray(rawEntry)) {
+      const formula = rawEntry as JsonRecord
+      const clamp = (entry: unknown) => Math.min(100, Math.max(0, Math.round((Number(entry) || 0) * 10) / 10))
+      normalized[id] = {
+        expenses: clamp(formula.expenses),
+        wants: clamp(formula.wants),
+        savings: clamp(formula.savings),
+        rolloverSavings: Boolean(formula.rolloverSavings),
+      }
+      continue
+    }
+
+    const rate = Math.round(Number(rawEntry))
+    if (Number.isFinite(rate) && rate > 0) normalized[id] = Math.min(100, rate)
   }
 
   return normalized

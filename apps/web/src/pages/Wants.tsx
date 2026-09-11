@@ -39,6 +39,7 @@ import { buildReceiptCategoryGroups, buildReceiptTransaction, getReceiptTotalsBy
 import { useAuthStore } from '@/store/authStore'
 import { IncomeAccountSelect } from '@/components/income/IncomeAccountSelect'
 import { getIncomeAccountOverview, getIncomeAccountsForMonth, type IncomeAccountView } from '@/lib/income-account-view'
+import { getAccountAllocationFormula } from '@/lib/account-savings'
 
 interface WantFormState {
   amount: string
@@ -201,11 +202,11 @@ export default function Wants() {
   const incomeSources = useFinanceStore((state) => state.incomeSources)
   const overview = useMonthlyOverview()
   const formula = usePreferencesStore((state) => state.formula)
+  const accountSavingsFormulas = usePreferencesStore((state) => state.accountSavingsFormulas)
   const activeCurrencyCode = usePreferencesStore((state) => state.activeCurrencyCode)
   const profileId = useAuthStore((state) => state.user?.id) ?? 'guest'
   const userRules = usePreferencesStore(useShallow((state) => state.categoryRulesByProfile[profileId] ?? []))
   const saveCategoryRule = usePreferencesStore((state) => state.saveCategoryRule)
-  const isWantsDisabled = formula.wants === 0
   const [open, setOpen] = useState(false)
   const [editId, setEditId] = useState<string | null>(null)
   const [sparkBursts, setSparkBursts] = useState<Record<string, number>>({})
@@ -245,8 +246,12 @@ export default function Wants() {
   const formAccount = accounts.find((account) => account.source.id === formIncomeSourceId)
   const accountCurrency = getCurrencyByCode(selectedAccount?.salary.currencyCode)
   const formCurrency = getCurrencyByCode(formAccount?.salary.currencyCode)
-  const accountOverview = getIncomeAccountOverview(selectedAccount, overview.periodTransactions, formula)
-  const formAccountOverview = getIncomeAccountOverview(formAccount, overview.periodTransactions, formula)
+  const accountFormula = getAccountAllocationFormula(accountSavingsFormulas, selectedIncomeSourceId, formula)
+  const formAccountFormula = getAccountAllocationFormula(accountSavingsFormulas, formIncomeSourceId, formula)
+  const isWantsDisabled = accountFormula.wants === 0
+  const isFormWantsDisabled = formAccountFormula.wants === 0
+  const accountOverview = getIncomeAccountOverview(selectedAccount, overview.periodTransactions, accountFormula)
+  const formAccountOverview = getIncomeAccountOverview(formAccount, overview.periodTransactions, formAccountFormula)
   const formatAccountMoney = (value: number) => formatMoneyWithCode(value, accountCurrency)
   const receiptCategoryGroups = useMemo(() => buildReceiptCategoryGroups(transactions), [transactions])
   const categoryWasChanged = useRef(false)
@@ -447,7 +452,7 @@ setCustomCategoryName('')
 
   async function handleSave() {
     if (!form.amount || !form.itemName || isSaving) return
-    if (isWantsDisabled) {
+    if (isFormWantsDisabled) {
       setFormError('La sección Gustos está desactivada porque su porcentaje es 0%.')
       return
     }
@@ -666,7 +671,7 @@ setCustomCategoryName('')
         <div className="relative z-10 grid gap-4 lg:grid-cols-[1.4fr_0.6fr]">
           <div>
             <div className="mb-2 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-              <p className="text-xs uppercase tracking-wider text-muted-gray">Presupuesto mensual ({formula.wants}%)</p>
+              <p className="text-xs uppercase tracking-wider text-muted-gray">Presupuesto mensual ({accountFormula.wants}%)</p>
               <Badge variant="secondary" className={`w-fit ${isWantsDisabled ? 'bg-warning/10 text-warning' : remaining >= 0 ? 'bg-success/10 text-success' : 'bg-error/10 text-error'}`}>
                 {isWantsDisabled
                   ? 'Sección desactivada'
@@ -829,6 +834,7 @@ setCustomCategoryName('')
                                   </span>
                                   <div className="flex gap-1">
                                     <Button
+                                      aria-label={`Editar gusto ${item.itemName}`}
                                       variant="ghost"
                                       size="icon"
                                       disabled={isWantsDisabled || isChecked}
@@ -838,6 +844,7 @@ setCustomCategoryName('')
                                       <Pencil data-icon="inline-start" />
                                     </Button>
                                     <Button
+                                      aria-label={`Eliminar gusto ${item.itemName}`}
                                       variant="ghost"
                                       size="icon"
                                       disabled={isChecked}

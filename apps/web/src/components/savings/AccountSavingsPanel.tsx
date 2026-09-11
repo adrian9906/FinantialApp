@@ -11,11 +11,11 @@ import {
   type AccountSavingsPlan,
 } from '@/lib/account-savings'
 import { formatMoneyWithCode, getCurrencyByCode } from '@/lib/currency'
-import { getIncomeAccountsForMonth } from '@/lib/income-account-view'
+import type { IncomeAccountView } from '@/lib/income-account-view'
 import { useFinanceStore } from '@/store/financeStore'
 import { usePreferencesStore } from '@/store/preferencesStore'
 
-export function AccountSavingsPanel() {
+export function AccountSavingsPanel({ account }: { account?: IncomeAccountView }) {
   const salaries = useFinanceStore((state) => state.salaries)
   const incomeSources = useFinanceStore((state) => state.incomeSources)
   const transferIncomeMoney = useFinanceStore((state) => state.transferIncomeMoney)
@@ -23,10 +23,7 @@ export function AccountSavingsPanel() {
   const [applyingId, setApplyingId] = useState<string | null>(null)
 
   const month = getMonthKey()
-  const accounts = useMemo(
-    () => getIncomeAccountsForMonth(salaries, incomeSources, month),
-    [incomeSources, month, salaries],
-  )
+  const accounts = useMemo(() => account ? [account] : [], [account])
   const plans = useMemo(
     () => getAccountSavingsPlans(accounts, accountSavingsFormulas, incomeSources),
     [accounts, accountSavingsFormulas, incomeSources],

@@ -33,6 +33,7 @@ import { reconcileIncomeAccountCharge } from '@/lib/income-account'
 import { ensureCurrencyPreference } from '@/lib/currency'
 import { useAuthStore } from '@/store/authStore'
 import { usePreferencesStore } from '@/store/preferencesStore'
+import { getAccountAllocationFormula } from '@/lib/account-savings'
 
 const GUEST_FINANCE_STORAGE_KEY = 'plata-guest-finance'
 
@@ -565,7 +566,13 @@ export const useFinanceStore = create<FinanceStore>()((set, get) => ({
     await updateLocalState(set, (state) => applyIncomeMoneyMovement(state, input, makeId))
   },
   addTransaction: async (transaction) => {
-    if (transaction.type === 'want' && usePreferencesStore.getState().formula.wants === 0) {
+    const preferences = usePreferencesStore.getState()
+    const transactionFormula = getAccountAllocationFormula(
+      preferences.accountSavingsFormulas,
+      transaction.incomeSourceId,
+      preferences.formula,
+    )
+    if (transaction.type === 'want' && transactionFormula.wants === 0) {
       throw new Error('La sección Gustos está desactivada porque su porcentaje es 0%.')
     }
 
@@ -645,11 +652,6 @@ export const useFinanceStore = create<FinanceStore>()((set, get) => ({
   restoreMonthlyPlan: async (id, scope = 'all') => {
     const history = get().monthlyPlanningHistory.find((entry) => entry.id === id)
     if (!history) return
-    const wantsDisabled = usePreferencesStore.getState().formula.wants === 0
-    if (wantsDisabled && (scope === 'wants' || (scope === 'all' && history.wants.length > 0))) {
-      throw new Error('No puedes restaurar gustos porque esa sección tiene una asignación de 0%.')
-    }
-
     const restoredTransactions = buildTransactionsFromHistory(history, scope)
     if (restoredTransactions.length === 0) return
 

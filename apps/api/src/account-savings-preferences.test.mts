@@ -4,6 +4,13 @@ import assert from 'node:assert/strict'
 import { normalizeAccountSavingsFormulas } from './api.ts'
 
 assert.deepEqual(normalizeAccountSavingsFormulas({ salary: 50, cup: 10 }), { salary: 50, cup: 10 })
+assert.deepEqual(
+  normalizeAccountSavingsFormulas({
+    salary: { savings: 62.5, expenses: 37.5, wants: 0, rolloverSavings: false },
+  }),
+  { salary: { savings: 62.5, expenses: 37.5, wants: 0, rolloverSavings: false } },
+  'conserva la fórmula completa de cada cuenta',
+)
 console.log('PASS 1: se conservan los porcentajes validos')
 
 assert.deepEqual(normalizeAccountSavingsFormulas({ salary: 150 }), { salary: 100 }, 'se limita a 100')

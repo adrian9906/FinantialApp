@@ -1,16 +1,62 @@
-import type { IncomeSource, Salary } from '@plata/shared'
+import { normalizeFormula, type AllocationFormula, type IncomeSource, type Salary } from '@plata/shared'
 
 import type { IncomeAccountView } from '@/lib/income-account-view'
 
-/** Percentage of an account's income that is moved to savings, keyed by source id. */
-export type AccountSavingsFormulas = Record<string, number>
+/** Complete distribution for each income account. Numeric entries are legacy savings-only values. */
+export type AccountSavingsFormulas = Record<string, AllocationFormula | number>
 
 export const SAVINGS_ACCOUNT_MARKER = 'savings'
 
 export function getAccountSavingsRate(formulas: AccountSavingsFormulas, sourceId: string) {
-  const rate = Number(formulas[sourceId])
+  const entry = formulas[sourceId]
+  const rate = Number(typeof entry === 'object' && entry ? entry.savings : entry)
   if (!Number.isFinite(rate)) return 0
   return Math.min(100, Math.max(0, Math.round(rate)))
+}
+
+export function getAccountAllocationFormula(
+  formulas: AccountSavingsFormulas,
+  sourceId: string | undefined,
+  fallback: AllocationFormula,
+) {
+  const normalizedFallback = normalizeFormula(fallback)
+  const fallbackTotal = normalizedFallback.savings + normalizedFallback.expenses + normalizedFallback.wants
+  const legacySpendingTotal = normalizedFallback.expenses + normalizedFallback.wants
+  let accountFallback = normalizedFallback
+  if (fallbackTotal > 100 && Math.abs(legacySpendingTotal - 100) < 0.01) {
+    const expenses = Math.round(
+      normalizedFallback.expenses * ((100 - normalizedFallback.savings) / 100) * 10,
+    ) / 10
+    accountFallback = normalizeFormula({
+      savings: normalizedFallback.savings,
+      expenses,
+      wants: 100 - normalizedFallback.savings - expenses,
+      rolloverSavings: normalizedFallback.rolloverSavings,
+    })
+  }
+
+  if (!sourceId) return accountFallback
+  const entry = formulas[sourceId]
+  if (typeof entry === 'object' && entry) return normalizeFormula(entry)
+  if (typeof entry !== 'number') return accountFallback
+
+  // Migrate the former savings-only setting without losing the user's choice:
+  // the remainder keeps the same expenses/wants proportion as the old formula.
+  const savings = Math.min(100, Math.max(0, entry))
+  const remainder = 100 - savings
+  const spendingTotal = Math.max(0, accountFallback.expenses + accountFallback.wants)
+  const expenses = spendingTotal > 0 ? remainder * (accountFallback.expenses / spendingTotal) : remainder
+
+  return normalizeFormula({
+    savings,
+    expenses,
+    wants: remainder - expenses,
+    rolloverSavings: accountFallback.rolloverSavings,
+  })
+}
+
+export function isSavingsIncomeSource(source: IncomeSource) {
+  return source.name.trim().toLocaleLowerCase('es').startsWith('ahorro ')
 }
 
 /**

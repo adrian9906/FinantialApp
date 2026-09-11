@@ -1,5 +1,5 @@
-import { useState } from 'react'
-import { buildSavingWithdrawalDescription, parseSavingDescription } from '@plata/shared'
+import { useMemo, useState } from 'react'
+import { buildSavingWithdrawalDescription, getMonthKey, parseSavingDescription } from '@plata/shared'
 import { useFinanceStore } from '@/store/financeStore'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -17,6 +17,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { usePreferencesStore } from '@/store/preferencesStore'
 import { getTodayDateKey } from '@/lib/date'
 import { AccountSavingsPanel } from '@/components/savings/AccountSavingsPanel'
+import { IncomeAccountSelect } from '@/components/income/IncomeAccountSelect'
+import { getIncomeAccountsForMonth } from '@/lib/income-account-view'
+import { findSavingsAccount, getAccountAllocationFormula, getSavingsAccountBalance, isSavingsIncomeSource } from '@/lib/account-savings'
 
 const GOAL_CATEGORY_LABELS = {
   emergency: 'Emergencia',
@@ -32,12 +35,28 @@ export default function Savings() {
   const updateTransaction = useFinanceStore((state) => state.updateTransaction)
   const removeTransaction = useFinanceStore((state) => state.removeTransaction)
   const savingsGoals = useFinanceStore((state) => state.savingsGoals)
+  const salaries = useFinanceStore((state) => state.salaries)
+  const incomeSources = useFinanceStore((state) => state.incomeSources)
   const addSavingsGoal = useFinanceStore((state) => state.addSavingsGoal)
   const updateSavingsGoal = useFinanceStore((state) => state.updateSavingsGoal)
   const removeSavingsGoal = useFinanceStore((state) => state.removeSavingsGoal)
   const overview = useMonthlyOverview()
   const moneyInput = useCurrencyInput()
-  const wantsEnabled = usePreferencesStore((state) => state.formula.wants > 0)
+  const formula = usePreferencesStore((state) => state.formula)
+  const accountSavingsFormulas = usePreferencesStore((state) => state.accountSavingsFormulas)
+  const activeCurrencyCode = usePreferencesStore((state) => state.activeCurrencyCode)
+  const accounts = useMemo(
+    () => getIncomeAccountsForMonth(salaries, incomeSources, undefined, activeCurrencyCode)
+      .filter((account) => !isSavingsIncomeSource(account.source)),
+    [activeCurrencyCode, incomeSources, salaries],
+  )
+  const [selectedAccountPreference, setSelectedAccountPreference] = useState('')
+  const selectedAccountId = accounts.some((account) => account.source.id === selectedAccountPreference)
+    ? selectedAccountPreference
+    : accounts[0]?.source.id ?? ''
+  const selectedAccount = accounts.find((account) => account.source.id === selectedAccountId)
+  const selectedFormula = getAccountAllocationFormula(accountSavingsFormulas, selectedAccountId, formula)
+  const wantsEnabled = selectedFormula.wants > 0
   const [open, setOpen] = useState(false)
   const [editId, setEditId] = useState<string | null>(null)
   const [form, setForm] = useState({ amount: '', date: getTodayDateKey() })
@@ -75,7 +94,7 @@ export default function Savings() {
 
   function resetWithdrawForm() {
     setWithdrawForm({
-      amount: moneyInput.fromUsd(Math.max(0, overview.accumulatedSavings)),
+      amount: moneyInput.fromUsd(Math.max(0, accountAccumulatedSavings)),
       target: 'purpose',
       itemName: '',
       date: getTodayDateKey(),
@@ -128,7 +147,7 @@ export default function Savings() {
 
   function handleOpenWithdraw(goal?: typeof savingsGoals[number]) {
     setWithdrawForm({
-      amount: moneyInput.fromUsd(Math.max(0, goal?.currentAmount ?? overview.accumulatedSavings)),
+      amount: moneyInput.fromUsd(Math.max(0, goal?.currentAmount ?? accountAccumulatedSavings)),
       target: 'purpose',
       itemName: '',
       date: getTodayDateKey(),
@@ -159,6 +178,9 @@ export default function Savings() {
       amount,
       type: 'saving' as const,
       date: form.date || new Date().toISOString().slice(0, 10),
+      incomeSourceId: selectedAccount?.source.id,
+      incomeSourceName: selectedAccount?.source.name,
+      isCash: selectedAccount?.source.isCash !== false,
     }
     setIsSaving(true)
 
@@ -176,10 +198,29 @@ export default function Savings() {
     }
   }
 
-  const savingsList = transactions.filter((transaction) => transaction.type === 'saving')
-  const remaining = overview.budgetSavings - overview.totalSavings
+  const savingsList = transactions.filter((transaction) => transaction.type === 'saving'
+    && transaction.incomeSourceId === selectedAccountId)
+  const accountPeriodSavings = overview.periodTransactions
+    .filter((transaction) => transaction.type === 'saving'
+      && transaction.incomeSourceId === selectedAccountId
+      && transaction.amount > 0)
+    .reduce((sum, transaction) => sum + transaction.amount, 0)
+  const accountBudgetSavings = Number(selectedAccount?.salary.amount ?? 0) * (selectedFormula.savings / 100)
+  const remaining = accountBudgetSavings - accountPeriodSavings
   const budgetFull = remaining <= 0
-  const availableSavings = Math.max(0, overview.accumulatedSavings)
+  const selectedSavingsSource = selectedAccount
+    ? findSavingsAccount(
+        incomeSources,
+        selectedAccount.salary.currencyCode ?? selectedAccount.source.currencyCode ?? 'USD',
+        selectedAccount.source.isCash !== false,
+      )
+    : undefined
+  const generatedSavingsBalance = selectedSavingsSource
+    ? getSavingsAccountBalance(salaries, selectedSavingsSource.id, getMonthKey())
+    : 0
+  const accountAccumulatedSavings = generatedSavingsBalance
+    + savingsList.reduce((sum, transaction) => sum + transaction.amount, 0)
+  const availableSavings = Math.max(0, accountAccumulatedSavings)
   const assignedToGoals = savingsGoals.reduce((sum, goal) => sum + goal.currentAmount, 0)
   const freeSavings = Math.max(0, availableSavings - assignedToGoals)
   const selectedSourceGoal = withdrawForm.sourceGoalId
@@ -282,6 +323,9 @@ export default function Savings() {
         sourceGoalName: selectedSourceGoal?.name,
       }),
       date: movementDate,
+      incomeSourceId: selectedAccount?.source.id,
+      incomeSourceName: selectedAccount?.source.name,
+      isCash: selectedAccount?.source.isCash !== false,
     }
     setIsWithdrawing(true)
 
@@ -349,7 +393,16 @@ export default function Savings() {
         </div>
       </header>
 
-      <AccountSavingsPanel />
+      <Card className="border-graphite bg-surface p-5 shadow-vault">
+        <IncomeAccountSelect
+          accounts={accounts}
+          value={selectedAccountId}
+          onValueChange={setSelectedAccountPreference}
+          label="Cuenta de ahorro"
+        />
+      </Card>
+
+      <AccountSavingsPanel account={selectedAccount} />
 
       <section className="grid gap-4 xl:grid-cols-[1.35fr_0.65fr]">
         <Card className="relative overflow-hidden border-success/20 bg-surface p-6 shadow-vault md:p-8">
@@ -357,7 +410,7 @@ export default function Savings() {
           <div className="relative">
             <p className="text-xs uppercase tracking-[0.22em] text-success">Ahorro total disponible</p>
             <p className="mt-3 text-5xl font-semibold tracking-tight tabular-nums text-on-surface md:text-6xl">
-              {formatMoney(overview.accumulatedSavings)}
+              {formatMoney(accountAccumulatedSavings)}
             </p>
             <p className="mt-3 max-w-xl text-sm text-muted-gray">
               Este es tu saldo real después de compras de deseos, retiros y pagos de deuda.
@@ -379,11 +432,10 @@ export default function Savings() {
         <Card className="border-primary/20 bg-surface p-5 shadow-vault md:p-6">
           <p className="text-xs uppercase tracking-[0.22em] text-primary">Metas de ahorro</p>
           <p className="mt-5 text-2xl font-semibold tabular-nums text-on-surface">
-            {formatMoney(overview.accumulatedSavings)}
+            {formatMoney(accountAccumulatedSavings)}
           </p>
           <p className="mt-2 text-sm text-muted-gray">
-            Cada cuenta tiene su propia meta según el porcentaje que le pusiste en Ajustes. Arriba las ves
-            por separado, con su moneda y su cuenta de ahorro.
+            Esta vista muestra únicamente el ahorro de la cuenta seleccionada y conserva su moneda.
           </p>
           <p className="mt-4 text-xs text-muted-gray">
             Las cuentas con 0% de ahorro no tienen meta y no aparecen.
@@ -432,10 +484,10 @@ export default function Savings() {
                       </p>
                     </div>
                     <div className="flex gap-1">
-                      <Button variant="ghost" size="icon" className="text-muted-gray hover:text-primary" onClick={() => handleOpenGoal(goal)}>
+                      <Button aria-label={`Editar meta ${goal.name}`} variant="ghost" size="icon" className="text-muted-gray hover:text-primary" onClick={() => handleOpenGoal(goal)}>
                         <Pencil data-icon="inline-start" />
                       </Button>
-                      <Button variant="ghost" size="icon" className="text-muted-gray hover:text-error" onClick={() => void removeSavingsGoal(goal.id)}>
+                      <Button aria-label={`Eliminar meta ${goal.name}`} variant="ghost" size="icon" className="text-muted-gray hover:text-error" onClick={() => void removeSavingsGoal(goal.id)}>
                         <Trash2 data-icon="inline-start" />
                       </Button>
                     </div>
@@ -452,7 +504,7 @@ export default function Savings() {
                     </Badge>
                   </div>
                   <div className="h-2 overflow-hidden rounded-full bg-surface-container-highest">
-                    <div className="h-full rounded-full bg-primary transition-all duration-700" style={{ width: `${progress}%` }} />
+                    <div className="h-full rounded-full bg-primary transition-[width] duration-700" style={{ width: `${progress}%` }} />
                   </div>
                   <div className="grid gap-3 sm:grid-cols-2">
                     <div className="rounded-xl bg-abyss p-3 shadow-vault-sm">
@@ -537,7 +589,7 @@ export default function Savings() {
                     {(() => {
                       const savingDetails = parseSavingDescription(transaction.description)
                       return savingDetails.kind === 'manual' && transaction.amount >= 0 ? (
-                        <Button variant="ghost" size="icon" className="text-muted-gray hover:text-primary" onClick={() => handleOpen(transaction)}>
+                        <Button aria-label="Editar ahorro" variant="ghost" size="icon" className="text-muted-gray hover:text-primary" onClick={() => handleOpen(transaction)}>
                           <Pencil data-icon="inline-start" />
                         </Button>
                       ) : null
@@ -545,7 +597,7 @@ export default function Savings() {
                     {(() => {
                       const savingDetails = parseSavingDescription(transaction.description)
                       return savingDetails.kind === 'debt-acquisition' || savingDetails.kind === 'debt-payment' ? null : (
-                        <Button variant="ghost" size="icon" className="text-muted-gray hover:text-error" onClick={() => void removeTransaction(transaction.id)}>
+                        <Button aria-label="Eliminar ahorro" variant="ghost" size="icon" className="text-muted-gray hover:text-error" onClick={() => void removeTransaction(transaction.id)}>
                           <Trash2 data-icon="inline-start" />
                         </Button>
                       )
