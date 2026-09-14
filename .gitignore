@@ -27,6 +27,7 @@ Obsidian.md
 diseño/
 /src/generated/prisma
 /apps/web/src/generated/prisma
+/apps/api/src/generated/prisma
 *.db
 *.db-journal
 .env

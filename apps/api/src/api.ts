@@ -19,7 +19,7 @@ import type {
   Transaction,
   WishlistItem,
 } from '@plata/shared'
-import type { Prisma } from '@prisma/client'
+import type { Prisma } from './generated/prisma/client.js'
 import { buildExpenseDescription, parseExpenseDescription } from '@plata/shared'
 
 import { clearSession, createSession, getSessionUser, hashPassword, verifyPassword } from './auth.js'
