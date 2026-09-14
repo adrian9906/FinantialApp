@@ -1,5 +1,4 @@
-const defaultApiBaseUrl = 'https://finantialapp.onrender.com'
-const rawApiBaseUrl = import.meta.env.VITE_API_BASE_URL?.trim() || defaultApiBaseUrl
+const rawApiBaseUrl = import.meta.env.VITE_API_BASE_URL?.trim() || ''
 const SESSION_TOKEN_KEY = 'plata-session-token'
 
 function normalizeBaseUrl(baseUrl: string) {
