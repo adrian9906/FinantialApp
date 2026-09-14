@@ -14,6 +14,8 @@ export interface IncomeMoneyMovement {
   month: string
   destination: IncomeMoneyDestination
   sourceSalaryId?: string
+  /** Savings allocation keeps the income account's displayed balance intact. */
+  preserveSourceBalance?: boolean
 }
 
 export interface IncomeMoneyState {
@@ -73,15 +75,17 @@ export function applyIncomeMoneyMovement(
   const target = state.salaries.find(
     (salary) => salary.month === movement.month && salary.sourceId === destinationSource.id,
   )
+  const isTransfer = Boolean(sourceSalary)
   const salaries = state.salaries.map((salary) => {
-    if (salary.id === sourceSalary?.id) return {
+    if (salary.id === sourceSalary?.id && !movement.preserveSourceBalance) return {
       ...salary,
-      amount: Math.max(0, salary.amount - amountUsd),
       balance: Math.max(0, Number(salary.balance ?? salary.amount) - amountUsd),
     }
     if (salary.id === target?.id) return {
       ...salary,
-      amount: salary.amount + amountUsd,
+      // Moving existing money changes balances, not the income registered for
+      // the month. A deposit without an origin is new income and does increase it.
+      amount: salary.amount + (isTransfer ? 0 : amountUsd),
       balance: Number(salary.balance ?? salary.amount) + amountUsd,
     }
     return salary
@@ -90,7 +94,7 @@ export function applyIncomeMoneyMovement(
   if (!target) {
     salaries.unshift({
       id: createId('salary'),
-      amount: amountUsd,
+      amount: isTransfer ? 0 : amountUsd,
       balance: amountUsd,
       month: movement.month,
       currencyCode: normalizedCurrency,

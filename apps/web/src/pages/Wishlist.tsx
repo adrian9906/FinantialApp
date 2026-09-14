@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   buildPurchaseProjection,
+  getMonthKey,
   getWishlistAvailableAmount,
   getWishlistExternalContribution,
   getWishlistReservedAmount,
@@ -32,10 +33,10 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { ImageUploadField } from '@/components/wishlist/ImageUploadField'
 import { searchPriceScout, PRICESCOUT_STORE_OPTIONS, groupPriceScoutResultsByStore, normalizePriceScoutStore, type PriceScoutStoreValue } from '@/lib/pricescout'
 import { exportWishlistReport } from '@/lib/reportExports'
-import { useMonthlyOverview } from '@/lib/useMonthlyOverview'
 import { useFinanceStore } from '@/store/financeStore'
-import { convertToUsd, formatMoney, getCurrencyByCode, useCurrencyInput } from '@/lib/currency'
+import { convertToUsd, convertUsdToInput, formatMoney, formatMoneyWithCode, getCurrencyByCode } from '@/lib/currency'
 import { WantCelebration } from '@/components/celebration/WantCelebration'
+import { findSavingsAccount, getSavingsAccountBalance, isSavingsIncomeSource } from '@/lib/account-savings'
 
 interface FormState {
   name: string
@@ -71,6 +72,16 @@ function parseMoneyInput(value: string) {
 
 const formatCurrency = formatMoney
 
+type SavingsCurrencyCode = 'USD' | 'CUP'
+
+function getWishlistCurrency(item: { sourceCurrency?: string }): SavingsCurrencyCode {
+  return item.sourceCurrency?.trim().toUpperCase() === 'CUP' ? 'CUP' : 'USD'
+}
+
+function formatWishlistMoney(item: { sourceCurrency?: string }, value: number) {
+  return formatMoneyWithCode(value, getCurrencyByCode(getWishlistCurrency(item)))
+}
+
 function getPriorityLabel(priority: FormState['priority']) {
   if (priority === 'high') return 'Alta'
   if (priority === 'low') return 'Baja'
@@ -97,15 +108,12 @@ export default function Wishlist() {
   const allWishlist = useFinanceStore((state) => state.wishlist)
   const transactions = useFinanceStore((state) => state.transactions)
   const salaries = useFinanceStore((state) => state.salaries)
+  const incomeSources = useFinanceStore((state) => state.incomeSources)
+  const savingsGoals = useFinanceStore((state) => state.savingsGoals)
   const addWishlistItem = useFinanceStore((state) => state.addWishlistItem)
   const updateWishlistItem = useFinanceStore((state) => state.updateWishlistItem)
   const removeWishlistItem = useFinanceStore((state) => state.removeWishlistItem)
-  const overview = useMonthlyOverview()
-  const wishlist = useMemo(
-    () => allWishlist.filter((item) => item.incomeSourceId === overview.activeIncomeSourceId),
-    [allWishlist, overview.activeIncomeSourceId],
-  )
-  const moneyInput = useCurrencyInput()
+  const wishlist = allWishlist
   const [open, setOpen] = useState(false)
   const [editId, setEditId] = useState<string | null>(null)
   const [viewMode, setViewMode] = useState<ViewMode>('cards')
@@ -126,7 +134,7 @@ export default function Wishlist() {
     image: undefined,
     sourceStore: undefined,
     sourceUrl: undefined,
-    sourceCurrency: undefined,
+    sourceCurrency: 'USD',
   })
 
   useEffect(() => {
@@ -135,49 +143,92 @@ export default function Wishlist() {
     }
   }, [])
 
-  const averageMonthlySavings = useMemo(() => {
-    const totalSaved = transactions
-      .filter((transaction) => transaction.type === 'saving' && transaction.incomeSourceId === overview.activeIncomeSourceId)
-      .reduce((sum, transaction) => sum + transaction.amount, 0)
+  const sourceById = useMemo(() => new Map(incomeSources.map((source) => [source.id, source])), [incomeSources])
+  const savingsByCurrency = useMemo(() => {
+    return Object.fromEntries((['USD', 'CUP'] as const).map((currencyCode) => {
+      const savingsAccount = findSavingsAccount(incomeSources, currencyCode, true)
+      const generatedBalance = savingsAccount
+        ? getSavingsAccountBalance(salaries, savingsAccount.id, getMonthKey())
+        : 0
+      const manualBalance = transactions
+        .filter((transaction) => {
+          if (transaction.type !== 'saving') return false
+          const source = transaction.incomeSourceId ? sourceById.get(transaction.incomeSourceId) : undefined
+          return !source || (!isSavingsIncomeSource(source)
+            && (source.currencyCode ?? 'USD').trim().toUpperCase() === currencyCode)
+        })
+        .reduce((sum, transaction) => sum + transaction.amount, 0)
+      const assignedGoals = savingsGoals
+        .filter((goal) => {
+          if (goal.incomeSourceId === savingsAccount?.id) return true
+          const source = goal.incomeSourceId ? sourceById.get(goal.incomeSourceId) : undefined
+          return Boolean(source)
+            && !isSavingsIncomeSource(source!)
+            && (source!.currencyCode ?? 'USD').trim().toUpperCase() === currencyCode
+        })
+        .reduce((sum, goal) => sum + goal.currentAmount, 0)
+      const purchasedReserved = wishlist
+        .filter((item) => getWishlistCurrency(item) === currencyCode && isWishlistPurchased(item))
+        .reduce((sum, item) => sum + getWishlistReservedAmount(item), 0)
 
-    const accountSalaries = salaries.filter((salary) => salary.sourceId === overview.activeIncomeSourceId)
-    const trackedMonths = accountSalaries.length > 0
-      ? new Set(accountSalaries.map((salary) => salary.month)).size
-      : new Set(
-        transactions
-          .filter((transaction) => transaction.type === 'saving' && transaction.incomeSourceId === overview.activeIncomeSourceId)
-          .map((transaction) => transaction.date.slice(0, 7)),
-      ).size
+      return [currencyCode, {
+        account: savingsAccount,
+        balance: Math.max(0, generatedBalance + manualBalance),
+        assignedGoals,
+        purchasedReserved,
+        free: Math.max(0, generatedBalance + manualBalance - assignedGoals - purchasedReserved),
+      }]
+    })) as Record<SavingsCurrencyCode, {
+      account: ReturnType<typeof findSavingsAccount>
+      balance: number
+      assignedGoals: number
+      purchasedReserved: number
+      free: number
+    }>
+  }, [incomeSources, salaries, savingsGoals, sourceById, transactions, wishlist])
+  const averageMonthlySavingsByCurrency = useMemo(() => {
+    return Object.fromEntries((['USD', 'CUP'] as const).map((currencyCode) => {
+      const relevant = transactions.filter((transaction) => {
+        if (transaction.type !== 'saving' || transaction.amount <= 0) return false
+        const source = transaction.incomeSourceId ? sourceById.get(transaction.incomeSourceId) : undefined
+        return (source?.currencyCode ?? 'USD').trim().toUpperCase() === currencyCode
+      })
+      const trackedMonths = new Set(relevant.map((transaction) => transaction.date.slice(0, 7))).size
+      const average = trackedMonths > 0
+        ? relevant.reduce((sum, transaction) => sum + transaction.amount, 0) / trackedMonths
+        : 0
+      return [currencyCode, average]
+    })) as Record<SavingsCurrencyCode, number>
+  }, [sourceById, transactions])
 
-    if (trackedMonths === 0) return 0
-
-    return totalSaved / trackedMonths
-  }, [overview.activeIncomeSourceId, salaries, transactions])
-
-  const currentFreeSavedAmount = Math.max(0, overview.freeSavings)
   const purchasedCount = wishlist.filter((item) => isWishlistPurchased(item)).length
-  const pendingWishlist = sortWishlistByPriority(wishlist.filter((item) => !isWishlistPurchased(item)))
-  const purchasedWishlist = sortWishlistByPriority(wishlist.filter((item) => isWishlistPurchased(item)))
-  const wishlistSections = [
+  const wishlistSections = (['USD', 'CUP'] as const).flatMap((currencyCode) => ([
     {
-      id: 'pending',
-      title: 'Deseos pendientes',
-      description: 'Productos que todavía estás planificando o ahorrando para comprar.',
-      emptyMessage: 'No tienes deseos pendientes. Todo lo de tu lista ya está comprado.',
-      items: pendingWishlist,
+      id: `pending-${currencyCode}`,
+      status: 'pending' as const,
+      currencyCode,
+      title: `Deseos pendientes · ${currencyCode}`,
+      description: `Se pagan únicamente desde la cuenta Ahorro ${currencyCode}.`,
+      emptyMessage: `No tienes deseos pendientes en ${currencyCode}.`,
+      items: sortWishlistByPriority(wishlist.filter((item) => !isWishlistPurchased(item) && getWishlistCurrency(item) === currencyCode)),
     },
     {
-      id: 'purchased',
-      title: 'Deseos comprados',
-      description: 'Historial de productos conseguidos y descontados de tus ahorros.',
-      emptyMessage: 'Todavía no has marcado ningún deseo como comprado.',
-      items: purchasedWishlist,
+      id: `purchased-${currencyCode}`,
+      status: 'purchased' as const,
+      currencyCode,
+      title: `Deseos comprados · ${currencyCode}`,
+      description: `Historial descontado de la cuenta Ahorro ${currencyCode}.`,
+      emptyMessage: `Todavía no has comprado deseos en ${currencyCode}.`,
+      items: sortWishlistByPriority(wishlist.filter((item) => isWishlistPurchased(item) && getWishlistCurrency(item) === currencyCode)),
     },
-  ] as const
+  ])).filter((section) => section.items.length > 0 || section.status === 'pending')
   const editItem = useMemo(() => wishlist.find((item) => item.id === editId) ?? null, [editId, wishlist])
-  const formPriceInUsd = moneyInput.toUsd(parseMoneyInput(form.price))
-  const formExternalContributionInUsd = moneyInput.toUsd(parseMoneyInput(form.externalContribution))
-  const reachedItems = wishlist.filter((item) => getWishlistAvailableAmount(item, currentFreeSavedAmount) >= item.price && item.price > 0).length
+  const formCurrencyCode = getWishlistCurrency(form)
+  const formCurrency = getCurrencyByCode(formCurrencyCode)
+  const formPriceInUsd = convertToUsd(parseMoneyInput(form.price), formCurrency)
+  const formExternalContributionInUsd = convertToUsd(parseMoneyInput(form.externalContribution), formCurrency)
+  const formSavings = savingsByCurrency[formCurrencyCode]
+  const reachedItems = wishlist.filter((item) => getWishlistAvailableAmount(item, savingsByCurrency[getWishlistCurrency(item)].free) >= item.price && item.price > 0).length
   const groupedSearchResults = useMemo(() => groupPriceScoutResultsByStore(searchResults), [searchResults])
 
   function resetForm() {
@@ -190,7 +241,7 @@ export default function Wishlist() {
       image: undefined,
       sourceStore: undefined,
       sourceUrl: undefined,
-      sourceCurrency: undefined,
+      sourceCurrency: 'USD',
     })
     setSearchQuery('')
     setSelectedStores(DEFAULT_STORES)
@@ -207,13 +258,13 @@ export default function Wishlist() {
       setEditId(entry.id)
       setForm({
         name: entry.name,
-        price: moneyInput.fromUsd(entry.price),
-        externalContribution: getWishlistExternalContribution(entry) ? moneyInput.fromUsd(getWishlistExternalContribution(entry)) : '',
+        price: convertUsdToInput(entry.price, getCurrencyByCode(getWishlistCurrency(entry))),
+        externalContribution: getWishlistExternalContribution(entry) ? convertUsdToInput(getWishlistExternalContribution(entry), getCurrencyByCode(getWishlistCurrency(entry))) : '',
         priority: entry.priority,
         image: entry.image,
         sourceStore: entry.sourceStore,
         sourceUrl: entry.sourceUrl,
-        sourceCurrency: entry.sourceCurrency,
+        sourceCurrency: getWishlistCurrency(entry),
       })
       setSearchQuery(entry.name)
     } else {
@@ -241,11 +292,11 @@ export default function Wishlist() {
     setForm((current) => ({
       ...current,
       name: result.title,
-      price: moneyInput.fromUsd(priceInUsd),
+      price: convertUsdToInput(priceInUsd, getCurrencyByCode(result.currency === 'CUP' ? 'CUP' : 'USD')),
       image: result.image || current.image,
       sourceStore: normalizePriceScoutStore(result.store),
       sourceUrl: result.url,
-      sourceCurrency: result.currency,
+      sourceCurrency: result.currency === 'CUP' ? 'CUP' : 'USD',
     }))
     setSearchQuery(result.title)
   }
@@ -293,9 +344,9 @@ export default function Wishlist() {
       image: form.image,
       sourceStore: form.sourceStore,
       sourceUrl: form.sourceUrl,
-      sourceCurrency: form.sourceCurrency,
-      incomeSourceId: overview.activeIncomeSourceId,
-      incomeSourceName: overview.activeAccount?.source.name,
+      sourceCurrency: formCurrencyCode,
+      incomeSourceId: formSavings.account?.id,
+      incomeSourceName: formSavings.account?.name ?? `Ahorro ${formCurrencyCode}`,
     }
 
     setIsSaving(true)
@@ -318,7 +369,7 @@ export default function Wishlist() {
 
     const purchased = isWishlistPurchased(item)
     const externalContribution = getWishlistExternalContribution(item)
-    const availableToSpend = getWishlistAvailableAmount(item, currentFreeSavedAmount)
+    const availableToSpend = getWishlistAvailableAmount(item, savingsByCurrency[getWishlistCurrency(item)].free)
 
     if (!purchased && availableToSpend < item.price) {
       return
@@ -391,23 +442,20 @@ export default function Wishlist() {
       </header>
 
       <section className="grid grid-cols-1 gap-4 lg:grid-cols-3">
-        <Card className="border-0 bg-surface p-5 shadow-vault">
-          <p className="text-xs uppercase tracking-[0.22em] text-medium-gray">Ahorro disponible</p>
-          <p className="mt-3 text-3xl font-semibold text-on-surface">{formatCurrency(currentFreeSavedAmount)}</p>
-          <p className="mt-2 text-sm text-muted-gray">
-            {overview.assignedSavingsGoals > 0
-              ? `Saldo total real: ${formatCurrency(overview.accumulatedSavings)}. ${formatCurrency(overview.assignedSavingsGoals)} están apartados en bolsillos y no cuentan para deseos.`
-              : overview.reservedForPurchasedWishlist > 0
-                ? `${formatCurrency(overview.reservedForPurchasedWishlist)} ya se descontaron del ahorro por deseos comprados.`
-                : 'Este total se compara automaticamente contra cada producto.'}
-          </p>
-        </Card>
-
-        <Card className="border-0 bg-surface p-5 shadow-vault">
-          <p className="text-xs uppercase tracking-[0.22em] text-medium-gray">Promedio mensual</p>
-          <p className="mt-3 text-3xl font-semibold text-on-surface">{formatCurrency(averageMonthlySavings)}</p>
-          <p className="mt-2 text-sm text-muted-gray">Calculado con tus registros de ahorro reales por mes.</p>
-        </Card>
+        {(['USD', 'CUP'] as const).map((currencyCode) => (
+          <Card key={currencyCode} className="border-0 bg-surface p-5 shadow-vault">
+            <p className="text-xs uppercase tracking-[0.22em] text-medium-gray">Ahorro {currencyCode} disponible</p>
+            <p className="mt-3 text-3xl font-semibold text-on-surface">
+              {formatMoneyWithCode(savingsByCurrency[currencyCode].free, getCurrencyByCode(currencyCode))}
+            </p>
+            <p className="mt-2 text-sm text-muted-gray">
+              Saldo de Ahorro {currencyCode}: {formatMoneyWithCode(savingsByCurrency[currencyCode].balance, getCurrencyByCode(currencyCode))}.
+              {savingsByCurrency[currencyCode].assignedGoals > 0
+                ? ` ${formatMoneyWithCode(savingsByCurrency[currencyCode].assignedGoals, getCurrencyByCode(currencyCode))} están asignados a metas.`
+                : ' Sin dinero asignado a metas.'}
+            </p>
+          </Card>
+        ))}
 
         <Card className="border-0 bg-surface p-5 shadow-vault">
           <p className="text-xs uppercase tracking-[0.22em] text-medium-gray">Deseos alcanzables hoy</p>
@@ -437,7 +485,7 @@ export default function Wishlist() {
                 </div>
                 <Badge
                   variant="secondary"
-                  className={section.id === 'purchased' ? 'w-fit bg-success/10 text-success' : 'w-fit bg-primary/10 text-primary'}
+                  className={section.status === 'purchased' ? 'w-fit bg-success/10 text-success' : 'w-fit bg-primary/10 text-primary'}
                 >
                   {section.items.length} {section.items.length === 1 ? 'deseo' : 'deseos'}
                 </Badge>
@@ -453,17 +501,19 @@ export default function Wishlist() {
             const purchased = isWishlistPurchased(item)
             const reservedAmount = getWishlistReservedAmount(item)
             const externalContribution = getWishlistExternalContribution(item)
-            const effectiveSavedAmount = getWishlistAvailableAmount(item, currentFreeSavedAmount)
+            const itemCurrencyCode = getWishlistCurrency(item)
+            const itemAverageMonthlySavings = averageMonthlySavingsByCurrency[itemCurrencyCode]
+            const effectiveSavedAmount = getWishlistAvailableAmount(item, savingsByCurrency[itemCurrencyCode].free)
             const canBePurchased = purchased || effectiveSavedAmount >= item.price
             const projection = purchased
               ? {
                 remaining: 0,
                 progress: 100,
                 timelineLabel: 'Ya lo compraste.',
-                purchaseDateLabel: `Descontado del ahorro: ${formatCurrency(reservedAmount)}`,
+                purchaseDateLabel: `Descontado del ahorro: ${formatWishlistMoney(item, reservedAmount)}`,
                 isReady: true,
               }
-              : buildPurchaseProjection(item.price, effectiveSavedAmount, averageMonthlySavings, (date) => dateFormatter.format(date))
+              : buildPurchaseProjection(item.price, effectiveSavedAmount, itemAverageMonthlySavings, (date) => dateFormatter.format(date))
 
             return (
               <article key={item.id} className="overflow-hidden rounded-2xl bg-surface shadow-vault">
@@ -495,6 +545,7 @@ export default function Wishlist() {
                       <Badge variant="outline" className={getPriorityBadgeClass(item.priority)}>
                         Prioridad {getPriorityLabel(item.priority)}
                       </Badge>
+                      <Badge variant="secondary" className="bg-primary/10 text-primary">Ahorro {itemCurrencyCode}</Badge>
                       {item.sourceStore ? (
                         <Badge variant="secondary" className="bg-surface/75 text-white">
                           {getStoreLabel(item.sourceStore)}
@@ -507,13 +558,13 @@ export default function Wishlist() {
                       ) : null}
                     </div>
                     <h2 className="mt-2 text-2xl font-semibold text-white">{item.name}</h2>
-                    <p className="mt-1 text-sm text-lavender">{formatCurrency(item.price)}</p>
+                    <p className="mt-1 text-sm text-lavender">{formatWishlistMoney(item, item.price)}</p>
                     <p className="mt-2 text-xs text-white/80 sm:hidden">
                       {purchased
-                        ? `Comprado. Se descontaron ${formatCurrency(reservedAmount)} de tus ahorros.`
+                        ? `Comprado. Se descontaron ${formatWishlistMoney(item, reservedAmount)} de tus ahorros.`
                         : canBePurchased
-                          ? `Listo para comprar. Saldrian ${formatCurrency(Math.max(0, item.price - externalContribution))} de tus ahorros.`
-                          : `Aún faltan ${formatCurrency(projection.remaining)} para poder comprarlo.`}
+                          ? `Listo para comprar. Saldrían ${formatWishlistMoney(item, Math.max(0, item.price - externalContribution))} de tus ahorros.`
+                          : `Aún faltan ${formatWishlistMoney(item, projection.remaining)} para poder comprarlo.`}
                     </p>
                     {item.sourceUrl ? (
                       <a
@@ -535,10 +586,10 @@ export default function Wishlist() {
                       <p className="text-sm font-medium text-on-surface">Marcar como comprado</p>
                       <p className="text-xs text-muted-gray">
                         {purchased
-                          ? `Ya se descontaron ${formatCurrency(reservedAmount)} de tus ahorros.`
+                          ? `Ya se descontaron ${formatWishlistMoney(item, reservedAmount)} de tus ahorros.`
                           : canBePurchased
-                            ? `Ya puedes comprarlo. De tus ahorros saldrian ${formatCurrency(Math.max(0, item.price - externalContribution))}.`
-                            : `Aún no alcanza el ahorro disponible más el aporte externo para cubrir ${formatCurrency(item.price)}.`}
+                            ? `Ya puedes comprarlo. De tus ahorros saldrían ${formatWishlistMoney(item, Math.max(0, item.price - externalContribution))}.`
+                            : `Aún no alcanza el ahorro disponible más el aporte externo para cubrir ${formatWishlistMoney(item, item.price)}.`}
                       </p>
                     </div>
                     <Checkbox
@@ -558,11 +609,11 @@ export default function Wishlist() {
                       <div className="h-full rounded-full bg-primary transition-all duration-700" style={{ width: `${projection.progress}%` }} />
                     </div>
                     <div className="mt-3 flex items-center justify-between text-xs text-muted-gray">
-                      <span>Tienes libre: {formatCurrency(effectiveSavedAmount)}</span>
-                      <span>Faltan: {formatCurrency(projection.remaining)}</span>
+                      <span>Tienes libre: {formatWishlistMoney(item, effectiveSavedAmount)}</span>
+                      <span>Faltan: {formatWishlistMoney(item, projection.remaining)}</span>
                     </div>
                     {externalContribution > 0 ? (
-                      <p className="mt-3 text-xs text-muted-gray">Incluye {formatCurrency(externalContribution)} de dinero externo para este deseo.</p>
+                      <p className="mt-3 text-xs text-muted-gray">Incluye {formatWishlistMoney(item, externalContribution)} de dinero externo para este deseo.</p>
                     ) : null}
                     {item.sourceUrl ? (
                       <a
@@ -590,7 +641,7 @@ export default function Wishlist() {
 
                   <div className="flex items-center justify-between gap-3">
                     <p className="text-xs text-muted-gray">
-                      Basado en {formatCurrency(effectiveSavedAmount)} libres y un promedio de {formatCurrency(averageMonthlySavings)} al mes.
+                      Basado en {formatWishlistMoney(item, effectiveSavedAmount)} libres y un promedio de {formatWishlistMoney(item, itemAverageMonthlySavings)} al mes.
                     </p>
                     <div className="flex gap-1">
                       <Button variant="ghost" size="icon" className="text-muted-gray hover:text-primary" onClick={() => handleOpen(item)}>
@@ -621,7 +672,7 @@ export default function Wishlist() {
                 </div>
                 <Badge
                   variant="secondary"
-                  className={section.id === 'purchased' ? 'w-fit bg-success/10 text-success' : 'w-fit bg-primary/10 text-primary'}
+                  className={section.status === 'purchased' ? 'w-fit bg-success/10 text-success' : 'w-fit bg-primary/10 text-primary'}
                 >
                   {section.items.length} {section.items.length === 1 ? 'deseo' : 'deseos'}
                 </Badge>
@@ -637,17 +688,19 @@ export default function Wishlist() {
             const purchased = isWishlistPurchased(item)
             const reservedAmount = getWishlistReservedAmount(item)
             const externalContribution = getWishlistExternalContribution(item)
-            const effectiveSavedAmount = getWishlistAvailableAmount(item, currentFreeSavedAmount)
+            const itemCurrencyCode = getWishlistCurrency(item)
+            const itemAverageMonthlySavings = averageMonthlySavingsByCurrency[itemCurrencyCode]
+            const effectiveSavedAmount = getWishlistAvailableAmount(item, savingsByCurrency[itemCurrencyCode].free)
             const canBePurchased = purchased || effectiveSavedAmount >= item.price
             const projection = purchased
               ? {
                 remaining: 0,
                 progress: 100,
                 timelineLabel: 'Ya lo compraste.',
-                purchaseDateLabel: `Descontado del ahorro: ${formatCurrency(reservedAmount)}`,
+                purchaseDateLabel: `Descontado del ahorro: ${formatWishlistMoney(item, reservedAmount)}`,
                 isReady: true,
               }
-              : buildPurchaseProjection(item.price, effectiveSavedAmount, averageMonthlySavings, (date) => dateFormatter.format(date))
+              : buildPurchaseProjection(item.price, effectiveSavedAmount, itemAverageMonthlySavings, (date) => dateFormatter.format(date))
 
             return (
               <article key={item.id} className="rounded-2xl bg-surface p-4 shadow-vault">
@@ -668,6 +721,7 @@ export default function Wishlist() {
                         <Badge variant="outline" className={getPriorityBadgeClass(item.priority)}>
                           Prioridad {getPriorityLabel(item.priority)}
                         </Badge>
+                        <Badge variant="secondary" className="bg-primary/10 text-primary">Ahorro {itemCurrencyCode}</Badge>
                         {item.sourceStore ? (
                           <Badge variant="secondary" className="bg-surface-container-high text-on-surface">
                             {getStoreLabel(item.sourceStore)}
@@ -680,7 +734,7 @@ export default function Wishlist() {
                         ) : null}
                       </div>
                       <h2 className="text-xl font-semibold text-on-surface">{item.name}</h2>
-                      <p className="text-sm text-primary">{formatCurrency(item.price)}</p>
+                      <p className="text-sm text-primary">{formatWishlistMoney(item, item.price)}</p>
                       <p className="text-sm text-muted-gray">{projection.purchaseDateLabel}</p>
                       {item.sourceUrl ? (
                         <a href={item.sourceUrl} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-xs text-primary hover:underline">
@@ -701,9 +755,9 @@ export default function Wishlist() {
                         <div className="h-full rounded-full bg-primary transition-all duration-700" style={{ width: `${projection.progress}%` }} />
                       </div>
                       <div className="mt-3 space-y-1 text-sm text-muted-gray">
-                        <p>Tienes libres: {formatCurrency(effectiveSavedAmount)}</p>
-                        <p>Restante: {formatCurrency(projection.remaining)}</p>
-                        {externalContribution > 0 ? <p>Aporte externo: {formatCurrency(externalContribution)}</p> : null}
+                        <p>Tienes libres: {formatWishlistMoney(item, effectiveSavedAmount)}</p>
+                        <p>Restante: {formatWishlistMoney(item, projection.remaining)}</p>
+                        {externalContribution > 0 ? <p>Aporte externo: {formatWishlistMoney(item, externalContribution)}</p> : null}
                         <p>{projection.timelineLabel}</p>
                       </div>
                     </div>
@@ -714,9 +768,9 @@ export default function Wishlist() {
                           <p className="text-sm font-medium text-on-surface">Marcar como comprado</p>
                           <p className="text-xs text-muted-gray">
                             {purchased
-                              ? `Ya se descontaron ${formatCurrency(reservedAmount)} de tus ahorros.`
+                              ? `Ya se descontaron ${formatWishlistMoney(item, reservedAmount)} de tus ahorros.`
                               : canBePurchased
-                                ? `Marca el check para descontar ${formatCurrency(Math.max(0, item.price - externalContribution))} de tus ahorros.`
+                                ? `Marca el check para descontar ${formatWishlistMoney(item, Math.max(0, item.price - externalContribution))} de tus ahorros.`
                                 : 'Todavia no tienes ahorro suficiente, incluso contando el aporte externo.'}
                           </p>
                         </div>
@@ -730,7 +784,7 @@ export default function Wishlist() {
 
                       <p className="rounded-xl border border-graphite bg-abyss p-4 text-sm text-muted-gray">
                         {purchased
-                          ? `Este deseo ya fue comprado y se descontaron ${formatCurrency(reservedAmount)} de tus ahorros.`
+                          ? `Este deseo ya fue comprado y se descontaron ${formatWishlistMoney(item, reservedAmount)} de tus ahorros.`
                           : `Si mantienes este ritmo de ahorro, podras comprarlo el ${projection.purchaseDateLabel.replace('Compra posible: ', '')}.`}
                       </p>
 
@@ -900,7 +954,7 @@ export default function Wishlist() {
 
               <div className="grid gap-4 md:grid-cols-2">
                 <div className="space-y-2">
-                  <Label className="text-medium-gray">Precio ({moneyInput.currency.code})</Label>
+                  <Label className="text-medium-gray">Precio ({formCurrencyCode})</Label>
                   <Input
                     type="number"
                     min="0"
@@ -911,7 +965,7 @@ export default function Wishlist() {
                 </div>
 
                 <div className="space-y-2">
-                  <Label className="text-medium-gray">Dinero externo ({moneyInput.currency.code})</Label>
+                  <Label className="text-medium-gray">Dinero externo ({formCurrencyCode})</Label>
                   <Input
                     type="number"
                     min="0"
@@ -936,6 +990,41 @@ export default function Wishlist() {
                       <SelectItem value="high">Alta</SelectItem>
                     </SelectContent>
                   </Select>
+                </div>
+
+                <div className="space-y-2">
+                  <Label className="text-medium-gray">Cuenta de ahorro / Moneda</Label>
+                  <Select
+                    value={formCurrencyCode}
+                    onValueChange={(value) => {
+                      const nextCurrencyCode = value ?? 'USD'
+                      setForm((current) => ({
+                      ...current,
+                      sourceCurrency: nextCurrencyCode as SavingsCurrencyCode,
+                      price: current.price
+                        ? convertUsdToInput(
+                            convertToUsd(parseMoneyInput(current.price), getCurrencyByCode(getWishlistCurrency(current))),
+                            getCurrencyByCode(nextCurrencyCode),
+                          )
+                        : '',
+                      externalContribution: current.externalContribution
+                        ? convertUsdToInput(
+                            convertToUsd(parseMoneyInput(current.externalContribution), getCurrencyByCode(getWishlistCurrency(current))),
+                            getCurrencyByCode(nextCurrencyCode),
+                          )
+                        : '',
+                      }))
+                    }}
+                  >
+                    <SelectTrigger className="border-graphite bg-abyss text-on-surface">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent className="border-graphite bg-surface">
+                      <SelectItem value="USD">Ahorro USD</SelectItem>
+                      <SelectItem value="CUP">Ahorro CUP</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <p className="text-xs text-muted-gray">El deseo solo utiliza el saldo de esta cuenta.</p>
                 </div>
               </div>
 
@@ -966,20 +1055,20 @@ export default function Wishlist() {
                 <p className="text-xs uppercase tracking-[0.22em] text-medium-gray">Resumen del deseo</p>
                 <p className="mt-2 text-lg font-semibold text-on-surface">{form.name || 'Artículo sin nombre'}</p>
                 <p className="mt-1 text-sm text-muted-gray">
-                  {form.price ? `Meta: ${formatCurrency(formPriceInUsd)}` : 'Agrega el precio para activar la proyección de compra.'}
+                  {form.price ? `Meta: ${formatMoneyWithCode(formPriceInUsd, formCurrency)}` : 'Agrega el precio para activar la proyección de compra.'}
                 </p>
-                <p className="mt-1 text-sm text-muted-gray">Ahorro libre ahora mismo: {formatCurrency(currentFreeSavedAmount)}</p>
-                <p className="mt-1 text-sm text-muted-gray">Apartado en bolsillos: {formatCurrency(overview.assignedSavingsGoals)}</p>
+                <p className="mt-1 text-sm text-muted-gray">Cuenta: Ahorro {formCurrencyCode}</p>
+                <p className="mt-1 text-sm text-muted-gray">Ahorro libre ahora mismo: {formatMoneyWithCode(formSavings.free, formCurrency)}</p>
+                <p className="mt-1 text-sm text-muted-gray">Apartado en metas: {formatMoneyWithCode(formSavings.assignedGoals, formCurrency)}</p>
                 <p className="mt-1 text-sm text-muted-gray">
-                  Aporte externo para este deseo: {formatCurrency(formExternalContributionInUsd)}
+                  Aporte externo para este deseo: {formatMoneyWithCode(formExternalContributionInUsd, formCurrency)}
                 </p>
-                {form.sourceCurrency ? <p className="mt-1 text-sm text-muted-gray">Moneda de referencia: {form.sourceCurrency}</p> : null}
                 <p className="mt-1 text-sm text-muted-gray">
                   {form.price
                     ? buildPurchaseProjection(
                       formPriceInUsd,
-                      currentFreeSavedAmount + formExternalContributionInUsd,
-                      averageMonthlySavings,
+                      formSavings.free + formExternalContributionInUsd,
+                      averageMonthlySavingsByCurrency[formCurrencyCode],
                       (date) => dateFormatter.format(date),
                     ).purchaseDateLabel
                     : 'Sin fecha estimada todavia.'}

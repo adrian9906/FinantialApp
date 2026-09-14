@@ -15,7 +15,7 @@ import type { IncomeAccountView } from '@/lib/income-account-view'
 import { useFinanceStore } from '@/store/financeStore'
 import { usePreferencesStore } from '@/store/preferencesStore'
 
-export function AccountSavingsPanel({ account }: { account?: IncomeAccountView }) {
+export function AccountSavingsPanel({ accounts }: { accounts: IncomeAccountView[] }) {
   const salaries = useFinanceStore((state) => state.salaries)
   const incomeSources = useFinanceStore((state) => state.incomeSources)
   const transferIncomeMoney = useFinanceStore((state) => state.transferIncomeMoney)
@@ -23,10 +23,9 @@ export function AccountSavingsPanel({ account }: { account?: IncomeAccountView }
   const [applyingId, setApplyingId] = useState<string | null>(null)
 
   const month = getMonthKey()
-  const accounts = useMemo(() => account ? [account] : [], [account])
   const plans = useMemo(
-    () => getAccountSavingsPlans(accounts, accountSavingsFormulas, incomeSources),
-    [accounts, accountSavingsFormulas, incomeSources],
+    () => getAccountSavingsPlans(accounts, accountSavingsFormulas, incomeSources, salaries, month),
+    [accounts, accountSavingsFormulas, incomeSources, month, salaries],
   )
   const goals = useMemo(
     () => getAccountSavingsGoals(accounts, accountSavingsFormulas, incomeSources, salaries, month),
@@ -43,6 +42,7 @@ export function AccountSavingsPanel({ account }: { account?: IncomeAccountView }
         sourceSalaryId: plan.salaryId,
         amountUsd: plan.amountUsd,
         month,
+        preserveSourceBalance: true,
         destination: {
           sourceId: plan.existingSavingsSourceId,
           newSourceName: plan.existingSavingsSourceId ? undefined : plan.savingsAccountName,
@@ -71,8 +71,8 @@ export function AccountSavingsPanel({ account }: { account?: IncomeAccountView }
         <div className="min-w-0">
           <h2 className="text-lg font-semibold text-on-surface">Ahorro por cuenta</h2>
           <p className="mt-1 text-sm text-muted-gray">
-            Según la fórmula que definiste en Ajustes. El dinero se descuenta de la cuenta y se suma a su
-            cuenta de ahorro.
+            Según la fórmula que definiste en Ajustes. La asignación mantiene intacto el ingreso registrado
+            y suma el ahorro a la cuenta interna de su moneda.
           </p>
         </div>
       </div>

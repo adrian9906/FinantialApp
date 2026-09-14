@@ -22,8 +22,8 @@ const transferred = applyIncomeMoneyMovement(initial, {
   destination: { sourceId: 'transfer-source', currencyCode: 'CUP' },
 }, makeId)
 
-assert.equal(transferred.salaries.find((entry) => entry.id === 'salary-usd')?.amount, 75)
-assert.equal(transferred.salaries.find((entry) => entry.id === 'transfer-cup')?.amount, 35)
+assert.equal(transferred.salaries.find((entry) => entry.id === 'salary-usd')?.amount, 100)
+assert.equal(transferred.salaries.find((entry) => entry.id === 'transfer-cup')?.amount, 10)
 assert.equal(transferred.salaries.find((entry) => entry.id === 'salary-usd')?.balance, 55)
 assert.equal(transferred.salaries.find((entry) => entry.id === 'transfer-cup')?.balance, 35)
 assert.equal(transferred.salaries.find((entry) => entry.id === 'transfer-cup')?.currencyCode, 'CUP')
@@ -41,6 +41,30 @@ assert.equal(assigned.salaries.find((entry) => entry.sourceId === createdSource.
 assert.equal(createdSource.balanceMode, 'zero')
 assert.equal(createdSource.isCash, true)
 assert.equal(assigned.salaries.find((entry) => entry.sourceId === createdSource.id)?.balanceMode, 'zero')
+
+const movedToNewAccount = applyIncomeMoneyMovement(initial, {
+  sourceSalaryId: 'salary-usd',
+  amountUsd: 25,
+  month: '2026-09',
+  destination: { newSourceName: 'Ahorro USD Efectivo', currencyCode: 'USD' },
+}, makeId)
+const savingsSource = movedToNewAccount.incomeSources.find((entry) => entry.name === 'Ahorro USD Efectivo')
+const savingsSalary = movedToNewAccount.salaries.find((entry) => entry.sourceId === savingsSource?.id)
+assert.equal(movedToNewAccount.salaries.find((entry) => entry.id === 'salary-usd')?.amount, 100)
+assert.equal(movedToNewAccount.salaries.find((entry) => entry.id === 'salary-usd')?.balance, 55)
+assert.equal(savingsSalary?.amount, 0)
+assert.equal(savingsSalary?.balance, 25)
+
+const allocatedToSavings = applyIncomeMoneyMovement(initial, {
+  sourceSalaryId: 'salary-usd',
+  amountUsd: 25,
+  month: '2026-09',
+  preserveSourceBalance: true,
+  destination: { newSourceName: 'Ahorro USD', currencyCode: 'USD' },
+}, makeId)
+assert.equal(allocatedToSavings.salaries.find((entry) => entry.id === 'salary-usd')?.amount, 100)
+assert.equal(allocatedToSavings.salaries.find((entry) => entry.id === 'salary-usd')?.balance, 80)
+assert.equal(allocatedToSavings.salaries.find((entry) => entry.sourceName === 'Ahorro USD')?.balance, 25)
 
 assert.throws(() => applyIncomeMoneyMovement(initial, {
   sourceSalaryId: 'salary-usd',

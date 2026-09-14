@@ -10,6 +10,8 @@ import {
   getAccountSavingsRate,
   getSavingsAccountBalance,
   getSavingsAccountName,
+  ensureSavingsCurrencyAccounts,
+  normalizeLegacySavingsAccounts,
 } from './account-savings.ts'
 
 function account(id: string, currencyCode: string, isCash: boolean, amount: number, balance = amount) {
@@ -50,27 +52,27 @@ assert.equal(getAccountSavingsAmount(spent, 50), 120, 'se limita al saldo dispon
 console.log('PASS 3: nunca se descuenta mas que el saldo disponible')
 
 // Cada moneda y forma de pago tiene su propia cuenta de ahorro.
-assert.equal(getSavingsAccountName('usd', true), 'Ahorro USD Efectivo')
-assert.equal(getSavingsAccountName('CUP', false), 'Ahorro CUP Transferencia')
+assert.equal(getSavingsAccountName('usd', true), 'Ahorro USD')
+assert.equal(getSavingsAccountName('CUP', false), 'Ahorro CUP')
 
 const usdPlan = getAccountSavingsPlan(salaryAccount, { salary: 50 }, [salaryAccount.source])
 assert.equal(usdPlan?.amountUsd, 200)
 assert.equal(usdPlan?.currencyCode, 'USD')
 assert.equal(usdPlan?.isCash, true)
-assert.equal(usdPlan?.savingsAccountName, 'Ahorro USD Efectivo')
+assert.equal(usdPlan?.savingsAccountName, 'Ahorro USD')
 assert.equal(usdPlan?.existingSavingsSourceId, undefined, 'la primera vez no existe todavia')
 
 const cupPlan = getAccountSavingsPlan(transferAccount, { transfer: 10 }, [transferAccount.source])
-assert.equal(cupPlan?.savingsAccountName, 'Ahorro CUP Transferencia', 'no se mezcla con el ahorro del salario')
+assert.equal(cupPlan?.savingsAccountName, 'Ahorro CUP', 'no se mezcla con el ahorro USD')
 assert.equal(cupPlan?.isCash, false, 'conserva la forma de pago de origen')
-console.log('PASS 4: cada moneda y forma de pago tiene su cuenta de ahorro')
+console.log('PASS 4: cada moneda tiene una sola cuenta de ahorro')
 
 // Si la cuenta de ahorro ya existe se reutiliza en vez de duplicarse.
 const existingSavings: IncomeSource = {
   id: 'savings-usd', name: 'Ahorro USD Efectivo', recurring: true, isCash: true, currencyCode: 'USD',
 }
 assert.equal(findSavingsAccount([existingSavings], 'USD', true)?.id, 'savings-usd')
-assert.equal(findSavingsAccount([existingSavings], 'USD', false), undefined, 'la forma de pago debe coincidir')
+assert.equal(findSavingsAccount([existingSavings], 'USD', false)?.id, 'savings-usd', 'efectivo y transferencia comparten ahorro por moneda')
 assert.equal(findSavingsAccount([existingSavings], 'CUP', true), undefined, 'la moneda debe coincidir')
 assert.equal(
   getAccountSavingsPlan(salaryAccount, { salary: 50 }, [salaryAccount.source, existingSavings])?.existingSavingsSourceId,
@@ -157,5 +159,40 @@ assert.equal(complete[0].isComplete, true)
 assert.equal(complete[0].progress, 100)
 assert.equal(complete[0].remainingUsd, 0)
 console.log('PASS 12: la meta se cumple con el saldo de su propia cuenta')
+
+// El formato anterior dividía 400 en salario 200 + cuenta interna de ahorro 200.
+const repaired = normalizeLegacySavingsAccounts({
+  salaries: [
+    { ...salaryAccount.salary, amount: 200, balance: 200 },
+    { id: 'legacy-saving', amount: 200, balance: 200, month: '2026-09', sourceId: 'savings-usd', sourceName: 'Ahorro USD Efectivo', currencyCode: 'USD' },
+  ],
+  incomeSources: [salaryAccount.source, usdSavingsSource],
+  transactions: [], debts: [], wishlist: [], monthlyPlanningHistory: [], events: [], projections: [], savingsGoals: [], reminders: [], subscriptions: [],
+})
+assert.equal(repaired.salaries.find((entry) => entry.id === salaryAccount.salary.id)?.amount, 400)
+assert.equal(repaired.salaries.find((entry) => entry.id === salaryAccount.salary.id)?.balance, 400)
+assert.equal(repaired.salaries.find((entry) => entry.id === 'legacy-saving')?.amount, 0)
+assert.equal(repaired.salaries.find((entry) => entry.id === 'legacy-saving')?.balance, 200)
+console.log('PASS 13: el formato antiguo se restaura como salario 400 y ahorro interno 200')
+
+const ensured = ensureSavingsCurrencyAccounts({
+  salaries: [], incomeSources: [], transactions: [], debts: [], wishlist: [], monthlyPlanningHistory: [], events: [], projections: [], savingsGoals: [], reminders: [], subscriptions: [],
+}, 'user-1', '2026-09')
+assert.deepEqual(
+  ensured.incomeSources.map((source) => source.name).sort(),
+  ['Ahorro CUP', 'Ahorro USD'],
+)
+assert.ok(ensured.salaries.every((salary) => salary.amount === 0 && salary.balance === 0))
+console.log('PASS 14: existen exactamente las cuentas internas USD y CUP')
+
+const completedPlan = getAccountSavingsPlan(
+  account('salary', 'USD', true, 400, 400),
+  { salary: { savings: 20, expenses: 60, wants: 20, rolloverSavings: false } },
+  [salaryAccount.source, usdSavingsSource],
+  [{ id: 'saved', amount: 0, balance: 80, month: '2026-09', sourceId: 'savings-usd', currencyCode: 'USD' }],
+  '2026-09',
+)
+assert.equal(completedPlan, null, 'el 20% ya aplicado no debe aparecer de nuevo')
+console.log('PASS 15: la asignación por cuenta solo se aplica una vez')
 
 console.log('Metas de ahorro por cuenta correctas.')

@@ -6,6 +6,7 @@ import {
   type Salary,
   type Transaction,
 } from '@plata/shared'
+import { isSavingsIncomeSource } from '@/lib/account-savings'
 
 export interface IncomeAccountView {
   source: IncomeSource
@@ -18,7 +19,11 @@ export function getIncomeAccountsForMonth(
   month = new Date().toISOString().slice(0, 7),
   currencyCode?: string,
 ): IncomeAccountView[] {
-  const sourceById = new Map(sources.filter((source) => !source.archived).map((source) => [source.id, source]))
+  const sourceById = new Map(
+    sources
+      .filter((source) => !source.archived && !isSavingsIncomeSource(source))
+      .map((source) => [source.id, source]),
+  )
   const normalizedCurrencyCode = currencyCode?.trim().toUpperCase()
 
   return salaries

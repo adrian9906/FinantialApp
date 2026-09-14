@@ -10,7 +10,7 @@ import { DatePickerField } from '@/components/ui/date-picker-field'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog'
 import { Plus, Trash2, PiggyBank, Pencil, ArrowUpRight } from 'lucide-react'
 import { useMonthlyOverview } from '@/lib/useMonthlyOverview'
-import { formatMoney, useCurrencyInput } from '@/lib/currency'
+import { formatMoney, formatMoneyWithCode, getCurrencyByCode, useCurrencyInput } from '@/lib/currency'
 import { Badge } from '@/components/ui/badge'
 import { exportSavingsReport } from '@/lib/reportExports'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
@@ -44,15 +44,26 @@ export default function Savings() {
   const moneyInput = useCurrencyInput()
   const formula = usePreferencesStore((state) => state.formula)
   const accountSavingsFormulas = usePreferencesStore((state) => state.accountSavingsFormulas)
+  const activeCurrencyCode = usePreferencesStore((state) => state.activeCurrencyCode)
+  const setActiveCurrency = usePreferencesStore((state) => state.setActiveCurrency)
   const {
     accounts,
     activeAccount: selectedAccount,
     activeIncomeSourceId: selectedAccountId,
     selectAccount: setSelectedAccountPreference,
   } = useActiveIncomeAccount()
+  const savingsCurrencyCode = activeCurrencyCode === 'CUP' ? 'CUP' : 'USD'
+  const selectedSavingsSource = findSavingsAccount(incomeSources, savingsCurrencyCode, true)
+  const sourceById = useMemo(() => new Map(incomeSources.map((source) => [source.id, source])), [incomeSources])
   const savingsGoals = useMemo(
-    () => allSavingsGoals.filter((goal) => goal.incomeSourceId === selectedAccountId),
-    [allSavingsGoals, selectedAccountId],
+    () => allSavingsGoals.filter((goal) => {
+      if (goal.incomeSourceId === selectedSavingsSource?.id) return true
+      const legacySource = goal.incomeSourceId ? sourceById.get(goal.incomeSourceId) : undefined
+      return Boolean(legacySource)
+        && !legacySource!.name.toLocaleLowerCase('es').startsWith('ahorro ')
+        && (legacySource!.currencyCode ?? 'USD').trim().toUpperCase() === savingsCurrencyCode
+    }),
+    [allSavingsGoals, savingsCurrencyCode, selectedSavingsSource?.id, sourceById],
   )
   const selectedFormula = getAccountAllocationFormula(accountSavingsFormulas, selectedAccountId, formula)
   const wantsEnabled = selectedFormula.wants > 0
@@ -197,8 +208,11 @@ export default function Savings() {
     }
   }
 
-  const savingsList = transactions.filter((transaction) => transaction.type === 'saving'
-    && transaction.incomeSourceId === selectedAccountId)
+  const savingsList = transactions.filter((transaction) => {
+    if (transaction.type !== 'saving') return false
+    const source = transaction.incomeSourceId ? sourceById.get(transaction.incomeSourceId) : undefined
+    return (source?.currencyCode ?? 'USD').trim().toUpperCase() === savingsCurrencyCode
+  })
   const accountPeriodSavings = overview.periodTransactions
     .filter((transaction) => transaction.type === 'saving'
       && transaction.incomeSourceId === selectedAccountId
@@ -207,13 +221,6 @@ export default function Savings() {
   const accountBudgetSavings = Number(selectedAccount?.salary.amount ?? 0) * (selectedFormula.savings / 100)
   const remaining = accountBudgetSavings - accountPeriodSavings
   const budgetFull = remaining <= 0
-  const selectedSavingsSource = selectedAccount
-    ? findSavingsAccount(
-        incomeSources,
-        selectedAccount.salary.currencyCode ?? selectedAccount.source.currencyCode ?? 'USD',
-        selectedAccount.source.isCash !== false,
-      )
-    : undefined
   const generatedSavingsBalance = selectedSavingsSource
     ? getSavingsAccountBalance(salaries, selectedSavingsSource.id, getMonthKey())
     : 0
@@ -269,8 +276,8 @@ export default function Savings() {
       targetAmount,
       currentAmount,
       monthlyContribution,
-      incomeSourceId: selectedAccountId,
-      incomeSourceName: selectedAccount?.source.name,
+      incomeSourceId: selectedSavingsSource?.id,
+      incomeSourceName: selectedSavingsSource?.name ?? `Ahorro ${savingsCurrencyCode}`,
     }
 
     setIsGoalSaving(true)
@@ -395,15 +402,39 @@ export default function Savings() {
       </header>
 
       <Card className="border-graphite bg-surface p-5 shadow-vault">
+        <p className="mb-3 text-xs uppercase tracking-[0.18em] text-medium-gray">Cuenta de ahorro</p>
+        <div className="grid gap-3 sm:grid-cols-2">
+          {(['USD', 'CUP'] as const).map((currencyCode) => {
+            const source = findSavingsAccount(incomeSources, currencyCode, true)
+            const balance = source ? getSavingsAccountBalance(salaries, source.id, getMonthKey()) : 0
+            const active = savingsCurrencyCode === currencyCode
+            return (
+              <button
+                key={currencyCode}
+                type="button"
+                onClick={() => setActiveCurrency(currencyCode)}
+                className={`rounded-2xl border p-4 text-left transition-colors ${active ? 'border-primary bg-primary/10' : 'border-graphite bg-abyss hover:bg-surface-container-low'}`}
+              >
+                <span className="text-sm font-semibold text-on-surface">Ahorro {currencyCode}</span>
+                <span className="mt-2 block text-2xl font-semibold tabular-nums text-success">
+                  {formatMoneyWithCode(balance, getCurrencyByCode(currencyCode))}
+                </span>
+              </button>
+            )
+          })}
+        </div>
+      </Card>
+
+      <Card className="border-graphite bg-surface p-5 shadow-vault">
         <IncomeAccountSelect
           accounts={accounts}
           value={selectedAccountId}
           onValueChange={setSelectedAccountPreference}
-          label="Cuenta de ahorro"
+          label="Cuenta de ingreso para movimientos manuales"
         />
       </Card>
 
-      <AccountSavingsPanel account={selectedAccount} />
+      <AccountSavingsPanel accounts={accounts} />
 
       <section className="grid gap-4 xl:grid-cols-[1.35fr_0.65fr]">
         <Card className="relative overflow-hidden border-success/20 bg-surface p-6 shadow-vault md:p-8">

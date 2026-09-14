@@ -1,4 +1,4 @@
-import { normalizeFormula, type AllocationFormula, type IncomeSource, type Salary } from '@plata/shared'
+import { normalizeFormula, type AllocationFormula, type BootstrapPayload, type IncomeSource, type Salary } from '@plata/shared'
 
 import type { IncomeAccountView } from '@/lib/income-account-view'
 
@@ -60,6 +60,47 @@ export function isSavingsIncomeSource(source: IncomeSource) {
 }
 
 /**
+ * Repairs the representation used by older builds, which counted an internal
+ * savings balance as income and reduced the original account's monthly income.
+ */
+export function normalizeLegacySavingsAccounts(snapshot: BootstrapPayload): BootstrapPayload {
+  const sourceById = new Map(snapshot.incomeSources.map((source) => [source.id, source]))
+  const salaries = snapshot.salaries.map((salary) => ({ ...salary }))
+  let changed = false
+
+  for (const savingsSalary of salaries) {
+    if (savingsSalary.amount <= 0 || !savingsSalary.sourceId) continue
+    const savingsSource = sourceById.get(savingsSalary.sourceId)
+    if (!savingsSource || !isSavingsIncomeSource(savingsSource)) continue
+
+    const currencyCode = (savingsSalary.currencyCode ?? savingsSource.currencyCode ?? 'USD').trim().toUpperCase()
+    const isCash = savingsSource.isCash !== false
+    const candidates = salaries.filter((candidate) => {
+      if (candidate.id === savingsSalary.id || candidate.month !== savingsSalary.month || !candidate.sourceId) return false
+      const source = sourceById.get(candidate.sourceId)
+      if (!source || isSavingsIncomeSource(source)) return false
+      return (candidate.currencyCode ?? source.currencyCode ?? 'USD').trim().toUpperCase() === currencyCode
+        && (source.isCash !== false) === isCash
+    })
+
+    // Without a single origin account, redistributing historical money would
+    // be guesswork. New transfers always keep enough information correctly.
+    if (candidates.length !== 1) continue
+
+    const sourceSalary = candidates[0]
+    const minimumOriginalAmount = Number(sourceSalary.balance ?? sourceSalary.amount) + savingsSalary.amount
+    if (sourceSalary.amount < minimumOriginalAmount) {
+      sourceSalary.amount += savingsSalary.amount
+    }
+    sourceSalary.balance = Math.max(Number(sourceSalary.balance ?? 0), sourceSalary.amount)
+    savingsSalary.amount = 0
+    changed = true
+  }
+
+  return changed ? { ...snapshot, salaries } : snapshot
+}
+
+/**
  * The amount a single application moves, based on the account's planning base.
  * Capped by the live balance so a partly spent account never goes negative.
  */
@@ -75,25 +116,83 @@ export function getAccountSavingsAmount(account: IncomeAccountView, rate: number
 }
 
 export function getSavingsAccountName(currencyCode: string, isCash: boolean) {
-  return `Ahorro ${currencyCode.trim().toUpperCase()} ${isCash ? 'Efectivo' : 'Transferencia'}`
+  void isCash
+  return `Ahorro ${currencyCode.trim().toUpperCase()}`
 }
 
 /**
- * Savings keep the denomination and payment rail of the account they came from,
- * so each combination owns its own savings account instead of pooling into one.
+ * Savings are pooled by denomination into exactly one internal account. Cash
+ * and transfer income in USD both fund Ahorro USD; CUP funds Ahorro CUP.
  */
 export function findSavingsAccount(
   sources: IncomeSource[],
   currencyCode: string,
   isCash: boolean,
 ): IncomeSource | undefined {
+  void isCash
   const normalizedCode = currencyCode.trim().toUpperCase()
-  const name = getSavingsAccountName(normalizedCode, isCash).toLowerCase()
 
   return sources.find((source) => !source.archived
-    && source.name.trim().toLowerCase() === name
+    && isSavingsIncomeSource(source)
     && (source.currencyCode ?? 'USD').trim().toUpperCase() === normalizedCode
-    && (source.isCash !== false) === isCash)
+  )
+}
+
+/** Creates the two internal savings ledgers requested by the product model. */
+export function ensureSavingsCurrencyAccounts(
+  snapshot: BootstrapPayload,
+  ownerKey: string,
+  month: string,
+): BootstrapPayload {
+  const incomeSources = snapshot.incomeSources.map((source) => ({ ...source }))
+  const salaries = snapshot.salaries.map((salary) => ({ ...salary }))
+  let changed = false
+
+  for (const currencyCode of ['USD', 'CUP']) {
+    let source = findSavingsAccount(incomeSources, currencyCode, true)
+    const canonicalName = getSavingsAccountName(currencyCode, true)
+
+    if (!source) {
+      source = {
+        id: `savings-${ownerKey}-${currencyCode.toLowerCase()}`,
+        name: canonicalName,
+        currencyCode,
+        recurring: true,
+        balanceMode: 'fixed',
+        isCash: true,
+      }
+      incomeSources.push(source)
+      changed = true
+    } else if (source.name !== canonicalName || source.isCash !== true) {
+      Object.assign(source, { name: canonicalName, isCash: true, recurring: true, balanceMode: 'fixed' })
+      changed = true
+    }
+
+    const entries = salaries.filter((salary) => salary.sourceId === source!.id)
+    let current = entries.find((salary) => salary.month === month)
+    if (!current) {
+      const latest = [...entries].sort((left, right) => right.month.localeCompare(left.month))[0]
+      current = {
+        id: `${source.id}-${month}`,
+        amount: 0,
+        balance: Number(latest?.balance ?? 0),
+        month,
+        currencyCode,
+        sourceId: source.id,
+        sourceName: canonicalName,
+        kind: 'recurring',
+        balanceMode: 'fixed',
+      }
+      salaries.unshift(current)
+      changed = true
+    } else if (current.amount !== 0 || current.sourceName !== canonicalName) {
+      current.amount = 0
+      current.sourceName = canonicalName
+      changed = true
+    }
+  }
+
+  return changed ? { ...snapshot, incomeSources, salaries } : snapshot
 }
 
 export interface AccountSavingsPlan {
@@ -113,10 +212,12 @@ export function getAccountSavingsPlan(
   account: IncomeAccountView,
   formulas: AccountSavingsFormulas,
   sources: IncomeSource[],
+  salaries?: Salary[],
+  month?: string,
 ): AccountSavingsPlan | null {
   const rate = getAccountSavingsRate(formulas, account.source.id)
-  const amountUsd = getAccountSavingsAmount(account, rate)
-  if (rate <= 0 || amountUsd <= 0) return null
+  const goalUsd = getAccountSavingsAmount(account, rate)
+  if (rate <= 0 || goalUsd <= 0) return null
 
   const currencyCode = (account.salary.currencyCode ?? account.source.currencyCode ?? 'USD').trim().toUpperCase()
   const isCash = account.source.isCash !== false
@@ -124,6 +225,11 @@ export function getAccountSavingsPlan(
 
   // Applying a savings rate to a savings account itself would loop the money.
   if (existing?.id === account.source.id) return null
+  const savedUsd = existing && salaries && month
+    ? getSavingsAccountBalance(salaries, existing.id, month)
+    : 0
+  const amountUsd = Math.max(0, goalUsd - savedUsd)
+  if (amountUsd <= 0) return null
 
   return {
     sourceId: account.source.id,
@@ -142,9 +248,11 @@ export function getAccountSavingsPlans(
   accounts: IncomeAccountView[],
   formulas: AccountSavingsFormulas,
   sources: IncomeSource[],
+  salaries?: Salary[],
+  month?: string,
 ): AccountSavingsPlan[] {
   return accounts
-    .map((account) => getAccountSavingsPlan(account, formulas, sources))
+    .map((account) => getAccountSavingsPlan(account, formulas, sources, salaries, month))
     .filter((plan): plan is AccountSavingsPlan => plan !== null)
 }
 

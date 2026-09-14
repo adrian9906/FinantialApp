@@ -19,6 +19,7 @@ import { convertUsdToInput, ensureCurrencyPreference, formatMoneyWithCode, getCu
 import { useFinanceStore } from '@/store/financeStore'
 import { usePreferencesStore } from '@/store/preferencesStore'
 import { getIncomesForMonth, getMonthKey, normalizeSalaryHistory } from '@plata/shared'
+import { isSavingsIncomeSource } from '@/lib/account-savings'
 
 export function IncomeSourceManager() {
   const incomeSources = useFinanceStore((state) => state.incomeSources)
@@ -34,6 +35,7 @@ export function IncomeSourceManager() {
   const currentIncomes = getIncomesForMonth(salaries, currentMonth)
   const salaryHistory = normalizeSalaryHistory(salaries)
   const visibleSources = incomeSources.filter((source) => {
+    if (isSavingsIncomeSource(source)) return false
     const accountIncome = currentIncomes.find((entry) => entry.sourceId === source.id)
       ?? salaryHistory.find((entry) => entry.sourceId === source.id)
     const accountCurrencyCode = source.currencyCode ?? accountIncome?.currencyCode

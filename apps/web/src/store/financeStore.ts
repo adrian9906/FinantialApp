@@ -33,7 +33,7 @@ import { reconcileIncomeAccountCharge } from '@/lib/income-account'
 import { ensureCurrencyPreference } from '@/lib/currency'
 import { useAuthStore } from '@/store/authStore'
 import { usePreferencesStore } from '@/store/preferencesStore'
-import { getAccountAllocationFormula } from '@/lib/account-savings'
+import { ensureSavingsCurrencyAccounts, getAccountAllocationFormula, normalizeLegacySavingsAccounts } from '@/lib/account-savings'
 
 const GUEST_FINANCE_STORAGE_KEY = 'plata-guest-finance'
 
@@ -57,7 +57,7 @@ interface FinanceStore extends BootstrapPayload {
   updateIncomeSource: (id: string, data: Partial<Omit<IncomeSource, 'id'>>) => Promise<void>
   removeIncomeSource: (id: string) => Promise<void>
   assignIncomeMoney: (input: { amountUsd: number; month: string; destination: IncomeMoneyDestination }) => Promise<void>
-  transferIncomeMoney: (input: { sourceSalaryId: string; amountUsd: number; month: string; destination: IncomeMoneyDestination }) => Promise<void>
+  transferIncomeMoney: (input: { sourceSalaryId: string; amountUsd: number; month: string; destination: IncomeMoneyDestination; preserveSourceBalance?: boolean }) => Promise<void>
   addTransaction: (t: Omit<Transaction, 'id'>) => Promise<Transaction>
   updateTransaction: (id: string, data: Partial<Omit<Transaction, 'id'>>) => Promise<void>
   removeTransaction: (id: string) => Promise<void>
@@ -125,7 +125,7 @@ function normalizeDebt(entry: Partial<Debt>): Debt {
   }
 }
 
-function normalizeBootstrapSnapshot(payload?: Partial<BootstrapPayload> | null): BootstrapPayload {
+function normalizeBootstrapSnapshot(payload?: Partial<BootstrapPayload> | null, ownerKey?: string): BootstrapPayload {
   const snapshot = normalizeBootstrapPayload(payload)
 
   // Accounts created before their currency was registered as a preference would
@@ -156,7 +156,11 @@ function normalizeBootstrapSnapshot(payload?: Partial<BootstrapPayload> | null):
     })),
   }
 
-  return ensureCurrentSubscriptionExpenses(withLegacyAccounts)
+  const repaired = normalizeLegacySavingsAccounts(withLegacyAccounts)
+  const withSavingsAccounts = ownerKey
+    ? ensureSavingsCurrencyAccounts(repaired, ownerKey, getMonthKey())
+    : repaired
+  return ensureCurrentSubscriptionExpenses(withSavingsAccounts)
 }
 
 function getSubscriptionExpenseMarker(subscriptionId: string, month = getMonthKey()) {
@@ -394,7 +398,7 @@ export const useFinanceStore = create<FinanceStore>()((set, get) => ({
     if (get().hasLoaded && get().loadedKey === activeKey) return
 
     if (activeKey === 'guest') {
-      const snapshot = normalizeBootstrapSnapshot(getGuestSnapshot())
+      const snapshot = normalizeBootstrapSnapshot(getGuestSnapshot(), 'guest')
       const salaries = carrySalaryForwardToMonth(
         snapshot.salaries,
         getMonthKey(),
@@ -426,7 +430,7 @@ export const useFinanceStore = create<FinanceStore>()((set, get) => ({
     // with no network, and so nothing on screen is ever an empty placeholder
     // that could later be written back over the cache.
     const document = await readSyncDocument(userId)
-    const cachedSnapshot = normalizeBootstrapSnapshot(document.snapshot)
+    const cachedSnapshot = normalizeBootstrapSnapshot(document.snapshot, userId)
 
     set({ ...cachedSnapshot, hasLoaded: true, loadedKey: activeKey })
 
@@ -436,8 +440,8 @@ export const useFinanceStore = create<FinanceStore>()((set, get) => ({
       () => makeId('salary'),
     )
 
-    if (salaries.length !== cachedSnapshot.salaries.length) {
-      const carried = { ...cachedSnapshot, salaries }
+    const carried = { ...cachedSnapshot, salaries }
+    if (JSON.stringify(carried) !== JSON.stringify(document.snapshot)) {
       await persistLocalSnapshot(carried)
       set({ ...carried, hasLoaded: true, loadedKey: activeKey })
     }
@@ -448,7 +452,7 @@ export const useFinanceStore = create<FinanceStore>()((set, get) => ({
       const synced = await syncNow(userId)
       if (!synced) return
 
-      const normalized = normalizeBootstrapSnapshot(synced.snapshot)
+      const normalized = normalizeBootstrapSnapshot(synced.snapshot, userId)
       set({
         ...normalized,
         hasLoaded: true,
@@ -475,7 +479,7 @@ export const useFinanceStore = create<FinanceStore>()((set, get) => ({
       const synced = await syncNow(userId, reason)
       if (!synced) return false
 
-      const normalized = normalizeBootstrapSnapshot(synced.snapshot)
+      const normalized = normalizeBootstrapSnapshot(synced.snapshot, userId)
       set({
         ...normalized,
         hasLoaded: true,
