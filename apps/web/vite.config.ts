@@ -6,7 +6,7 @@ import { VitePWA } from 'vite-plugin-pwa'
 import path from 'path'
 import { fileURLToPath } from 'node:url'
 
-const defaultApiTarget = 'http://localhost:3001'
+const defaultApiTarget = 'https://finantialapp.onrender.com'
 const rootDir = fileURLToPath(new URL('.', import.meta.url))
 
 export default defineConfig(({ mode }) => {
