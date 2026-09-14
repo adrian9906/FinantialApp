@@ -8,11 +8,15 @@ import {
 
 import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
+import { requestJson } from '@/lib/api'
 
 interface PurchasePhotosFieldProps {
   value: string[]
   onChange: (value: string[]) => void
+  kind?: 'expense' | 'want' | 'saving'
 }
+
+const MAX_UPLOAD_BYTES = 3 * 1024 * 1024
 
 function readFileAsDataUrl(file: File) {
   return new Promise<string | null>((resolve) => {
@@ -28,7 +32,7 @@ function readFileAsDataUrl(file: File) {
  * bytes before it is accepted, so a renamed script or document is refused here
  * as well as on the server.
  */
-export function PurchasePhotosField({ value, onChange }: PurchasePhotosFieldProps) {
+export function PurchasePhotosField({ value, onChange, kind = 'expense' }: PurchasePhotosFieldProps) {
   const inputRef = useRef<HTMLInputElement>(null)
   const [error, setError] = useState<string | null>(null)
   const [isReading, setIsReading] = useState(false)
@@ -46,10 +50,27 @@ export function PurchasePhotosField({ value, onChange }: PurchasePhotosFieldProp
       let rejected: string | null = null
 
       for (const file of Array.from(files).slice(0, Math.max(0, remaining))) {
+        if (file.size > MAX_UPLOAD_BYTES) {
+          rejected = 'Cada imagen no puede superar 3 MB.'
+          continue
+        }
+
         const dataUrl = await readFileAsDataUrl(file)
         const result = validateImageDataUrl(dataUrl)
-        if (result.valid && dataUrl) accepted.push(dataUrl)
-        else rejected = result.error ?? 'No se pudo leer el archivo.'
+        if (!result.valid || !dataUrl) {
+          rejected = result.error ?? 'No se pudo leer el archivo.'
+          continue
+        }
+
+        try {
+          const uploaded = await requestJson<{ url: string }>('/uploads/transaction-image', {
+            method: 'POST',
+            body: JSON.stringify({ image: dataUrl, kind }),
+          })
+          accepted.push(uploaded.url)
+        } catch (error) {
+          rejected = error instanceof Error ? error.message : 'No se pudo subir el archivo.'
+        }
       }
 
       if (accepted.length > 0) onChange([...value, ...accepted])
@@ -116,7 +137,7 @@ export function PurchasePhotosField({ value, onChange }: PurchasePhotosFieldProp
 
       {error ? <p className="text-xs text-error">{error}</p> : null}
       <p className="text-xs text-muted-gray">
-        JPG, PNG, WEBP o GIF. Hasta {MAX_ATTACHMENTS_PER_TRANSACTION} fotos de 4 MB cada una.
+        JPG, PNG, WEBP o GIF. Hasta {MAX_ATTACHMENTS_PER_TRANSACTION} fotos de 3 MB cada una.
       </p>
     </div>
   )

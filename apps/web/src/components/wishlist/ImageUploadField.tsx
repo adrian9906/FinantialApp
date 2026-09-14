@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState, type DragEvent } from 'react'
 import { ImagePlus, Upload, X } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
+import { requestJson } from '@/lib/api'
 import { cn } from '@/lib/utils'
 
 interface ImageUploadFieldProps {
@@ -19,10 +20,14 @@ async function fileToDataUrl(file: File) {
   })
 }
 
+const MAX_IMAGE_BYTES = 3 * 1024 * 1024
+
 export function ImageUploadField({ value, onChange }: ImageUploadFieldProps) {
   const inputRef = useRef<HTMLInputElement>(null)
   const [isDragging, setIsDragging] = useState(false)
   const [isBroken, setIsBroken] = useState(false)
+  const [isUploading, setIsUploading] = useState(false)
+  const [uploadError, setUploadError] = useState<string | null>(null)
 
   useEffect(() => {
     const Broken = () => {
@@ -46,13 +51,36 @@ export function ImageUploadField({ value, onChange }: ImageUploadFieldProps) {
     }
 
     if (!file.type.startsWith('image/')) {
+      setUploadError('Selecciona una imagen válida.')
       if (inputRef.current) {
         inputRef.current.value = ''
       }
       return
     }
 
-    onChange(await fileToDataUrl(file))
+    if (file.size > MAX_IMAGE_BYTES) {
+      setUploadError('La imagen no puede superar 3 MB.')
+      if (inputRef.current) {
+        inputRef.current.value = ''
+      }
+      return
+    }
+
+    setUploadError(null)
+    setIsUploading(true)
+
+    try {
+      const image = await fileToDataUrl(file)
+      const result = await requestJson<{ url: string }>('/uploads/wishlist-image', {
+        method: 'POST',
+        body: JSON.stringify({ image }),
+      })
+      onChange(result.url)
+    } catch (error) {
+      setUploadError(error instanceof Error ? error.message : 'No se pudo subir la imagen.')
+    } finally {
+      setIsUploading(false)
+    }
 
     if (inputRef.current) {
       inputRef.current.value = ''
@@ -77,6 +105,7 @@ export function ImageUploadField({ value, onChange }: ImageUploadFieldProps) {
 
       <button
         type="button"
+        disabled={isUploading}
         onClick={() => inputRef.current?.click()}
         onDragOver={(event) => {
           event.preventDefault()
@@ -126,14 +155,16 @@ export function ImageUploadField({ value, onChange }: ImageUploadFieldProps) {
               Imagen del producto
             </div>
             <p className="text-sm font-medium text-foreground">
-              Arrastra una foto aqui o haz clic para subirla
+              {isUploading ? 'Subiendo imagen…' : 'Arrastra una foto aqui o haz clic para subirla'}
             </p>
             <p className="text-sm text-muted-foreground">
-              Se usara para la vista en tarjetas y para reconocer el producto más rápido.
+              Máximo 3 MB. Se guarda de forma segura fuera de la base de datos.
             </p>
           </div>
         </div>
       </button>
+
+      {uploadError ? <p className="text-sm text-destructive">{uploadError}</p> : null}
 
       {value ? (
         <div className="flex items-center justify-between rounded-xl border border-border/70 bg-card px-3 py-2">

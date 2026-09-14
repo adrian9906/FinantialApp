@@ -1015,6 +1015,7 @@ export default function Expenses() {
             <PurchasePhotosField
               value={form.attachments}
               onChange={(attachments) => setForm((current) => ({ ...current, attachments }))}
+              kind="expense"
             />
 
 

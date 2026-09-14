@@ -2,6 +2,7 @@ import { createHash, randomUUID } from 'node:crypto'
 import { createEmptyBootstrapPayload, SYNC_PROTOCOL, canonicalJson, syncCollections, syncKey, getSyncValue, type SyncOperation, type SyncResponse } from '@plata/shared'
 import { parseSyncOperation } from './sync-validation.js'
 import { getGoogleWebClientId, isGoogleAuthConfigured, verifyGoogleIdToken } from './google-auth.js'
+import { assertSupportedImageDataUrl, getCloudinaryFolder, isCloudinaryConfigured, uploadImageDataUrl } from './cloudinary.js'
 import { sanitizeAttachments, sanitizePlace } from '@plata/shared'
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import type {
@@ -25,6 +26,19 @@ import { clearSession, createSession, getSessionUser, hashPassword, verifyPasswo
 import { getPrisma } from './prisma.js'
 
 type JsonRecord = Record<string, unknown>
+
+function getTransactionImageFolder(kind: unknown, userId: string) {
+  switch (kind) {
+    case 'expense':
+      return getCloudinaryFolder('gastos', userId)
+    case 'want':
+      return getCloudinaryFolder('gustos', userId)
+    case 'saving':
+      return getCloudinaryFolder('ahorros', userId)
+    default:
+      throw new Error('El tipo de imagen no es válido.')
+  }
+}
 
 function normalizeOrigin(value: string) {
   return value.trim().replace(/\/+$/, '')
@@ -2047,6 +2061,36 @@ export async function handleApiRequest(req: IncomingMessage, res: ServerResponse
 
     const authenticatedUser = await requireUser(req, res)
     if (!authenticatedUser) {
+      return true
+    }
+
+    const isWishlistImageUpload = pathname === '/api/uploads/wishlist-image'
+    const isTransactionImageUpload = pathname === '/api/uploads/transaction-image'
+
+    if ((isWishlistImageUpload || isTransactionImageUpload) && method === 'POST') {
+      if (!isCloudinaryConfigured()) {
+        sendJson(res, 503, { error: 'El almacenamiento de imágenes todavía no está configurado.' })
+        return true
+      }
+
+      const body = await readJsonBody(req)
+
+      try {
+        assertSupportedImageDataUrl(body.image)
+        const uploadFolder = isWishlistImageUpload
+          ? getCloudinaryFolder('deseos', authenticatedUser.id)
+          : getTransactionImageFolder(body.kind, authenticatedUser.id)
+        const url = await uploadImageDataUrl(body.image, {
+          folder: uploadFolder,
+        })
+        sendJson(res, 201, { url })
+      } catch (error) {
+        const message = error instanceof Error ? error.message : 'No se pudo subir la imagen.'
+        const isInputError = message.startsWith('La imagen') || message.startsWith('El tipo de imagen')
+        sendJson(res, isInputError ? 400 : 502, {
+          error: isInputError ? message : 'No se pudo guardar la imagen en Cloudinary. Inténtalo de nuevo.',
+        })
+      }
       return true
     }
 

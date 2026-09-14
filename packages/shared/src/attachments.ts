@@ -141,11 +141,16 @@ export function isValidImageDataUrl(value: unknown) {
   return validateImageDataUrl(value).valid
 }
 
-/** Drops anything that does not pass validation, keeping the rest. */
+/** A hosted image reference that is safe to persist in PostgreSQL and sync. */
+export function isValidHostedImageUrl(value: unknown) {
+  return typeof value === 'string' && value.length <= 2_000 && /^https:\/\/[^\s]+$/i.test(value)
+}
+
+/** Drops anything that is not an HTTPS image reference, keeping the rest. */
 export function sanitizeAttachments(values: unknown): string[] {
   if (!Array.isArray(values)) return []
   return values
-    .filter((value): value is string => isValidImageDataUrl(value))
+    .filter((value): value is string => isValidHostedImageUrl(value))
     .slice(0, MAX_ATTACHMENTS_PER_TRANSACTION)
 }
 
