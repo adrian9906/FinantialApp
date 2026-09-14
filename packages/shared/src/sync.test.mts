@@ -228,4 +228,51 @@ const tx = (id, amount, desc) => ({ id, amount, type: 'expense', description: de
   console.log('PASS 10: an open conflict does not block unrelated changes')
 }
 
+// === Test 11: edits made before the first successful sync are not reverted ===
+{
+  const server = createServer()
+  let seeded = drain(createSyncDocument(), server)
+  seeded = drain(queueSnapshot(seeded, {
+    ...seeded.snapshot,
+    salaries: [{ id: 'salary-1', amount: 200, month: '2026-09' }],
+  }, makeId), server)
+
+  const cached = {
+    ...empty(),
+    salaries: [{ id: 'salary-1', amount: 200, month: '2026-09' }],
+  }
+  let reconnecting = createSyncDocument(cached)
+  reconnecting = queueSnapshot(reconnecting, {
+    ...cached,
+    salaries: [{ id: 'salary-1', amount: 400, month: '2026-09' }],
+  }, makeId)
+  reconnecting = drain(reconnecting, server)
+
+  assert.equal(reconnecting.conflicts.length, 1, 'the offline edit must be reviewable instead of discarded')
+  assert.equal(reconnecting.snapshot.salaries[0].amount, 400, 'the edited amount remains visible')
+  console.log('PASS 11: a pre-initialization edit is never silently reverted')
+}
+
+// === Test 12: deletions made before the first successful sync are not restored ===
+{
+  const server = createServer()
+  let seeded = drain(createSyncDocument(), server)
+  seeded = drain(queueSnapshot(seeded, {
+    ...seeded.snapshot,
+    salaries: [{ id: 'salary-delete', amount: 200, month: '2026-09' }],
+  }, makeId), server)
+
+  const cached = {
+    ...empty(),
+    salaries: [{ id: 'salary-delete', amount: 200, month: '2026-09' }],
+  }
+  let reconnecting = createSyncDocument(cached)
+  reconnecting = queueSnapshot(reconnecting, { ...cached, salaries: [] }, makeId)
+  reconnecting = drain(reconnecting, server)
+
+  assert.equal(reconnecting.conflicts.length, 1, 'the offline deletion must be reviewable instead of discarded')
+  assert.equal(reconnecting.snapshot.salaries.length, 0, 'the deleted salary stays removed locally')
+  console.log('PASS 12: a pre-initialization deletion is never silently restored')
+}
+
 console.log('\nAll sync scenarios passed.')

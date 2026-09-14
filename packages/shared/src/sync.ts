@@ -52,7 +52,6 @@ export function createSyncDocument(legacy?: BootstrapPayload): SyncDocument {
   return { format: 2, initialized: false, snapshot: legacy ?? createEmptyBootstrapPayload(), base: createEmptyBootstrapPayload(), versions: {}, operations: [], conflicts: [], resolutions: [], ...(legacy ? { legacyBackup: legacy } : {}) }
 }
 export function queueSnapshot(document: SyncDocument, next: BootstrapPayload, makeId: () => string): SyncDocument {
-  if (!document.initialized) return { ...document, snapshot: next }
   const operations = [...document.operations]
   for (const collection of syncCollections) {
     const ids = new Set([...document.snapshot[collection], ...next[collection]].map((entry) => entry.id))
@@ -82,7 +81,18 @@ export function acceptSyncResponse(document: SyncDocument, response: SyncRespons
         ...document.snapshot[collection].filter((entry) => !response.snapshot[collection].some((remote) => remote.id === entry.id)),
       ]])),
     }
-    operations = queueSnapshot(initial, merged, makeId).operations
+    const explicitKeys = new Set(
+      operations.map((operation) => syncKey(operation.collection, operation.entityId)),
+    )
+    const mergeOperations = queueSnapshot(initial, merged, makeId).operations.filter(
+      (operation) => !explicitKeys.has(syncKey(operation.collection, operation.entityId)),
+    )
+
+    // Mutations made while the first server exchange was unavailable are
+    // intentional user changes, not part of the legacy snapshot. Keep them
+    // after the conservative union so an edit or deletion cannot silently be
+    // replaced by the server copy when connectivity returns.
+    operations = [...mergeOperations, ...operations]
   }
   operations = operations.filter((op) => !response.acknowledged.includes(op.id))
   const conflicts = document.conflicts.filter((conflict) => operations.some((op) => op.id === conflict.operationId))
