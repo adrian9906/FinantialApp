@@ -1,3 +1,4 @@
+import { validatePlannedMovement } from '@/lib/planned-movement-validation'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import { buildExpenseTransferSavingDescription, createLearnedCategorizationRule, findCategorizationRule, isCashPayment, MAX_PLACE_LENGTH, sanitizeAttachments, sanitizePlace, type ReceiptOCRLineItem, type ReceiptOCRParsedDraft } from '@plata/shared'
@@ -221,11 +222,12 @@ export default function Expenses() {
   const profileId = useAuthStore((state) => state.user?.id) ?? 'guest'
   const userRules = usePreferencesStore(useShallow((state) => state.categoryRulesByProfile[profileId] ?? []))
   const saveCategoryRule = usePreferencesStore((state) => state.saveCategoryRule)
-  const [open, setOpen] = useState(false)
+  const [open, setOpen] = useState(() => new URLSearchParams(window.location.search).has('add'))
   const [editId, setEditId] = useState<string | null>(null)
   const [sparkBursts, setSparkBursts] = useState<Record<string, number>>({})
   const [formError, setFormError] = useState<string | null>(null)
   const [isSaving, setIsSaving] = useState(false)
+  const [isUploadingPhoto, setIsUploadingPhoto] = useState(false)
   const [isTransferring, setIsTransferring] = useState(false)
   const [isExporting, setIsExporting] = useState(false)
   const [transferOpen, setTransferOpen] = useState(false)
@@ -380,7 +382,7 @@ export default function Expenses() {
   }
 
   async function handleSave() {
-    if (!form.amount || !form.itemName || isSaving) return
+    if (!form.amount || !form.itemName || isSaving || isUploadingPhoto) return
 
     if (!formAccount) {
       setFormError('Selecciona el ingreso desde donde se descontará el dinero.')
@@ -393,23 +395,10 @@ export default function Expenses() {
       return
     }
 
-    if (nextAmount > availableToPlan) {
-      setFormError(`Ese precio supera el disponible para planificar: ${formatMoneyWithCode(availableToPlan, formCurrency)}.`)
-      return
-    }
-
-    if (plannedTotal + nextAmount > formAccountOverview.budgetExpenses) {
-      setFormError(`No puedes agregarlo porque la lista total se iría a ${formatMoneyWithCode(plannedTotal + nextAmount, formCurrency)} y tu límite es ${formatMoneyWithCode(formAccountOverview.budgetExpenses, formCurrency)}.`)
-      return
-    }
-
     const previousRefund = editingTransaction?.incomeSourceId === formAccount.source.id ? editingTransaction.amount : 0
     const availableAccountBalance = Number(formAccount.salary.balance ?? formAccount.salary.amount) + previousRefund
-    if (nextAmount > availableAccountBalance) {
-      setFormError(`Ese ingreso solo tiene ${formatMoneyWithCode(availableAccountBalance, formCurrency)} de saldo.`)
-      return
-    }
-
+    const planningError = validatePlannedMovement({ amount: nextAmount, plannedTotal, budget: formAccountOverview.budgetExpenses, balance: availableAccountBalance })
+    if (planningError) { setFormError(planningError); return }
     const currentStatus = editId
       ? expenseItems.find((item) => item.id === editId)?.status ?? 'pending'
       : 'pending'
@@ -883,7 +872,7 @@ export default function Expenses() {
           })}
       </div>
 
-      <Dialog open={open} onOpenChange={(nextOpen) => { if (!isSaving) setOpen(nextOpen) }}>
+      <Dialog open={open} onOpenChange={(nextOpen) => { if (!isSaving && !isUploadingPhoto) setOpen(nextOpen) }}>
         <DialogContent className="max-h-[88dvh] overflow-y-auto border-graphite bg-surface sm:max-w-4xl">
           <DialogHeader>
             <DialogTitle className="text-on-surface">{editId ? 'Editar producto' : 'Agregar producto'}</DialogTitle>
@@ -1013,6 +1002,7 @@ export default function Expenses() {
             </div>
 
             <PurchasePhotosField
+              onBusyChange={setIsUploadingPhoto}
               value={form.attachments}
               onChange={(attachments) => setForm((current) => ({ ...current, attachments }))}
               kind="expense"
@@ -1045,11 +1035,11 @@ export default function Expenses() {
             {formError ? <p className="text-sm text-error">{formError}</p> : null}
           </div>
           <DialogFooter>
-            <Button variant="ghost" disabled={isSaving} onClick={() => { resetForm(); setOpen(false) }} className="text-muted-gray">Cancelar</Button>
+            <Button variant="ghost" disabled={isSaving || isUploadingPhoto} onClick={() => { resetForm(); setOpen(false) }} className="text-muted-gray">Cancelar</Button>
             <Button
               loading={isSaving}
               onClick={() => void handleSave()}
-              disabled={isSaving || !form.amount || !form.itemName}
+              disabled={isSaving || isUploadingPhoto || !form.amount || !form.itemName}
               className="bg-primary-container text-white shadow-vault hover:brightness-110"
             >
               Guardar

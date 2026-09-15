@@ -14,11 +14,11 @@ export function AccountSwitcher() {
         className="h-11 w-full min-w-0 border-graphite bg-surface/90 text-on-surface shadow-vault-sm sm:w-[250px] sm:shrink-0"
       >
         <WalletCards className="mr-2 size-4 shrink-0 text-primary" />
-        <SelectValue>
+        <SelectValue className="min-w-0">
           {activeAccount ? (
             <span className="flex min-w-0 items-center gap-2">
               <span className="truncate font-semibold">{activeAccount.source.name}</span>
-              <span className="ml-auto shrink-0 text-xs text-muted-gray">
+              <span className="ml-auto hidden shrink-0 text-xs text-muted-gray sm:inline">
                 {formatMoneyWithCode(
                   Number(activeAccount.salary.balance ?? activeAccount.salary.amount),
                   getCurrencyByCode(activeAccount.salary.currencyCode),

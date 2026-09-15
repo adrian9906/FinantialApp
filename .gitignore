@@ -49,3 +49,4 @@ promo/
 .npm-cache/
 plata-backup-2026-09-11.json
 recovery.seed.ts
+.codex-tools/

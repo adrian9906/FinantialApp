@@ -11,8 +11,9 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
+import { Field, FieldGroup, FieldLabel } from '@/components/ui/field'
 import { ScrollArea } from '@/components/ui/scroll-area'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import {
   buildGlobalSearchIndex,
   getSearchFilterOptions,
@@ -28,6 +29,28 @@ const SECTION_LABELS: Record<SearchSection, string> = {
   wishlist: 'Deseos',
   debt: 'Deudas',
   reminder: 'Recordatorios',
+}
+
+function SearchFilter({ id, label, value, options, onChange }: {
+  id: string
+  label: string
+  value: string
+  options: Array<{ value: string, label: string }>
+  onChange: (value: string) => void
+}) {
+  return (
+    <Field className="min-w-0">
+      <FieldLabel htmlFor={id}>{label}</FieldLabel>
+      <Select value={value} items={options} onValueChange={(next) => onChange(next ?? 'all')}>
+        <SelectTrigger id={id} className="h-9 w-full min-w-0">
+          <SelectValue className="truncate" />
+        </SelectTrigger>
+        <SelectContent><SelectGroup>
+          {options.map((option) => <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>)}
+        </SelectGroup></SelectContent>
+      </Select>
+    </Field>
+  )
 }
 
 export function GlobalSearchDialog() {
@@ -101,13 +124,14 @@ export function GlobalSearchDialog() {
     <>
       <button
         type="button"
+        aria-label="Abrir búsqueda global"
         onClick={() => setOpen(true)}
-        className="group flex w-full items-start gap-3 rounded-2xl border border-graphite bg-surface/90 px-4 py-3 text-left shadow-vault transition-all hover:border-primary/35 hover:bg-surface-container-high sm:items-center"
+        className="group flex size-11 shrink-0 items-center justify-center rounded-2xl border border-graphite bg-surface/90 text-left shadow-vault transition-all hover:border-primary/35 hover:bg-surface-container-high sm:h-auto sm:w-full sm:justify-start sm:gap-3 sm:px-4 sm:py-3"
       >
-        <div className="mt-0.5 flex size-10 shrink-0 items-center justify-center rounded-2xl bg-primary/10 text-primary sm:mt-0">
+        <div className="flex size-10 shrink-0 items-center justify-center rounded-2xl text-primary sm:bg-primary/10">
           <Search className="size-4" />
         </div>
-        <div className="min-w-0 flex-1">
+        <div className="hidden min-w-0 flex-1 sm:block">
           <p className="text-sm font-semibold text-on-surface">Busqueda global</p>
           <p className="line-clamp-2 text-xs leading-5 text-muted-gray sm:line-clamp-1">
             Busca gastos, gustos, deseos, deudas y recordatorios con filtros reales.
@@ -116,7 +140,7 @@ export function GlobalSearchDialog() {
       </button>
 
       <Dialog open={open} onOpenChange={handleOpenChange}>
-        <DialogContent className="border-graphite bg-surface p-0 sm:max-w-5xl">
+        <DialogContent className="max-h-[90dvh] overflow-y-auto border-graphite bg-surface p-0 sm:max-w-5xl">
           <DialogHeader className="border-b border-graphite px-5 pb-4 pt-5">
             <DialogTitle className="flex items-center gap-2 text-on-surface">
               <Search className="size-4 text-primary" />
@@ -127,79 +151,35 @@ export function GlobalSearchDialog() {
             </DialogDescription>
           </DialogHeader>
 
-          <div className="space-y-4 px-5 pb-5 pt-4">
-            <div className="grid gap-3 lg:grid-cols-[minmax(0,1.35fr)_repeat(4,minmax(0,0.8fr))]">
-              <Input
-                value={query}
-                onChange={(event) => setQuery(event.target.value)}
-                placeholder="Buscar por producto, deuda, deseo o recordatorio..."
-                className="border-graphite bg-abyss text-on-surface"
-              />
-              <Select value={sectionFilter} onValueChange={(value) => setSectionFilter(value as 'all' | SearchSection)}>
-                <SelectTrigger className="border-graphite bg-abyss text-on-surface">
-                  <SelectValue placeholder="Seccion" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">Todas las secciones</SelectItem>
-                  {Object.entries(SECTION_LABELS).map(([value, label]) => (
-                    <SelectItem key={value} value={value}>{label}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              <Select value={monthFilter} onValueChange={(value) => setMonthFilter(value ?? 'all')}>
-                <SelectTrigger className="border-graphite bg-abyss text-on-surface">
-                  <SelectValue placeholder="Mes" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">Todos los meses</SelectItem>
-                  {filterOptions.months.map((option) => (
-                    <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              <Select value={categoryFilter} onValueChange={(value) => setCategoryFilter(value ?? 'all')}>
-                <SelectTrigger className="border-graphite bg-abyss text-on-surface">
-                  <SelectValue placeholder="Categoria" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">Todas las categorías</SelectItem>
-                  {filterOptions.categories.map((option) => (
-                    <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              <Select value={statusFilter} onValueChange={(value) => setStatusFilter(value ?? 'all')}>
-                <SelectTrigger className="border-graphite bg-abyss text-on-surface">
-                  <SelectValue placeholder="Estado" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">Todos los estados</SelectItem>
-                  {filterOptions.statuses.map((option) => (
-                    <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div className="grid gap-3 sm:grid-cols-2">
-              <Input
-                type="number"
-                inputMode="decimal"
-                value={minAmount}
-                onChange={(event) => setMinAmount(event.target.value)}
-                placeholder="Monto mínimo"
-                className="border-graphite bg-abyss text-on-surface"
-              />
-              <Input
-                type="number"
-                inputMode="decimal"
-                value={maxAmount}
-                onChange={(event) => setMaxAmount(event.target.value)}
-                placeholder="Monto máximo"
-                className="border-graphite bg-abyss text-on-surface"
-              />
-            </div>
-
+          <div className="flex flex-col gap-4 px-5 pb-5 pt-4">
+            <FieldGroup className="grid min-w-0 items-start gap-3 sm:grid-cols-2 lg:grid-cols-4">
+              <Field className="min-w-0 sm:col-span-2 lg:col-span-4">
+                <FieldLabel htmlFor="global-search-query">Buscar</FieldLabel>
+                <Input id="global-search-query" value={query} onChange={(event) => setQuery(event.target.value)}
+                  placeholder="Producto, deuda, deseo o recordatorio..." className="h-9 w-full" />
+              </Field>
+              <SearchFilter id="global-search-section" label="Sección" value={sectionFilter}
+                onChange={(value) => setSectionFilter(value as 'all' | SearchSection)}
+                options={[{ value: 'all', label: 'Todas las secciones' }, ...Object.entries(SECTION_LABELS).map(([value, label]) => ({ value, label }))]} />
+              <SearchFilter id="global-search-month" label="Mes" value={monthFilter} onChange={setMonthFilter}
+                options={[{ value: 'all', label: 'Todos los meses' }, ...filterOptions.months]} />
+              <SearchFilter id="global-search-category" label="Categoría" value={categoryFilter} onChange={setCategoryFilter}
+                options={[{ value: 'all', label: 'Todas las categorías' }, ...filterOptions.categories]} />
+              <SearchFilter id="global-search-status" label="Estado" value={statusFilter} onChange={setStatusFilter}
+                options={[{ value: 'all', label: 'Todos los estados' }, ...filterOptions.statuses]} />
+            </FieldGroup>
+            <FieldGroup className="grid min-w-0 gap-3 sm:grid-cols-2">
+              <Field className="min-w-0">
+                <FieldLabel htmlFor="global-search-min">Monto mínimo</FieldLabel>
+                <Input id="global-search-min" type="number" inputMode="decimal" value={minAmount}
+                  onChange={(event) => setMinAmount(event.target.value)} placeholder="Sin mínimo" className="h-9 w-full" />
+              </Field>
+              <Field className="min-w-0">
+                <FieldLabel htmlFor="global-search-max">Monto máximo</FieldLabel>
+                <Input id="global-search-max" type="number" inputMode="decimal" value={maxAmount}
+                  onChange={(event) => setMaxAmount(event.target.value)} placeholder="Sin máximo" className="h-9 w-full" />
+              </Field>
+            </FieldGroup>
             <div className="flex flex-wrap items-center gap-2">
               <Badge variant="secondary" className="bg-primary/10 text-primary">
                 {filteredResults.length} resultado(s)

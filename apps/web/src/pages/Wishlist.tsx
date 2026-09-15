@@ -118,6 +118,7 @@ export default function Wishlist() {
   const [editId, setEditId] = useState<string | null>(null)
   const [viewMode, setViewMode] = useState<ViewMode>('cards')
   const [isSaving, setIsSaving] = useState(false)
+  const [isUploadingPhoto, setIsUploadingPhoto] = useState(false)
   const [isExporting, setIsExporting] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
   const [selectedStores, setSelectedStores] = useState<PriceScoutStoreValue[]>(DEFAULT_STORES)
@@ -328,7 +329,7 @@ export default function Wishlist() {
   }
 
   async function handleSave() {
-    if (!form.name || !form.price || isSaving) return
+    if (!form.name || !form.price || isSaving || isUploadingPhoto) return
 
     const nextPrice = formPriceInUsd
     const nextExternalContribution = formExternalContributionInUsd
@@ -812,7 +813,7 @@ export default function Wishlist() {
       <Dialog
         open={open}
         onOpenChange={(nextOpen) => {
-          if (!isSaving) setOpen(nextOpen)
+          if (!isSaving && !isUploadingPhoto) setOpen(nextOpen)
         }}
       >
         <DialogContent className="max-h-[88vh] overflow-y-auto border-graphite bg-surface sm:max-w-5xl">
@@ -1030,7 +1031,7 @@ export default function Wishlist() {
 
               <div className="space-y-2">
                 <Label className="text-medium-gray">Foto del producto</Label>
-                <ImageUploadField value={form.image} onChange={(image) => setForm((current) => ({ ...current, image }))} />
+                <ImageUploadField onBusyChange={setIsUploadingPhoto} value={form.image} onChange={(image) => setForm((current) => ({ ...current, image }))} />
               </div>
             </div>
 
@@ -1080,7 +1081,7 @@ export default function Wishlist() {
           <DialogFooter>
             <Button
               variant="ghost"
-              disabled={isSaving}
+              disabled={isSaving || isUploadingPhoto}
               onClick={() => {
                 resetForm()
                 setOpen(false)
@@ -1089,7 +1090,7 @@ export default function Wishlist() {
             >
               Cancelar
             </Button>
-            <Button loading={isSaving} onClick={() => void handleSave()} className="bg-primary-container text-white shadow-vault hover:bg-primary-container/80">
+            <Button loading={isSaving} disabled={isUploadingPhoto} onClick={() => void handleSave()} className="bg-primary-container text-white shadow-vault hover:bg-primary-container/80">
               Guardar
             </Button>
           </DialogFooter>

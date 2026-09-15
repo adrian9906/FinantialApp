@@ -4,27 +4,20 @@ import {
   ALLOWED_IMAGE_MIME_TYPES,
   MAX_ATTACHMENTS_PER_TRANSACTION,
   validateImageDataUrl,
+  isValidHostedImageUrl,
 } from '@plata/shared'
 
 import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
 import { requestJson } from '@/lib/api'
+import { preparePurchasePhoto } from '@/lib/prepare-purchase-photo'
+import { useAuthStore } from '@/store/authStore'
 
 interface PurchasePhotosFieldProps {
   value: string[]
   onChange: (value: string[]) => void
   kind?: 'expense' | 'want' | 'saving'
-}
-
-const MAX_UPLOAD_BYTES = 3 * 1024 * 1024
-
-function readFileAsDataUrl(file: File) {
-  return new Promise<string | null>((resolve) => {
-    const reader = new FileReader()
-    reader.onload = () => resolve(typeof reader.result === 'string' ? reader.result : null)
-    reader.onerror = () => resolve(null)
-    reader.readAsDataURL(file)
-  })
+  onBusyChange?: (busy: boolean) => void
 }
 
 /**
@@ -32,30 +25,40 @@ function readFileAsDataUrl(file: File) {
  * bytes before it is accepted, so a renamed script or document is refused here
  * as well as on the server.
  */
-export function PurchasePhotosField({ value, onChange, kind = 'expense' }: PurchasePhotosFieldProps) {
+export function PurchasePhotosField({ value, onChange, kind = 'expense', onBusyChange }: PurchasePhotosFieldProps) {
   const inputRef = useRef<HTMLInputElement>(null)
   const [error, setError] = useState<string | null>(null)
   const [isReading, setIsReading] = useState(false)
+  const [progress, setProgress] = useState('')
+  const authMode = useAuthStore((state) => state.authMode)
 
   const remaining = MAX_ATTACHMENTS_PER_TRANSACTION - value.length
 
   async function handleFiles(files: FileList | null) {
-    if (!files || files.length === 0) return
+    if (!files || files.length === 0 || isReading) return
+    if (authMode !== 'authenticated') {
+      setError('Inicia sesión para subir fotos y guardarlas en tu cuenta.')
+      if (inputRef.current) inputRef.current.value = ''
+      return
+    }
 
     setError(null)
     setIsReading(true)
+    onBusyChange?.(true)
 
     try {
       const accepted: string[] = []
       let rejected: string | null = null
 
       for (const file of Array.from(files).slice(0, Math.max(0, remaining))) {
-        if (file.size > MAX_UPLOAD_BYTES) {
-          rejected = 'Cada imagen no puede superar 3 MB.'
+        setProgress(`Preparando foto ${accepted.length + 1}…`)
+        let dataUrl: string
+        try {
+          dataUrl = await preparePurchasePhoto(file)
+        } catch (error) {
+          rejected = error instanceof Error ? error.message : 'No se pudo preparar la foto.'
           continue
         }
-
-        const dataUrl = await readFileAsDataUrl(file)
         const result = validateImageDataUrl(dataUrl)
         if (!result.valid || !dataUrl) {
           rejected = result.error ?? 'No se pudo leer el archivo.'
@@ -63,23 +66,30 @@ export function PurchasePhotosField({ value, onChange, kind = 'expense' }: Purch
         }
 
         try {
+          setProgress(`Subiendo foto ${accepted.length + 1}…`)
           const uploaded = await requestJson<{ url: string }>('/uploads/transaction-image', {
             method: 'POST',
             body: JSON.stringify({ image: dataUrl, kind }),
-          })
+          }, { timeoutMs: 60_000 })
+          if (!isValidHostedImageUrl(uploaded.url)) throw new Error('La subida no devolvió una foto válida. Inténtalo de nuevo.')
           accepted.push(uploaded.url)
         } catch (error) {
-          rejected = error instanceof Error ? error.message : 'No se pudo subir el archivo.'
+          rejected = error instanceof DOMException && error.name === 'AbortError'
+            ? 'La subida tardó demasiado. Comprueba tu conexión y selecciona la foto de nuevo.'
+            : error instanceof TypeError ? 'No se pudo conectar para subir la foto. Comprueba tu conexión e inténtalo de nuevo.'
+            : error instanceof Error ? error.message : 'No se pudo subir el archivo.'
         }
       }
 
-      if (accepted.length > 0) onChange([...value, ...accepted])
+      if (accepted.length > 0) onChange([...new Set([...value, ...accepted])])
       if (rejected) setError(rejected)
       else if (files.length > remaining) {
         setError(`Solo puedes adjuntar ${MAX_ATTACHMENTS_PER_TRANSACTION} fotos.`)
       }
     } finally {
       setIsReading(false)
+      onBusyChange?.(false)
+      setProgress('')
       if (inputRef.current) inputRef.current.value = ''
     }
   }
@@ -114,6 +124,7 @@ export function PurchasePhotosField({ value, onChange, kind = 'expense' }: Purch
               type="button"
               aria-label={`Quitar foto ${index + 1}`}
               onClick={() => removeAt(index)}
+              disabled={isReading}
               className="absolute -right-1.5 -top-1.5 rounded-full bg-surface p-1 text-muted-gray shadow-vault-sm hover:text-error"
             >
               <X className="size-3" aria-hidden="true" />
@@ -135,9 +146,10 @@ export function PurchasePhotosField({ value, onChange, kind = 'expense' }: Purch
         ) : null}
       </div>
 
-      {error ? <p className="text-xs text-error">{error}</p> : null}
+      {isReading ? <p role="status" className="text-xs text-muted-gray">{progress}</p> : null}
+      {error ? <p role="alert" className="text-xs text-error">{error}</p> : null}
       <p className="text-xs text-muted-gray">
-        JPG, PNG, WEBP o GIF. Hasta {MAX_ATTACHMENTS_PER_TRANSACTION} fotos de 3 MB cada una.
+        JPG, PNG, WEBP o GIF. Hasta {MAX_ATTACHMENTS_PER_TRANSACTION} fotos. Las fotos grandes se reducen a 3 MB antes de subirlas.
       </p>
     </div>
   )

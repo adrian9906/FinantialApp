@@ -1,5 +1,5 @@
 const defaultApiBaseUrl = 'https://finantialapp.onrender.com'
-const rawApiBaseUrl = import.meta.env.VITE_API_BASE_URL?.trim() || defaultApiBaseUrl
+const rawApiBaseUrl = import.meta.env?.VITE_API_BASE_URL?.trim() || defaultApiBaseUrl
 const SESSION_TOKEN_KEY = 'plata-session-token'
 
 function normalizeBaseUrl(baseUrl: string) {
@@ -27,9 +27,9 @@ export function isNetworkRequestError(error: unknown) {
   return message.includes('failed to fetch') || message.includes('network') || message.includes('load failed') || message.includes('aborted')
 }
 
-export async function requestJson<T>(path: string, init?: RequestInit): Promise<T> {
+export async function requestJson<T>(path: string, init?: RequestInit, options?: { timeoutMs?: number }): Promise<T> {
   const token = readSessionToken()
-  const { headers: initHeaders, ...restInit } = init ?? {}
+  const { headers: initHeaders, signal: callerSignal, ...restInit } = init ?? {}
 
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
@@ -41,11 +41,11 @@ export async function requestJson<T>(path: string, init?: RequestInit): Promise<
   }
 
   const controller = new AbortController()
-  const timeoutId = window.setTimeout(() => controller.abort(), 8_000)
+  const timeoutId = window.setTimeout(() => controller.abort(), options?.timeoutMs ?? 8_000)
   const response = await fetch(getApiUrl(path), {
     credentials: 'include',
     headers,
-    signal: init?.signal ?? controller.signal,
+    signal: callerSignal ? AbortSignal.any([callerSignal, controller.signal]) : controller.signal,
     ...restInit,
   }).finally(() => window.clearTimeout(timeoutId))
 

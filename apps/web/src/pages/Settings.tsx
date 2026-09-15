@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState, type ChangeEvent, type Dispatch, type ReactNode, type SetStateAction } from 'react'
 import { toast } from 'sonner'
+import { VoiceSettings } from '@/components/voice/VoiceSettings'
 import { getFinancialPeriodStart, getFormulaBudgets } from '@plata/shared'
 
 import {
@@ -31,6 +32,7 @@ import { useFinanceStore } from '@/store/financeStore'
 import { useAuthStore } from '@/store/authStore'
 import { AutomationSettings } from '@/components/settings/AutomationSettings'
 import { NotificationSettings } from '@/components/settings/NotificationSettings'
+import { MobileWidgetSettings } from '@/components/settings/MobileWidgetSettings'
 import { IncomeAccountSelect } from '@/components/income/IncomeAccountSelect'
 import { getAccountAllocationFormula, isSavingsIncomeSource } from '@/lib/account-savings'
 import { getIncomeAccountsForMonth, type IncomeAccountView } from '@/lib/income-account-view'
@@ -1406,6 +1408,8 @@ export default function Settings() {
           <AutomationSettings />
 
           <NotificationSettings />
+          <MobileWidgetSettings />
+          <VoiceSettings />
 
           <MonthlyResetCard />
         </div>

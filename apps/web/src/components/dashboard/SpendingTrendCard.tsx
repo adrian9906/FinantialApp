@@ -1,4 +1,4 @@
-import { useMemo, useState, type ComponentProps } from 'react'
+import { useEffect, useMemo, useRef, useState, type ComponentProps } from 'react'
 import { CartesianGrid, Line, LineChart, XAxis, YAxis } from 'recharts'
 import {
   getWishlistReservedAmount,
@@ -137,6 +137,24 @@ export function SpendingTrendCard({
   incomeSourceId?: string
 }) {
   const { currency } = useCurrencyInput()
+  const cardRef = useRef<HTMLDivElement>(null)
+  const [compactChart, setCompactChart] = useState(false)
+  useEffect(() => {
+    const card = cardRef.current
+    if (!card) return
+    const observer = new ResizeObserver(([entry]) => setCompactChart(entry.contentRect.width < 480))
+    observer.observe(card)
+    return () => observer.disconnect()
+  }, [])
+  const compactNumber = useMemo(() => new Intl.NumberFormat(currency.locale, {
+    notation: 'compact', maximumFractionDigits: 1,
+  }), [currency.locale])
+  const axisMoney = (value: number) => compactChart
+    ? compactNumber.format(value)
+    : formatMoneyInput(value, currency)
+  const axisLabel = (value: string) => compactChart
+    ? value.replace('Día ', 'D').replace('Semana ', 'S').replace('.', '')
+    : value
   const [granularity, setGranularity] = useState<Granularity>('weekly')
   const [showPrevious, setShowPrevious] = useState(true)
   const [visibleCategories, setVisibleCategories] = useState<CategoryVisibility>({
@@ -235,9 +253,9 @@ export function SpendingTrendCard({
   const tooltipFormatter: NonNullable<ComponentProps<typeof ChartTooltipContent>['formatter']> = (value, name) => {
     const numericValue = Array.isArray(value) ? Number(value[0] ?? 0) : Number(value ?? 0)
     return (
-      <div className="flex min-w-48 items-center justify-between gap-4">
-        <span className="text-muted-foreground">{trendConfig[String(name) as keyof typeof trendConfig]?.label ?? String(name)}</span>
-        <span className="font-mono font-medium text-foreground tabular-nums">{formatMoneyInput(numericValue, currency)}</span>
+      <div className="flex min-w-0 flex-1 items-center justify-between gap-3">
+        <span className="min-w-0 text-muted-foreground">{trendConfig[String(name) as keyof typeof trendConfig]?.label ?? String(name)}</span>
+        <span className="shrink-0 font-mono font-medium text-foreground tabular-nums">{formatMoneyInput(numericValue, currency)}</span>
       </div>
     )
   }
@@ -251,7 +269,7 @@ export function SpendingTrendCard({
   }
 
   return (
-    <Card className="min-w-0 overflow-hidden border-graphite bg-surface shadow-vault">
+    <Card ref={cardRef} className="min-w-0 overflow-hidden border-graphite bg-surface shadow-vault">
       <CardHeader className="gap-4">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
           <div>
@@ -293,7 +311,7 @@ export function SpendingTrendCard({
       </CardHeader>
 
       <CardContent className="flex flex-col gap-4">
-        <div className="flex flex-wrap gap-2" aria-label="Series visibles">
+        <div className="grid min-w-0 grid-cols-3 gap-2 sm:flex sm:flex-wrap" aria-label="Series visibles">
           {categories.map((category) => {
             const isVisible = visibleCategories[category.key]
             return (
@@ -304,24 +322,25 @@ export function SpendingTrendCard({
                 variant="outline"
                 aria-pressed={isVisible}
                 onClick={() => toggleCategory(category.key)}
-                className={cn('border-graphite bg-abyss text-on-surface', !isVisible && 'opacity-45')}
+                className={cn('h-auto min-w-0 flex-col gap-1 whitespace-normal border-graphite bg-abyss py-2 text-on-surface sm:h-7 sm:flex-row sm:py-0', !isVisible && 'opacity-45')}
               >
                 <span className="size-2.5 rounded-full" style={{ backgroundColor: category.color }} />
                 {category.label}
-                <span className="text-muted-foreground">{formatMoney(analysis.currentTotals[category.key], currency)}</span>
+                <span className="max-w-full break-all text-muted-foreground">{formatMoney(analysis.currentTotals[category.key], currency)}</span>
               </Button>
             )
           })}
         </div>
 
+        {compactChart && <p className="text-xs text-muted-gray">Importes en {currency.code} · Toca el gráfico para ver el detalle.</p>}
         {granularity === 'monthly' ? (
-          <div className="overflow-x-auto overscroll-x-contain pb-2">
-            <ChartContainer config={trendConfig} className="h-[320px] w-full min-w-[640px] lg:min-w-0">
-              <LineChart accessibilityLayer data={convertedMonthlySeries} margin={{ top: 18, right: 16, left: -12, bottom: 4 }}>
+          <div className="min-w-0">
+            <ChartContainer config={trendConfig} className="h-[240px] w-full min-w-0 sm:h-[320px]">
+              <LineChart accessibilityLayer data={convertedMonthlySeries} margin={{ top: 12, right: compactChart ? 12 : 16, left: compactChart ? 0 : -12, bottom: 4 }}>
                 <CartesianGrid vertical={false} strokeDasharray="3 3" />
-                <XAxis dataKey="label" tickLine={false} axisLine={false} interval={0} />
-                <YAxis tickLine={false} axisLine={false} width={112} tickFormatter={(value) => formatMoneyInput(Number(value), currency)} />
-                <ChartTooltip content={<ChartTooltipContent indicator="line" formatter={tooltipFormatter} />} />
+                <XAxis dataKey="label" tickLine={false} axisLine={false} interval="preserveStartEnd" minTickGap={24} tickMargin={8} tickFormatter={axisLabel} tick={{ fontSize: compactChart ? 10 : 12 }} />
+                <YAxis tickLine={false} axisLine={false} width={compactChart ? 44 : 112} tickCount={compactChart ? 4 : 5} tickFormatter={(value) => axisMoney(Number(value))} tick={{ fontSize: compactChart ? 10 : 12 }} />
+                <ChartTooltip content={<ChartTooltipContent className="max-w-[calc(100vw-64px)]" indicator="line" formatter={tooltipFormatter} />} />
                 {categories.map((category) => visibleCategories[category.key] && (
                   <Line
                     key={category.key}
@@ -329,7 +348,7 @@ export function SpendingTrendCard({
                     dataKey={category.key}
                     stroke={`var(--color-${category.key})`}
                     strokeWidth={3}
-                    dot={{ r: 4 }}
+                    dot={compactChart ? false : { r: 4 }}
                     activeDot={{ r: 6 }}
                     connectNulls={false}
                   />
@@ -338,12 +357,12 @@ export function SpendingTrendCard({
             </ChartContainer>
           </div>
         ) : (
-          <ChartContainer config={trendConfig} className="h-[320px] w-full">
-            <LineChart accessibilityLayer data={convertedAlignedSeries} margin={{ top: 18, right: 16, left: -12, bottom: 4 }}>
+          <ChartContainer config={trendConfig} className="h-[240px] w-full min-w-0 sm:h-[320px]">
+            <LineChart accessibilityLayer data={convertedAlignedSeries} margin={{ top: 12, right: compactChart ? 12 : 16, left: compactChart ? 0 : -12, bottom: 4 }}>
               <CartesianGrid vertical={false} strokeDasharray="3 3" />
-              <XAxis dataKey="label" tickLine={false} axisLine={false} interval={granularity === 'daily' ? 'preserveStartEnd' : 0} />
-              <YAxis tickLine={false} axisLine={false} width={112} tickFormatter={(value) => formatMoneyInput(Number(value), currency)} />
-              <ChartTooltip content={<ChartTooltipContent indicator="line" formatter={tooltipFormatter} />} />
+              <XAxis dataKey="label" tickLine={false} axisLine={false} interval="preserveStartEnd" minTickGap={24} tickMargin={8} tickFormatter={axisLabel} tick={{ fontSize: compactChart ? 10 : 12 }} />
+              <YAxis tickLine={false} axisLine={false} width={compactChart ? 44 : 112} tickCount={compactChart ? 4 : 5} tickFormatter={(value) => axisMoney(Number(value))} tick={{ fontSize: compactChart ? 10 : 12 }} />
+              <ChartTooltip content={<ChartTooltipContent className="max-w-[calc(100vw-64px)]" indicator="line" formatter={tooltipFormatter} />} />
               {categories.map((category) => visibleCategories[category.key] && (
                 <Line
                   key={`${category.key}-actual`}
@@ -351,7 +370,7 @@ export function SpendingTrendCard({
                   dataKey={`${category.key}Actual`}
                   stroke={`var(--color-${category.key}Actual)`}
                   strokeWidth={3}
-                  dot={{ r: 3 }}
+                  dot={compactChart ? false : { r: 3 }}
                   activeDot={{ r: 5 }}
                   connectNulls={false}
                 />
@@ -377,7 +396,7 @@ export function SpendingTrendCard({
           {granularity !== 'monthly' && showPrevious && analysis.hasPreviousCycle ? (
             <span className="flex items-center gap-2"><span className="w-7 border-t-2 border-dashed border-muted-gray" /> Ciclo anterior</span>
           ) : null}
-          <span>Haz clic en una categoría para ocultarla o mostrarla.</span>
+          <span>Toca una categoría para ocultarla o mostrarla.</span>
         </div>
       </CardContent>
     </Card>

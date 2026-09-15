@@ -1,3 +1,4 @@
+import { validatePlannedMovement } from '@/lib/planned-movement-validation'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import { buildWantTransferSavingDescription, createLearnedCategorizationRule, findCategorizationRule, isCashPayment, type ReceiptOCRLineItem, type ReceiptOCRParsedDraft } from '@plata/shared'
@@ -460,23 +461,10 @@ setCustomCategoryName('')
       return
     }
 
-    if (nextAmount > availableToPlan) {
-      setFormError(`Ese precio supera el disponible para planificar: ${formatMoneyWithCode(availableToPlan, formCurrency)}.`)
-      return
-    }
-
-    if (plannedTotal + nextAmount > formAccountOverview.budgetWants) {
-      setFormError(`No puedes agregarlo porque la lista total se iría a ${formatMoneyWithCode(plannedTotal + nextAmount, formCurrency)} y tu límite es ${formatMoneyWithCode(formAccountOverview.budgetWants, formCurrency)}.`)
-      return
-    }
-
     const previousRefund = editingTransaction?.incomeSourceId === formAccount.source.id ? editingTransaction.amount : 0
     const availableAccountBalance = Number(formAccount.salary.balance ?? formAccount.salary.amount) + previousRefund
-    if (nextAmount > availableAccountBalance) {
-      setFormError(`Ese ingreso solo tiene ${formatMoneyWithCode(availableAccountBalance, formCurrency)} de saldo.`)
-      return
-    }
-
+    const planningError = validatePlannedMovement({ amount: nextAmount, plannedTotal, budget: formAccountOverview.budgetWants, balance: availableAccountBalance })
+    if (planningError) { setFormError(planningError); return }
     const currentStatus = editId
       ? wantItems.find((item) => item.id === editId)?.status ?? 'pending'
       : 'pending'

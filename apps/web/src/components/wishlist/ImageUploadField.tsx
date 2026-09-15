@@ -4,25 +4,16 @@ import { ImagePlus, Upload, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { requestJson } from '@/lib/api'
 import { cn } from '@/lib/utils'
+import { preparePurchasePhoto } from '@/lib/prepare-purchase-photo'
+import { isValidHostedImageUrl } from '@plata/shared'
 
 interface ImageUploadFieldProps {
   value?: string
   onChange: (value?: string) => void
+  onBusyChange?: (busy: boolean) => void
 }
 
-async function fileToDataUrl(file: File) {
-  return new Promise<string>((resolve, reject) => {
-    const reader = new FileReader()
-
-    reader.onload = () => resolve(String(reader.result))
-    reader.onerror = () => reject(new Error('No se pudo leer la imagen seleccionada.'))
-    reader.readAsDataURL(file)
-  })
-}
-
-const MAX_IMAGE_BYTES = 3 * 1024 * 1024
-
-export function ImageUploadField({ value, onChange }: ImageUploadFieldProps) {
+export function ImageUploadField({ value, onChange, onBusyChange }: ImageUploadFieldProps) {
   const inputRef = useRef<HTMLInputElement>(null)
   const [isDragging, setIsDragging] = useState(false)
   const [isBroken, setIsBroken] = useState(false)
@@ -42,6 +33,7 @@ export function ImageUploadField({ value, onChange }: ImageUploadFieldProps) {
   const patternBlocks = useMemo(() => Array.from({ length: 36 }, (_, index) => index), [])
 
   async function handleFiles(files: FileList | File[] | null) {
+    if (isUploading) return
     const file = files?.[0]
     if (!file) {
       if (inputRef.current) {
@@ -58,28 +50,26 @@ export function ImageUploadField({ value, onChange }: ImageUploadFieldProps) {
       return
     }
 
-    if (file.size > MAX_IMAGE_BYTES) {
-      setUploadError('La imagen no puede superar 3 MB.')
-      if (inputRef.current) {
-        inputRef.current.value = ''
-      }
-      return
-    }
-
     setUploadError(null)
     setIsUploading(true)
+    onBusyChange?.(true)
 
     try {
-      const image = await fileToDataUrl(file)
+      const image = await preparePurchasePhoto(file)
       const result = await requestJson<{ url: string }>('/uploads/wishlist-image', {
         method: 'POST',
         body: JSON.stringify({ image }),
-      })
+      }, { timeoutMs: 60_000 })
+      if (!isValidHostedImageUrl(result.url)) throw new Error('La subida no devolvió una imagen válida. Inténtalo de nuevo.')
       onChange(result.url)
     } catch (error) {
-      setUploadError(error instanceof Error ? error.message : 'No se pudo subir la imagen.')
+      setUploadError(error instanceof DOMException && error.name === 'AbortError'
+        ? 'La subida tardó demasiado. Comprueba tu conexión e inténtalo de nuevo.'
+        : error instanceof TypeError ? 'No se pudo conectar para subir la imagen. Comprueba tu conexión.'
+        : error instanceof Error ? error.message : 'No se pudo subir la imagen.')
     } finally {
       setIsUploading(false)
+      onBusyChange?.(false)
     }
 
     if (inputRef.current) {

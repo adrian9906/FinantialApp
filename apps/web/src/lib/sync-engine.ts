@@ -234,7 +234,7 @@ export async function queueLocalChange(
 ): Promise<SyncDocument> {
   const document = await readSyncDocument(userId)
   const updated = queueSnapshot(document, next, makeId)
-  await writeSyncDocument(userId, updated)
+  if (!await writeSyncDocument(userId, updated)) throw new Error('No se pudo guardar el movimiento en este dispositivo.')
 
   emit({
     pending: updated.operations.length,
@@ -242,6 +242,10 @@ export async function queueLocalChange(
   })
 
   return updated
+}
+
+export async function waitForCurrentSync() {
+  if (inFlight) await inFlight.catch(() => null)
 }
 
 export async function resolveConflict(

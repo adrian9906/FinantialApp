@@ -25,8 +25,9 @@ import {
 import { buildExpenseDescription, parseExpenseDescription } from '@/lib/expense-utils'
 import { isNetworkRequestError } from '@/lib/api'
 import { isOnline } from '@/lib/offline'
-import { isUpgradeRequiredError, queueLocalChange, syncNow } from '@/lib/sync-engine'
+import { isUpgradeRequiredError, queueLocalChange, syncNow, waitForCurrentSync } from '@/lib/sync-engine'
 import { readSyncDocument } from '@/lib/sync-store'
+import { prepareVoiceBatch, persistPreparedVoiceBatch } from '@/lib/voice-batch'
 import { parseWantDescription } from '@/lib/want-utils'
 import { applyIncomeMoneyMovement, type IncomeMoneyDestination } from '@/lib/income-money'
 import { reconcileIncomeAccountCharge } from '@/lib/income-account'
@@ -36,6 +37,8 @@ import { usePreferencesStore } from '@/store/preferencesStore'
 import { ensureSavingsCurrencyAccounts, getAccountAllocationFormula, normalizeLegacySavingsAccounts } from '@/lib/account-savings'
 
 const GUEST_FINANCE_STORAGE_KEY = 'plata-guest-finance'
+let voiceBatchSaving = false
+const pendingSnapshotWrites = new Set<Promise<void>>()
 
 type DebtInput = Omit<Debt, 'id' | 'paidAmount' | 'remainingAmount' | 'progress' | 'isSettled'> & {
   initialPayment?: number
@@ -59,6 +62,7 @@ interface FinanceStore extends BootstrapPayload {
   assignIncomeMoney: (input: { amountUsd: number; month: string; destination: IncomeMoneyDestination }) => Promise<void>
   transferIncomeMoney: (input: { sourceSalaryId: string; amountUsd: number; month: string; destination: IncomeMoneyDestination; preserveSourceBalance?: boolean }) => Promise<void>
   addTransaction: (t: Omit<Transaction, 'id'>) => Promise<Transaction>
+  addTransactionsBatch: (inputs: Transaction[]) => Promise<Transaction[]>
   updateTransaction: (id: string, data: Partial<Omit<Transaction, 'id'>>) => Promise<void>
   removeTransaction: (id: string) => Promise<void>
   addWishlistItem: (w: Omit<WishlistItem, 'id'>) => Promise<void>
@@ -371,6 +375,7 @@ function updateLocalState(
   set: (recipe: (state: FinanceStore) => Partial<FinanceStore>) => void,
   recipe: (state: FinanceStore) => Partial<BootstrapPayload>,
 ) {
+  if (voiceBatchSaving) return Promise.reject(new Error('Espera a que termine el guardado del dictado.'))
   let snapshot: BootstrapPayload | null = null
 
   set((state) => {
@@ -380,11 +385,13 @@ function updateLocalState(
   })
 
   const pendingWrite = snapshot ? persistLocalSnapshot(snapshot) : Promise.resolve()
+  pendingSnapshotWrites.add(pendingWrite)
+  void pendingWrite.finally(() => pendingSnapshotWrites.delete(pendingWrite)).catch(() => {})
 
   void pendingWrite.then(() => {
     if (isGuestMode() || !isOnline()) return
     void useFinanceStore.getState().syncPendingChanges().catch(() => {})
-  })
+  }).catch(() => {})
 
   return pendingWrite
 }
@@ -472,12 +479,14 @@ export const useFinanceStore = create<FinanceStore>()((set, get) => ({
     }
   },
   syncPendingChanges: async (reason = 'silent') => {
+    if (voiceBatchSaving) return false
     const userId = getAuthenticatedUserId()
     if (!userId || !isOnline()) return false
 
     try {
       const synced = await syncNow(userId, reason)
       if (!synced) return false
+      if (voiceBatchSaving) return false
 
       const normalized = normalizeBootstrapSnapshot(synced.snapshot, userId)
       set({
@@ -618,6 +627,33 @@ export const useFinanceStore = create<FinanceStore>()((set, get) => ({
       salaries: reconcileIncomeAccountCharge(state.salaries, undefined, created),
     }))
     return created
+  },
+  addTransactionsBatch: async (inputs) => {
+    if (voiceBatchSaving) throw new Error('El dictado ya se está guardando.')
+    const key = get().loadedKey
+    voiceBatchSaving = true
+    try {
+      await Promise.all([...pendingSnapshotWrites])
+      await waitForCurrentSync()
+      if (get().loadedKey !== key || !isLocalMutationMode() || !get().hasLoaded) throw new Error('Espera a que se carguen los datos de tu sesión.')
+      const userId = getAuthenticatedUserId()
+      if (userId) {
+        const latest = await readSyncDocument(userId)
+        if (get().loadedKey !== key) throw new Error('La sesión cambió durante el guardado.')
+        set(normalizeBootstrapSnapshot(latest.snapshot, userId))
+      }
+      const preferences = usePreferencesStore.getState()
+      const previous = get()
+      const prepared = prepareVoiceBatch(buildSnapshotFromState(previous, {}), inputs, (accountId) => getAccountAllocationFormula(preferences.accountSavingsFormulas, accountId, preferences.formula))
+      if (!prepared.created.length) return []
+      return await persistPreparedVoiceBatch(prepared,
+        () => persistLocalSnapshot(buildSnapshotFromState(previous, prepared)),
+        () => set({ transactions: prepared.transactions, salaries: prepared.salaries }),
+        () => get().loadedKey === key && isLocalMutationMode())
+    } finally {
+      voiceBatchSaving = false
+      if (!isGuestMode() && isOnline()) void get().syncPendingChanges().catch(() => {})
+    }
   },
   updateTransaction: async (id, data) => {
     if (isLocalMutationMode()) {

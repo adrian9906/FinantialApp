@@ -1,5 +1,5 @@
 import { NavLink } from 'react-router-dom'
-import { useState } from 'react'
+import { useEffect, useState, useSyncExternalStore } from 'react'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { AppIcon, type AppIconName } from '@/components/icons/AppIcon'
@@ -22,6 +22,8 @@ import { InstallAppPrompt } from '@/components/onboarding/InstallAppPrompt'
 import { CurrencySwitcher } from '@/components/layout/CurrencySwitcher'
 import { AccountSwitcher } from '@/components/layout/AccountSwitcher'
 import { ReceivableDueNotifier } from '@/components/debts/ReceivableDueNotifier'
+import { VoiceAssistant } from '@/components/voice/VoiceAssistant'
+import { useVoiceStore } from '@/store/voiceStore'
 
 const navItems = [
   { to: '/', icon: 'dashboard', label: 'Dashboard' },
@@ -37,11 +39,27 @@ const navItems = [
   { to: '/reminders', icon: 'bell', label: 'Recordatorios' },
   { to: '/subscriptions', icon: 'subscriptions', label: 'Suscripciones' },
   { to: '/reports', icon: 'reports', label: 'Informes' },
+  { to: '/currency-calculator', icon: 'coins', label: 'Calculadora de divisas' },
   { to: '/settings', icon: 'settings', label: 'Ajustes' },
 ] satisfies Array<{ to: string, icon: AppIconName, label: string }>
 
-export function Sidebar() {
+function subscribeMobileLayout(callback: () => void) {
+  const query = window.matchMedia('(max-width: 639px)')
+  query.addEventListener('change', callback)
+  return () => query.removeEventListener('change', callback)
+}
+
+function getMobileLayout() {
+  return window.matchMedia('(max-width: 639px)').matches
+}
+
+export function Sidebar({ mobileActions }: { mobileActions?: React.ReactNode }) {
   const [open, setOpen] = useState(false)
+  useEffect(() => {
+    const handleTourMenu = (event: Event) => setOpen((event as CustomEvent<boolean>).detail)
+    window.addEventListener('plata-tour-menu', handleTourMenu)
+    return () => window.removeEventListener('plata-tour-menu', handleTourMenu)
+  }, [])
   const authMode = useAuthStore((state) => state.authMode)
   const user = useAuthStore((state) => state.user)
   const logout = useAuthStore((state) => state.logout)
@@ -60,7 +78,7 @@ export function Sidebar() {
 
   return (
     <>
-      {!open && (
+      {(
         <div className="fixed inset-x-0 top-0 z-30 bg-[color:color-mix(in_srgb,var(--surface)_92%,transparent)] backdrop-blur-xl lg:hidden">
           <div className="flex items-center gap-3 px-3 py-3">
             <Button
@@ -74,15 +92,17 @@ export function Sidebar() {
               <AppIcon name="menu" className="size-5" />
             </Button>
 
-            <div className="min-w-0">
+            <div className="min-w-0 flex-1">
               <p className="text-sm font-semibold text-on-surface">Plata App</p>
               <p className="truncate text-xs text-muted-gray">Tu control financiero del mes</p>
             </div>
+            {mobileActions && <div className="ml-auto flex shrink-0 items-center gap-2">{mobileActions}</div>}
           </div>
         </div>
       )}
 
       <aside
+        data-tour-menu-open={open}
         className={cn(
           'fixed inset-y-0 left-0 z-50 flex w-64 flex-col border-r border-graphite bg-surface shadow-vault transition-transform duration-200 lg:translate-x-0',
           open ? 'translate-x-0' : '-translate-x-full'
@@ -109,6 +129,7 @@ export function Sidebar() {
         <nav data-tour="navigation" className="flex min-h-0 flex-1 flex-col gap-1 overflow-y-auto px-3">
           {navItems.map((item) => (
             <NavLink
+              data-tour-route={item.to}
               key={item.to}
               to={item.to}
               end={item.to === '/'}
@@ -191,6 +212,8 @@ export function Sidebar() {
 }
 
 export function AppLayout({ children }: { children: React.ReactNode }) {
+  const compactVoice = useVoiceStore((state) => state.compact)
+  const isMobile = useSyncExternalStore(subscribeMobileLayout, getMobileLayout, () => false)
   const authMode = useAuthStore((state) => state.authMode)
   const background = usePreferencesStore((state) => state.background)
   const activeCurrencyCode = usePreferencesStore((state) => state.activeCurrencyCode)
@@ -198,12 +221,14 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
     state.currencies.find((currency) => currency.code === state.activeCurrencyCode)?.exchangeRate ?? 1
   )
 
+  if (compactVoice) return <VoiceAssistant />
   return (
     <div
       className="relative flex min-h-dvh overflow-hidden"
       style={{ background: 'var(--app-shell-background)', backgroundSize: 'var(--app-shell-background-size, auto)' }}
     >
       <ReceivableDueNotifier />
+      <VoiceAssistant />
       {background === 'grid' ? (
         <div className="absolute inset-0 z-0">
           <HexagonBackground
@@ -218,20 +243,20 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
         </div>
       ) : null}
 
-      <Sidebar />
+      <Sidebar mobileActions={isMobile ? <><div data-tour="global-search"><GlobalSearchDialog /></div><AppTour /></> : undefined} />
       <main className="pointer-events-none relative z-10 min-h-dvh min-w-0 flex-1 overflow-x-hidden lg:pl-64">
         <div className="pointer-events-auto mx-auto w-full min-w-0 max-w-full px-3 pb-5 pt-24 sm:px-6 sm:pb-6 sm:pt-28 md:max-w-[94%] lg:max-w-[90%] lg:px-8 lg:py-8">
-          <div className="mb-5 grid min-w-0 grid-cols-[minmax(0,1fr)_auto] gap-2 sm:flex sm:items-center sm:gap-3">
-            <div data-tour="global-search" className="col-span-2 min-w-0 sm:col-span-1 sm:flex-1">
+          <div className="mb-5 flex min-w-0 items-center justify-end gap-2 sm:gap-3">
+            {!isMobile && <div data-tour="global-search" className="min-w-0 shrink-0 sm:flex-1">
               <GlobalSearchDialog />
-            </div>
-            <div className="min-w-0">
+            </div>}
+            <div className="min-w-0 shrink-0">
               <CurrencySwitcher />
             </div>
-            <div className="col-span-2 min-w-0 sm:col-span-1">
+            <div className="min-w-0 flex-1 sm:flex-none sm:shrink-0">
               <AccountSwitcher />
             </div>
-            <AppTour />
+            {!isMobile && <AppTour />}
           </div>
 
           {authMode === 'guest' && (
