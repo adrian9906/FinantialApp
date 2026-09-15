@@ -119,7 +119,7 @@ const bonus = (id: string, amount: number, month: string, name = 'Bonus'): Salar
   console.log('PASS 8: una cuenta mensual configurable comienza el mes en cero')
 }
 
-// --- Spending this month never reduces the starting balance of a fixed account next month ---
+// --- Unspent money remains available alongside next month's fixed income ---
 {
   const fixedAccount: Salary = {
     ...job('fixed-spent', 100, '2026-09', 'salary-fixed', 'Salario fijo'),
@@ -128,8 +128,27 @@ const bonus = (id: string, amount: number, month: string, name = 'Bonus'): Salar
   }
   const carried = carrySalaryForwardToMonth([fixedAccount], '2026-10', makeId)
   const october = getIncomesForMonth(carried, '2026-10')
-  assert.equal(october[0].balance, 100)
-  console.log('PASS 9: una cuenta fija reinicia con su importe mensual, no con el sobrante')
+  assert.equal(october[0].balance, 135)
+  assert.equal(october[0].amount, 100, 'el sobrante no cuenta como nuevo ingreso')
+  console.log('PASS 9: una cuenta fija conserva el sobrante y suma el nuevo ingreso')
+}
+
+{
+  const salary: Salary = { ...job('rollover', 400, '2026-09', 'salary', 'Salario'), balance: 200 }
+  const savings: Salary = { ...job('savings', 0, '2026-09', 'savings', 'Ahorro USD'), balance: 80 }
+  const variable: Salary = { ...job('variable', 100, '2026-09', 'cup', 'Cuenta CUP'), balance: 25, balanceMode: 'zero', currencyCode: 'CUP' }
+  const carried = carrySalaryForwardToMonth([salary, savings, variable], '2026-10', makeId)
+  const october = getIncomesForMonth(carried, '2026-10')
+  assert.equal(october.find((entry) => entry.sourceId === 'salary')?.balance, 600)
+  assert.equal(october.find((entry) => entry.sourceId === 'savings')?.balance, 80)
+  assert.equal(october.find((entry) => entry.sourceId === 'cup')?.balance, 25)
+  assert.equal(october.find((entry) => entry.sourceId === 'cup')?.amount, 0)
+  assert.equal(october.find((entry) => entry.sourceId === 'cup')?.currencyCode, 'CUP')
+  assert.deepEqual(carrySalaryForwardToMonth(carried, '2026-10', makeId), carried, 'repetir no duplica el ingreso ni el sobrante')
+  assert.equal(salary.balance, 200, 'el historial no se modifica')
+  const november = getIncomesForMonth(carrySalaryForwardToMonth([salary], '2026-11', makeId), '2026-11')
+  assert.equal(november[0].balance, 1000, 'cada mes parte del saldo anterior')
+  console.log('PASS 10: arrastre por cuenta y moneda, ahorro e idempotencia')
 }
 
 console.log('\nIngresos multiples correctos.')

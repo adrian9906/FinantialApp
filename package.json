@@ -26,6 +26,7 @@
     "db:studio": "pnpm --dir apps/api db:studio",
     "test:sync": "tsx packages/shared/src/sync.test.mts",
     "test:date": "tsx apps/web/src/lib/date.test.mts",
+    "test:expense-calendar": "node --experimental-strip-types apps/web/src/lib/expense-calendar.test.mts",
     "test:income": "tsx packages/shared/src/income.test.mts",
     "test:income-money": "tsx apps/web/src/lib/income-money.test.mts",
     "test:income-account": "tsx apps/web/src/lib/income-account.test.mts",

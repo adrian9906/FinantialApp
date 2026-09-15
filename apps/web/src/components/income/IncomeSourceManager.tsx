@@ -226,7 +226,7 @@ export function IncomeSourceManager() {
                 <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1 border-t border-graphite pt-3">
                   <p className="text-xs text-muted-gray">
                     {source.recurring
-                      ? source.balanceMode === 'zero' ? 'Mensual · comienza en 0' : 'Mensual · conserva el saldo'
+                      ? source.balanceMode === 'zero' ? 'Mensual · sin ingreso automático' : 'Mensual · ingreso automático'
                       : 'Solo cuenta este mes'}
                   </p>
                   <p className={`inline-flex items-center gap-1 text-xs ${source.isCash === false ? 'text-sky-300' : 'text-emerald-300'}`}>
@@ -323,18 +323,18 @@ export function IncomeSourceManager() {
 
             {recurring ? (
               <div className="grid gap-2 rounded-xl border border-graphite bg-abyss p-3">
-                <Label className="text-medium-gray">¿Cómo inicia el próximo mes?</Label>
+                <Label className="text-medium-gray">Ingreso del próximo mes</Label>
                 <Select value={balanceMode} onValueChange={(value) => setBalanceMode(value === 'zero' ? 'zero' : 'fixed')}>
-                  <SelectTrigger><SelectValue>{balanceMode === 'zero' ? 'En cero' : 'Con el mismo saldo'}</SelectValue></SelectTrigger>
+                  <SelectTrigger><SelectValue>{balanceMode === 'zero' ? 'Sin ingreso automático' : 'Repetir ingreso mensual'}</SelectValue></SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="fixed">Con el mismo saldo</SelectItem>
-                    <SelectItem value="zero">En cero</SelectItem>
+                    <SelectItem value="fixed">Repetir ingreso mensual</SelectItem>
+                    <SelectItem value="zero">Sin ingreso automático</SelectItem>
                   </SelectContent>
                 </Select>
                 <p className="text-xs text-muted-gray">
                   {balanceMode === 'fixed'
-                    ? 'Ideal para Salario: el importe se repite automáticamente.'
-                    : 'Ideal para Cambio en moneda nacional: aparece en 0 y luego le asignas o transfieres dinero.'}
+                    ? 'Conserva el saldo restante y suma el ingreso mensual automáticamente.'
+                    : 'Conserva el saldo restante; suma dinero cuando registres un ingreso o una transferencia.'}
                 </p>
               </div>
             ) : null}

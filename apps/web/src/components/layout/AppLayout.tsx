@@ -27,6 +27,7 @@ const navItems = [
   { to: '/', icon: 'dashboard', label: 'Dashboard' },
   { to: '/salary', icon: 'wallet', label: 'Ingresos' },
   { to: '/expenses', icon: 'expenses', label: 'Gastos' },
+  { to: '/expense-calendar', icon: 'events', label: 'Calendario de gastos' },
   { to: '/wants', icon: 'wants', label: 'Gustos' },
   { to: '/savings', icon: 'savings', label: 'Ahorros' },
   { to: '/debts', icon: 'debts', label: 'Deudas' },
@@ -105,7 +106,7 @@ export function Sidebar() {
             <AppIcon name="close" className="size-5" />
           </Button>
         </div>
-        <nav data-tour="navigation" className="flex flex-1 flex-col gap-1 px-3">
+        <nav data-tour="navigation" className="flex min-h-0 flex-1 flex-col gap-1 overflow-y-auto px-3">
           {navItems.map((item) => (
             <NavLink
               key={item.to}

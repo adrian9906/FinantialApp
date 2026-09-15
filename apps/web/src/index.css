@@ -1,5 +1,16 @@
 @import "tailwindcss";
 
+.expense-calendar {
+  --calendar-expense: #2563eb;
+  --calendar-want: #db2777;
+  --calendar-saving: #16a34a;
+}
+.dark .expense-calendar {
+  --calendar-expense: #60a5fa;
+  --calendar-want: #f472b6;
+  --calendar-saving: #4ade80;
+}
+
 @custom-variant dark (&:where(.dark, .dark *));
 
 @theme inline {

@@ -105,22 +105,32 @@ export function carrySalaryForwardToMonth(
   )
 
   const carried: Salary[] = []
+  const previousBySource = new Map(sources.map((source) => [getIncomeKey(source), source]))
   let month = addMonthsToKey(latestMonth, 1)
 
   while (month <= targetMonth) {
     for (const source of sources) {
       const key = `${month}/${getIncomeKey(source)}`
-      if (covered.has(key)) continue
+      if (covered.has(key)) {
+        const existing = normalized.find((salary) => salary.month === month && getIncomeKey(salary) === getIncomeKey(source))
+        if (existing) previousBySource.set(getIncomeKey(source), existing)
+        continue
+      }
       covered.add(key)
-      carried.push({
+      const previous = previousBySource.get(getIncomeKey(source))!
+      const income = source.balanceMode === 'zero' ? 0 : source.amount
+      // A monthly income is new money; the account's unspent balance remains
+      // available. Accounts without automatic income retain their money too.
+      // Legacy entries have no recorded balance, so do not invent a remainder.
+      const next: Salary = {
         ...source,
         id: createId(),
         month,
-        amount: source.balanceMode === 'zero' ? 0 : source.amount,
-        balance: source.balanceMode === 'zero'
-          ? 0
-          : source.amount,
-      })
+        amount: income,
+        balance: (previous.balance ?? 0) + income,
+      }
+      carried.push(next)
+      previousBySource.set(getIncomeKey(source), next)
     }
     month = addMonthsToKey(month, 1)
   }

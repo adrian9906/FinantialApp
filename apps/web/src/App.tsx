@@ -5,6 +5,7 @@ import { Toaster } from 'sonner'
 import Dashboard from '@/pages/Dashboard'
 import Salary from '@/pages/Salary'
 import Expenses from '@/pages/Expenses'
+import ExpenseCalendar from '@/pages/ExpenseCalendar'
 import Wants from '@/pages/Wants'
 import Savings from '@/pages/Savings'
 import Debts from '@/pages/Debts'
@@ -120,6 +121,7 @@ function ProtectedApp() {
         <Route index element={<Dashboard />} />
         <Route path="salary" element={<Salary />} />
         <Route path="expenses" element={<Expenses />} />
+        <Route path="expense-calendar" element={<ExpenseCalendar />} />
         <Route path="wants" element={<Wants />} />
         <Route path="savings" element={<Savings />} />
         <Route path="debts" element={<Debts />} />
