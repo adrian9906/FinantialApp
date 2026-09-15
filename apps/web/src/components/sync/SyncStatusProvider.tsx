@@ -16,6 +16,7 @@ const PERIODIC_SYNC_MS = 5 * 60 * 1000
 
 export function SyncStatusProvider() {
   const authMode = useAuthStore((state) => state.authMode)
+  const userId = useAuthStore((state) => state.user?.id)
   const syncPendingChanges = useFinanceStore((state) => state.syncPendingChanges)
   const systemNotificationsEnabled = usePreferencesStore((state) => state.systemNotificationsEnabled)
   const connectionNotificationsEnabled = usePreferencesStore((state) => state.connectionNotificationsEnabled)
@@ -93,7 +94,11 @@ export function SyncStatusProvider() {
     const run = (reason: 'silent' | 'reconnect' = 'silent') => {
       if (!isOnline()) return
       if (reason === 'reconnect') needsVisibleSync.current = false
-      void syncPendingChanges(reason).catch(() => {})
+      void (async () => {
+        if (userId) await usePreferencesStore.getState().hydrateCurrencyPreferences(userId).catch(() => {})
+        if (useAuthStore.getState().authMode !== 'authenticated' || useAuthStore.getState().user?.id !== userId) return
+        await syncPendingChanges(reason)
+      })().catch(() => {})
     }
 
     function handleReconnect() {
@@ -118,7 +123,7 @@ export function SyncStatusProvider() {
       document.removeEventListener('visibilitychange', handleVisibility)
       window.clearInterval(interval)
     }
-  }, [authMode, syncPendingChanges])
+  }, [authMode, syncPendingChanges, userId])
 
   if (authMode !== 'authenticated') return null
 

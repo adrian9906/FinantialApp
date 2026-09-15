@@ -1,6 +1,6 @@
 import { createHash, randomUUID } from 'node:crypto'
-import { createEmptyBootstrapPayload, SYNC_PROTOCOL, canonicalJson, syncCollections, syncKey, getSyncValue, type SyncOperation, type SyncResponse } from '@plata/shared'
-import { parseSyncOperation } from './sync-validation.js'
+import { createEmptyBootstrapPayload, SYNC_PROTOCOL, canonicalJson, syncCollections, syncKey, getSyncValue, normalizeFormula, type AllocationFormula, type SyncOperation, type SyncResponse } from '@plata/shared'
+import { getLegacySyncOperation, getSyncValidationFields, parseSyncOperation } from './sync-validation.js'
 import { getGoogleWebClientId, isGoogleAuthConfigured, verifyGoogleIdToken } from './google-auth.js'
 import { assertSupportedImageDataUrl, getCloudinaryFolder, isCloudinaryConfigured, uploadImageDataUrl } from './cloudinary.js'
 import { sanitizeAttachments, sanitizePlace } from '@plata/shared'
@@ -185,7 +185,7 @@ export function normalizeAccountSavingsFormulas(value: unknown): Record<string, 
   }> = {}
 
   for (const [sourceId, rawEntry] of Object.entries(value as JsonRecord).slice(0, 200)) {
-    const id = String(sourceId).trim().slice(0, 64)
+    const id = String(sourceId).trim().slice(0, 200)
     if (!id) continue
 
     if (rawEntry && typeof rawEntry === 'object' && !Array.isArray(rawEntry)) {
@@ -239,6 +239,7 @@ async function loadCurrencyPreferences(userId: string) {
       currencies: [USD_CURRENCY_PREFERENCE],
       activeCurrencyCode: 'USD',
       accountSavingsFormulas: {},
+      formula: null,
     }
   }
 
@@ -252,34 +253,66 @@ async function loadCurrencyPreferences(userId: string) {
     currencies,
     activeCurrencyCode,
     accountSavingsFormulas: normalizeAccountSavingsFormulas(entry.ahorroPorCuenta),
+    formula: entry.formulaGlobal ? normalizeFormula(entry.formulaGlobal as unknown as AllocationFormula) : null,
   }
+}
+
+export function mergeCurrencyPreferences(current: {
+  currencies: CurrencyPreferencePayload[]
+  activeCurrencyCode: string
+  accountSavingsFormulas: ReturnType<typeof normalizeAccountSavingsFormulas>
+  formula: AllocationFormula | null
+}, body: JsonRecord) {
+  const currenciesByCode = new Map(current.currencies.map((currency) => [currency.code, currency]))
+  if (body.discoveredCurrencies !== undefined) {
+    for (const currency of normalizeCurrencyPreferences(body.discoveredCurrencies)) {
+      if (!currenciesByCode.has(currency.code)) currenciesByCode.set(currency.code, currency)
+    }
+  }
+  if (body.currencies !== undefined) {
+    for (const currency of normalizeCurrencyPreferences(body.currencies)) currenciesByCode.set(currency.code, currency)
+  }
+  for (const code of Array.isArray(body.removedCurrencyCodes) ? body.removedCurrencyCodes : []) {
+    if (typeof code === 'string' && code !== 'USD') currenciesByCode.delete(code.trim().toUpperCase())
+  }
+  const currencies = [...currenciesByCode.values()]
+  const requestedActiveCode = String(body.activeCurrencyCode ?? current.activeCurrencyCode).trim().toUpperCase()
+  const activeCurrencyCode = currenciesByCode.has(requestedActiveCode) ? requestedActiveCode : 'USD'
+  const accountSavingsFormulas = { ...(body.resetAccountFormulas === true ? {} : current.accountSavingsFormulas), ...normalizeAccountSavingsFormulas(body.accountSavingsFormulas) }
+  let formula = current.formula
+  if (body.formula !== undefined) {
+    const raw = body.formula as AllocationFormula | null
+    if (!raw || !['expenses', 'wants', 'savings'].every((key) => {
+      const value = raw[key as 'expenses' | 'wants' | 'savings']
+      return typeof value === 'number' && Number.isFinite(value) && value >= 0 && value <= 100
+    }) || Math.abs(raw.expenses + raw.wants + raw.savings - 100) > 0.01) {
+      throw new Error('La fórmula debe sumar 100% con porcentajes válidos.')
+    }
+    formula = normalizeFormula(raw)
+  }
+  return { exists: true, currencies, activeCurrencyCode, accountSavingsFormulas, formula }
 }
 
 async function saveCurrencyPreferences(userId: string, body: JsonRecord) {
   const prisma = await getPrisma()
-  const currencies = normalizeCurrencyPreferences(body.currencies)
-  const requestedActiveCode = String(body.activeCurrencyCode ?? 'USD').trim().toUpperCase()
-  const activeCurrencyCode = currencies.some((currency) => currency.code === requestedActiveCode)
-    ? requestedActiveCode
-    : 'USD'
-  const accountSavingsFormulas = normalizeAccountSavingsFormulas(body.accountSavingsFormulas)
-
-  await prisma.preferenciaUsuario.upsert({
-    where: { usuarioId: userId },
-    update: {
-      monedas: currencies as unknown as Prisma.InputJsonValue,
-      monedaActiva: activeCurrencyCode,
-      ahorroPorCuenta: accountSavingsFormulas as unknown as Prisma.InputJsonValue,
-    },
-    create: {
-      usuarioId: userId,
-      monedas: currencies as unknown as Prisma.InputJsonValue,
-      monedaActiva: activeCurrencyCode,
-      ahorroPorCuenta: accountSavingsFormulas as unknown as Prisma.InputJsonValue,
-    },
-  })
-
-  return { exists: true, currencies, activeCurrencyCode, accountSavingsFormulas }
+  return prisma.$transaction(async (tx) => {
+    await tx.$queryRaw`SELECT id FROM usuarios WHERE id = ${userId} FOR UPDATE`
+    const entry = await tx.preferenciaUsuario.findUnique({ where: { usuarioId: userId } })
+    const result = mergeCurrencyPreferences({
+      currencies: normalizeCurrencyPreferences(entry?.monedas),
+      activeCurrencyCode: entry?.monedaActiva ?? 'USD',
+      accountSavingsFormulas: normalizeAccountSavingsFormulas(entry?.ahorroPorCuenta),
+      formula: entry?.formulaGlobal ? normalizeFormula(entry.formulaGlobal as unknown as AllocationFormula) : null,
+    }, body)
+    const data = {
+      monedas: result.currencies as unknown as Prisma.InputJsonValue,
+      monedaActiva: result.activeCurrencyCode,
+      ahorroPorCuenta: result.accountSavingsFormulas as unknown as Prisma.InputJsonValue,
+      ...(result.formula ? { formulaGlobal: result.formula as unknown as Prisma.InputJsonValue } : {}),
+    }
+    await tx.preferenciaUsuario.upsert({ where: { usuarioId: userId }, update: data, create: { usuarioId: userId, ...data } })
+    return result
+  }, { timeout: 20_000, maxWait: 10_000 })
 }
 
 function serializeSalary(entry: {
@@ -741,7 +774,7 @@ async function loadBootstrap(userId: string, prisma: Prisma.TransactionClient, m
   )
 
   return {
-    salaries: salaries.map(serializeSalary),
+    salaries: salaries.map((salary) => ({ ...serializeSalary(salary), currencyCode: incomeSources.find((source) => source.id === salary.fuenteId)?.moneda || salary.moneda || 'USD' })),
     incomeSources: incomeSources.map(serializeIncomeSource),
     transactions,
     debts: debts.map(serializeDebt),
@@ -841,12 +874,13 @@ async function writeSyncRecord(userId: string, operation: SyncOperation, tx: Pri
     if (operation.collection === 'subscriptions') await tx.suscripcion.deleteMany({ where: { usuarioId: userId, id: operation.entityId } })
 
     for (const entry of payload.salaries) {
+      const source = entry.sourceId ? await tx.fuenteIngreso.findFirst({ where: { id: entry.sourceId, usuarioId: userId }, select: { moneda: true } }) : null
       await tx.salario.create({
         data: {
           id: entry.id,
           salario: Number(entry.amount ?? 0),
           saldo: Number(entry.balance ?? entry.amount ?? 0),
-          moneda: String(entry.currencyCode ?? 'USD').trim().toUpperCase() || 'USD',
+          moneda: String(source?.moneda ?? entry.currencyCode ?? 'USD').trim().toUpperCase() || 'USD',
           modoSaldo: entry.balanceMode === 'zero' ? 'zero' : 'fixed',
           fecha: toMonthDate(String(entry.month ?? toMonthString(new Date()))),
           fuenteId: entry.sourceId ?? null,
@@ -1837,6 +1871,9 @@ export async function exchangeSync(userId: string, operation?: SyncOperation): P
     const key = syncKey(operation.collection, operation.entityId)
     const receipt = await tx.syncReceipt.findUnique({ where: { usuarioId_operationId: { usuarioId: userId, operationId: operation.id } } })
     if (receipt) {
+      if (receipt.digest !== syncDigest(operation) && receipt.digest === syncDigest(getLegacySyncOperation(operation))) {
+        return { ...current, conflict: { operationId: operation.id, key, remote: getSyncValue(current.snapshot, operation.collection, operation.entityId), version: current.versions[key] ?? null } }
+      }
       if (receipt.digest !== syncDigest(operation)) throw new Error('El identificador de operación ya se utilizó con otros datos.')
       return { ...current, acknowledged: [operation.id] }
     }
@@ -2100,7 +2137,12 @@ export async function handleApiRequest(req: IncomingMessage, res: ServerResponse
     }
 
     if (pathname === '/api/preferences/currencies' && method === 'PUT') {
-      sendJson(res, 200, await saveCurrencyPreferences(authenticatedUser.id, await readJsonBody(req)))
+      try {
+        sendJson(res, 200, await saveCurrencyPreferences(authenticatedUser.id, await readJsonBody(req)))
+      } catch (error) {
+        if (error instanceof Error && error.message.startsWith('La fórmula')) sendJson(res, 400, { error: error.message })
+        else throw error
+      }
       return true
     }
 
@@ -2114,10 +2156,15 @@ export async function handleApiRequest(req: IncomingMessage, res: ServerResponse
       if (method === 'POST') {
         try {
           const body = await readJsonBody(req)
-          if (body.protocol !== SYNC_PROTOCOL) throw new Error('Actualiza la app para sincronizar.')
+          if (body.protocol !== SYNC_PROTOCOL) {
+            sendJson(res, 426, { error: 'Actualiza la app para sincronizar. Los datos locales se conservan.' })
+            return true
+          }
           operation = parseSyncOperation(body.operation)
-        } catch {
-          sendJson(res, 400, { error: 'Cambio de sincronización inválido. Los datos locales se conservan.' })
+        } catch (error) {
+          const fields = getSyncValidationFields(error)
+          const detail = fields.length ? ` Revisa: ${fields.join(', ')}.` : ''
+          sendJson(res, 400, { error: `Cambio de sincronización inválido.${detail} Los datos locales se conservan.`, fields })
           return true
         }
       }

@@ -18,11 +18,17 @@ $sdkRoot = Join-Path $toolsRoot 'android-sdk'
 $sdkManager = Join-Path $sdkRoot 'cmdline-tools/latest/bin/sdkmanager.bat'
 if (-not (Test-Path -LiteralPath $sdkManager)) {
     $sdkZip = Join-Path $toolsRoot 'android-commandline.zip'
-    [xml]$sdkRepository = (Invoke-WebRequest -Uri 'https://dl.google.com/android/repository/repository2-3.xml' -TimeoutSec 60).Content
+    $sdkDownloadBase = 'https://dl.google.com/android/repository/'
+    try {
+        [xml]$sdkRepository = (Invoke-WebRequest -UseBasicParsing -Uri ($sdkDownloadBase + 'repository2-3.xml') -TimeoutSec 60).Content
+    } catch {
+        $sdkDownloadBase = 'https://redirector.gvt1.com/edgedl/android/repository/'
+        [xml]$sdkRepository = (Invoke-WebRequest -UseBasicParsing -Uri ($sdkDownloadBase + 'repository2-3.xml') -TimeoutSec 60).Content
+    }
     $sdkPackage = (Select-Xml -Xml $sdkRepository -XPath "//*[local-name()='remotePackage' and @path='cmdline-tools;latest']").Node
     $sdkArchive = @($sdkPackage.archives.archive | Where-Object { $_.'host-os' -eq 'windows' })[0].complete
     if (-not $sdkArchive.url) { throw 'No se encontraron herramientas Windows en el repositorio oficial Android.' }
-    Invoke-WebRequest -Uri ('https://dl.google.com/android/repository/' + $sdkArchive.url) -OutFile $sdkZip -TimeoutSec 300
+    Invoke-WebRequest -UseBasicParsing -Uri ($sdkDownloadBase + $sdkArchive.url) -OutFile $sdkZip -TimeoutSec 300
     if ((Get-FileHash -LiteralPath $sdkZip -Algorithm $sdkArchive.checksum.type.ToUpperInvariant()).Hash.ToLowerInvariant() -ne $sdkArchive.checksum.InnerText) { throw 'Checksum de herramientas Android incorrecto.' }
     $sdkExtract = Join-Path $toolsRoot 'android-commandline'
     Expand-Archive -LiteralPath $sdkZip -DestinationPath $sdkExtract -Force

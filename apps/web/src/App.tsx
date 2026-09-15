@@ -89,17 +89,16 @@ function ProtectedApp() {
 
   useEffect(() => {
     if (authMode === 'authenticated' || authMode === 'guest') {
-      void hydrate()
+      void (async () => {
+        if (authMode === 'authenticated' && user) await hydrateCurrencyPreferences(user.id).catch(() => {})
+        if (useAuthStore.getState().authMode !== authMode || useAuthStore.getState().user?.id !== user?.id) return
+        await hydrate()
+      })().catch(() => {})
       return
     }
 
     reset()
-  }, [authMode, hydrate, reset])
-
-  useEffect(() => {
-    if (authMode !== 'authenticated' || !user) return
-    void hydrateCurrencyPreferences(user.id).catch(() => {})
-  }, [authMode, hydrateCurrencyPreferences, user])
+  }, [authMode, hydrate, hydrateCurrencyPreferences, reset, user])
 
   if (isChecking && !hasChecked) {
     return (

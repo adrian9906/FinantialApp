@@ -23,9 +23,8 @@ import {
 } from '@plata/shared'
 
 import { buildExpenseDescription, parseExpenseDescription } from '@/lib/expense-utils'
-import { isNetworkRequestError } from '@/lib/api'
 import { isOnline } from '@/lib/offline'
-import { isUpgradeRequiredError, queueLocalChange, syncNow, waitForCurrentSync } from '@/lib/sync-engine'
+import { queueLocalChange, syncNow, waitForCurrentSync } from '@/lib/sync-engine'
 import { readSyncDocument } from '@/lib/sync-store'
 import { prepareVoiceBatch, persistPreparedVoiceBatch } from '@/lib/voice-batch'
 import { parseWantDescription } from '@/lib/want-utils'
@@ -465,17 +464,10 @@ export const useFinanceStore = create<FinanceStore>()((set, get) => ({
         hasLoaded: true,
         loadedKey: activeKey,
       })
-    } catch (error) {
-      // Network trouble keeps the device copy on screen with its queue intact.
-      if (isNetworkRequestError(error)) return
-      if (isUpgradeRequiredError(error)) return
-
-      useAuthStore.getState().logout().catch(() => {})
-      set({
-        ...getEmptyState(),
-        hasLoaded: false,
-        loadedKey: null,
-      })
+    } catch {
+      // A rejected change is not an expired session. Keep the device copy and
+      // pending queue; logging out here would delete them on a validation error.
+      return
     }
   },
   syncPendingChanges: async (reason = 'silent') => {

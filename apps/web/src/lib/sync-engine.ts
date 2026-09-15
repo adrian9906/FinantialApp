@@ -2,7 +2,7 @@ import type { BootstrapPayload, SyncDocument, SyncResponse } from '@plata/shared
 import { SYNC_PROTOCOL, acceptSyncResponse, queueSnapshot, resolveSyncConflict } from '@plata/shared'
 import type { SyncOperation } from '@plata/shared'
 
-import { isNetworkRequestError, requestJson } from '@/lib/api'
+import { ApiRequestError, isNetworkRequestError, requestJson } from '@/lib/api'
 import { readSyncDocument, writeSyncDocument } from '@/lib/sync-store'
 
 export type SyncStage = 'idle' | 'preparing' | 'uploading' | 'downloading' | 'done' | 'conflict' | 'failed'
@@ -185,7 +185,9 @@ async function runSync(userId: string, visible: boolean): Promise<SyncDocument |
       total: queued,
       pending: document.operations.length,
       conflicts: document.conflicts.length,
-      message: isNetworkRequestError(error)
+      message: error instanceof ApiRequestError && (error.status === 400 || error.status === 426)
+        ? error.message
+        : isNetworkRequestError(error)
         ? 'Se interrumpió la sincronización. Tus cambios pendientes siguen guardados.'
         : 'No se pudo sincronizar. Tus cambios pendientes siguen guardados.',
     })
@@ -218,12 +220,17 @@ export function syncNow(
   void started
     .catch(() => null)
     .then((result) => {
+      if (!result) {
+        rerunRequested = false
+        rerunVisible = false
+        return null
+      }
       if (!rerunRequested) return result
       rerunRequested = false
       const nextReason = rerunVisible ? 'reconnect' : 'silent'
       rerunVisible = false
       return syncNow(userId, nextReason)
-    })
+    }).catch(() => null)
 
   return started
 }

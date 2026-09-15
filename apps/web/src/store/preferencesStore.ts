@@ -29,6 +29,7 @@ interface PreferencesStore {
   iconPack: AppIconPack
   customFonts: CustomTypographyOption[]
   formula: AllocationFormula
+  financialPreferencesUserId: string | null
   /** Savings percentage per income account, keyed by income source id. */
   accountSavingsFormulas: AccountSavingsFormulas
   currencies: CurrencyPreference[]
@@ -52,6 +53,7 @@ interface PreferencesStore {
   setActiveCurrency: (code: string) => void
   setActiveIncomeSource: (sourceId: string) => void
   saveCurrency: (currency: CurrencyPreference) => void
+  registerCurrency: (currency: CurrencyPreference) => void
   removeCurrency: (code: string) => void
   hydrateCurrencyPreferences: (userId: string) => Promise<void>
   syncCurrencyPreferences: () => Promise<void>
@@ -112,27 +114,116 @@ interface CurrencyPreferencesResponse {
   currencies: CurrencyPreference[]
   activeCurrencyCode: string
   accountSavingsFormulas?: AccountSavingsFormulas
+  formula?: AllocationFormula | null
 }
 
-let currencyRevision = 0
+interface FinancialPreferencesPatch {
+  currencies?: CurrencyPreference[]
+  discoveredCurrencies?: CurrencyPreference[]
+  activeCurrencyCode?: string
+  accountSavingsFormulas?: AccountSavingsFormulas
+  formula?: AllocationFormula
+  removedCurrencyCodes?: string[]
+  resetAccountFormulas?: boolean
+}
+
 let currencySyncInFlight: Promise<void> | null = null
-let currencySyncQueued = false
+let preferencesLoadInFlight: { userId: string; promise: Promise<void> } | null = null
+let loadedPreferencesUserId: string | null = null
 
 function getCurrencyPendingKey(userId: string) {
   return `plata-currency-preferences-pending:${userId}`
 }
 
-function hasPendingCurrencyPreferences(userId: string) {
-  return typeof window !== 'undefined' && window.localStorage.getItem(getCurrencyPendingKey(userId)) === '1'
+function readPendingPatch(userId: string): FinancialPreferencesPatch {
+  if (typeof window === 'undefined') return {}
+  const raw = window.localStorage.getItem(`plata-financial-preferences-pending:${userId}`)
+  if (raw) {
+    try { return JSON.parse(raw) as FinancialPreferencesPatch } catch { return {} }
+  }
+  const state = usePreferencesStore.getState()
+  if (window.localStorage.getItem(getCurrencyPendingKey(userId)) === '1'
+    && (!state.financialPreferencesUserId || state.financialPreferencesUserId === userId)) {
+    return { currencies: state.currencies, activeCurrencyCode: state.activeCurrencyCode, accountSavingsFormulas: state.accountSavingsFormulas }
+  }
+  return {}
 }
 
-function markCurrencyPreferencesPending(userId: string, pending: boolean) {
+function writePendingPatch(userId: string, patch: FinancialPreferencesPatch) {
   if (typeof window === 'undefined') return
-  if (pending) {
-    window.localStorage.setItem(getCurrencyPendingKey(userId), '1')
-  } else {
-    window.localStorage.removeItem(getCurrencyPendingKey(userId))
+  const key = `plata-financial-preferences-pending:${userId}`
+  if (Object.keys(patch).length) window.localStorage.setItem(key, JSON.stringify(patch))
+  else window.localStorage.removeItem(key)
+  window.localStorage.removeItem(getCurrencyPendingKey(userId))
+}
+
+function mergePendingPatch(previous: FinancialPreferencesPatch, next: FinancialPreferencesPatch): FinancialPreferencesPatch {
+  const result = { ...previous, ...next }
+  if (previous.discoveredCurrencies || next.discoveredCurrencies) {
+    result.discoveredCurrencies = [...new Map([...(previous.discoveredCurrencies ?? []), ...(next.discoveredCurrencies ?? [])].map((currency) => [currency.code, currency])).values()]
   }
+  if (previous.currencies || next.currencies) {
+    const entries = new Map([...(previous.currencies ?? []), ...(next.currencies ?? [])].map((currency) => [currency.code, currency]))
+    for (const code of next.removedCurrencyCodes ?? []) entries.delete(code)
+    result.currencies = [...entries.values()]
+  }
+  if (previous.removedCurrencyCodes || next.removedCurrencyCodes) {
+    const removed = new Set([...(previous.removedCurrencyCodes ?? []), ...(next.removedCurrencyCodes ?? [])])
+    for (const currency of next.currencies ?? []) removed.delete(currency.code)
+    result.removedCurrencyCodes = [...removed]
+  }
+  if (previous.accountSavingsFormulas || next.accountSavingsFormulas) {
+    result.accountSavingsFormulas = { ...(next.resetAccountFormulas ? {} : previous.accountSavingsFormulas), ...next.accountSavingsFormulas }
+  }
+  return result
+}
+
+function applyRemotePreferences(userId: string, remote: CurrencyPreferencesResponse) {
+  if (getAuthenticatedUserId() !== userId) return
+  const pending = readPendingPatch(userId)
+  const currenciesByCode = new Map(remote.currencies.map((currency) => [currency.code, currency]))
+  for (const currency of pending.discoveredCurrencies ?? []) {
+    if (!currenciesByCode.has(currency.code)) currenciesByCode.set(currency.code, currency)
+  }
+  for (const currency of pending.currencies ?? []) currenciesByCode.set(currency.code, currency)
+  for (const code of pending.removedCurrencyCodes ?? []) currenciesByCode.delete(code)
+  const currencies = normalizeCurrencies([...currenciesByCode.values()])
+  const requestedActiveCode = pending.activeCurrencyCode ?? remote.activeCurrencyCode
+  const values = {
+    currencies,
+    activeCurrencyCode: currencies.some((currency) => currency.code === requestedActiveCode) ? requestedActiveCode : 'USD',
+    accountSavingsFormulas: { ...(pending.resetAccountFormulas ? {} : remote.accountSavingsFormulas), ...pending.accountSavingsFormulas },
+    formula: normalizeFormula(pending.formula ?? remote.formula ?? usePreferencesStore.getState().formula),
+    financialPreferencesUserId: userId,
+  }
+  usePreferencesStore.setState(values)
+  window.localStorage.setItem(`plata-financial-preferences:${userId}`, JSON.stringify(values))
+}
+
+async function loadFinancialPreferences(userId: string, refresh = false): Promise<void> {
+  if (preferencesLoadInFlight?.userId === userId) return preferencesLoadInFlight.promise
+  if (!refresh && loadedPreferencesUserId === userId) return
+  if (preferencesLoadInFlight) await preferencesLoadInFlight.promise.catch(() => {})
+  if (getAuthenticatedUserId() !== userId) return
+  const state = usePreferencesStore.getState()
+  if (state.financialPreferencesUserId && state.financialPreferencesUserId !== userId) {
+    let cached: Partial<PreferencesStore> = {}
+    try { cached = JSON.parse(window.localStorage.getItem(`plata-financial-preferences:${userId}`) ?? '{}') } catch { /* use defaults */ }
+    usePreferencesStore.setState({ currencies: [USD_CURRENCY], activeCurrencyCode: 'USD', accountSavingsFormulas: {}, formula: defaultFormula, activeIncomeSourceId: '', ...cached, financialPreferencesUserId: userId })
+  }
+  const promise = (async () => {
+    const remote = await requestJson<CurrencyPreferencesResponse>('/preferences/currencies')
+    if (getAuthenticatedUserId() !== userId) return
+    // An explicit null means this upgraded profile has no global formula yet.
+    // Preserve this device's legacy formula once, then share it through the DB.
+    if (remote.formula === null && !readPendingPatch(userId).formula) {
+      writePendingPatch(userId, mergePendingPatch(readPendingPatch(userId), { formula: usePreferencesStore.getState().formula }))
+    }
+    applyRemotePreferences(userId, remote)
+    loadedPreferencesUserId = userId
+  })().finally(() => { if (preferencesLoadInFlight?.promise === promise) preferencesLoadInFlight = null })
+  preferencesLoadInFlight = { userId, promise }
+  return promise
 }
 
 function getAuthenticatedUserId() {
@@ -141,35 +232,38 @@ function getAuthenticatedUserId() {
 }
 
 function syncCurrencyPreferencesToServer() {
-  if (currencySyncInFlight) {
-    currencySyncQueued = true
-    return currencySyncInFlight
-  }
-
+  if (currencySyncInFlight) return currencySyncInFlight
+  const userId = getAuthenticatedUserId()
+  if (!userId) return Promise.resolve()
   currencySyncInFlight = (async () => {
-    do {
-      currencySyncQueued = false
-      const userId = getAuthenticatedUserId()
-      if (!userId) return
-
-      const { currencies, activeCurrencyCode, accountSavingsFormulas } = usePreferencesStore.getState()
-      await requestJson<CurrencyPreferencesResponse>('/preferences/currencies', {
+    await loadFinancialPreferences(userId)
+    while (getAuthenticatedUserId() === userId) {
+      const patch = readPendingPatch(userId)
+      if (!Object.keys(patch).length) break
+      const sent = JSON.stringify(patch)
+      const remote = await requestJson<CurrencyPreferencesResponse>('/preferences/currencies', {
         method: 'PUT',
-        body: JSON.stringify({ currencies, activeCurrencyCode, accountSavingsFormulas }),
+        body: sent,
       })
-      if (!currencySyncQueued) markCurrencyPreferencesPending(userId, false)
-    } while (currencySyncQueued)
+      if (getAuthenticatedUserId() !== userId) return
+      if (JSON.stringify(readPendingPatch(userId)) === sent) writePendingPatch(userId, {})
+      applyRemotePreferences(userId, remote)
+    }
   })().finally(() => {
     currencySyncInFlight = null
+    const nextUserId = getAuthenticatedUserId()
+    if (nextUserId && nextUserId !== userId && Object.keys(readPendingPatch(nextUserId)).length) {
+      void syncCurrencyPreferencesToServer().catch(() => {})
+    }
   })
 
   return currencySyncInFlight
 }
 
-function scheduleCurrencySync() {
-  currencyRevision += 1
+function scheduleCurrencySync(patch: FinancialPreferencesPatch) {
   const userId = getAuthenticatedUserId()
-  if (userId) markCurrencyPreferencesPending(userId, true)
+  if (!userId) return
+  writePendingPatch(userId, mergePendingPatch(readPendingPatch(userId), patch))
   queueMicrotask(() => {
     void syncCurrencyPreferencesToServer().catch(() => {})
   })
@@ -183,6 +277,7 @@ const defaultState = {
   iconPack: 'lucide' as AppIconPack,
   customFonts: [] as CustomTypographyOption[],
   formula: defaultFormula,
+  financialPreferencesUserId: null,
   accountSavingsFormulas: {} as AccountSavingsFormulas,
   currencies: [USD_CURRENCY],
   activeCurrencyCode: 'USD',
@@ -221,7 +316,11 @@ export const usePreferencesStore = create<PreferencesStore>()(
           typography: state.typography === id ? 'inter' : state.typography,
         }
       }),
-      setFormula: (formula) => set({ formula: normalizeFormula(formula) }),
+      setFormula: (formula) => {
+        const normalized = normalizeFormula(formula)
+        set({ formula: normalized })
+        scheduleCurrencySync({ formula: normalized })
+      },
       setAccountFormula: (sourceId, formula) => {
         set((state) => ({
           accountSavingsFormulas: {
@@ -229,7 +328,7 @@ export const usePreferencesStore = create<PreferencesStore>()(
             [sourceId]: normalizeFormula(formula),
           },
         }))
-        scheduleCurrencySync()
+        scheduleCurrencySync({ accountSavingsFormulas: { [sourceId]: normalizeFormula(formula) } })
       },
       setActiveCurrency: (code) => {
         set((state) => {
@@ -238,7 +337,7 @@ export const usePreferencesStore = create<PreferencesStore>()(
             activeCurrencyCode: state.currencies.some((currency) => currency.code === normalizedCode) ? normalizedCode : 'USD',
           }
         })
-        scheduleCurrencySync()
+        scheduleCurrencySync({ activeCurrencyCode: code.trim().toUpperCase() })
       },
       setActiveIncomeSource: (activeIncomeSourceId) => set({ activeIncomeSourceId }),
       saveCurrency: (currency) => {
@@ -251,7 +350,12 @@ export const usePreferencesStore = create<PreferencesStore>()(
               : [...state.currencies, normalized],
           }
         })
-        scheduleCurrencySync()
+        scheduleCurrencySync({ currencies: [normalizeCurrencyPreference(currency)] })
+      },
+      registerCurrency: (currency) => {
+        const normalized = normalizeCurrencyPreference(currency)
+        set((state) => ({ currencies: state.currencies.some((entry) => entry.code === normalized.code) ? state.currencies : [...state.currencies, normalized] }))
+        scheduleCurrencySync({ discoveredCurrencies: [normalized] })
       },
       removeCurrency: (code) => {
         const normalizedCode = code.trim().toUpperCase()
@@ -260,32 +364,11 @@ export const usePreferencesStore = create<PreferencesStore>()(
           currencies: state.currencies.filter((currency) => currency.code !== normalizedCode),
           activeCurrencyCode: state.activeCurrencyCode === normalizedCode ? 'USD' : state.activeCurrencyCode,
         }))
-        scheduleCurrencySync()
+        scheduleCurrencySync({ removedCurrencyCodes: [normalizedCode] })
       },
       hydrateCurrencyPreferences: async (userId) => {
-        const revisionAtStart = currencyRevision
-        const remote = await requestJson<CurrencyPreferencesResponse>('/preferences/currencies')
-        if (getAuthenticatedUserId() !== userId) return
-
-        if (currencyRevision !== revisionAtStart || hasPendingCurrencyPreferences(userId)) {
-          await syncCurrencyPreferencesToServer()
-          return
-        }
-
-        if (!remote.exists) {
-          await syncCurrencyPreferencesToServer()
-          return
-        }
-
-        const currencies = normalizeCurrencies(remote.currencies)
-        const activeCurrencyCode = currencies.some((currency) => currency.code === remote.activeCurrencyCode)
-          ? remote.activeCurrencyCode
-          : 'USD'
-        set({
-          currencies,
-          activeCurrencyCode,
-          accountSavingsFormulas: remote.accountSavingsFormulas ?? {},
-        })
+        await loadFinancialPreferences(userId, true)
+        await syncCurrencyPreferencesToServer()
       },
       syncCurrencyPreferences: async () => {
         await syncCurrencyPreferencesToServer()
@@ -325,7 +408,7 @@ export const usePreferencesStore = create<PreferencesStore>()(
       setSyncNotificationsEnabled: (enabled) => set({ syncNotificationsEnabled: enabled }),
       resetPreferences: () => {
         set(defaultState)
-        scheduleCurrencySync()
+        scheduleCurrencySync({ formula: defaultFormula, resetAccountFormulas: true })
       },
     }),
     {

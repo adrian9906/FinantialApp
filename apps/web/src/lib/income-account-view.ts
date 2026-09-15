@@ -30,8 +30,11 @@ export function getIncomeAccountsForMonth(
     .filter((salary) => salary.month === month
       && salary.sourceId
       && sourceById.has(salary.sourceId)
-      && (!normalizedCurrencyCode || (salary.currencyCode ?? 'USD').trim().toUpperCase() === normalizedCurrencyCode))
-    .map((salary) => ({ salary, source: sourceById.get(salary.sourceId!)! }))
+      && (!normalizedCurrencyCode || (sourceById.get(salary.sourceId!)?.currencyCode ?? salary.currencyCode ?? 'USD').trim().toUpperCase() === normalizedCurrencyCode))
+    .map((salary) => {
+      const source = sourceById.get(salary.sourceId!)!
+      return { salary: { ...salary, currencyCode: source.currencyCode ?? salary.currencyCode ?? 'USD' }, source }
+    })
     .sort((left, right) => left.source.name.localeCompare(right.source.name, 'es'))
 }
 

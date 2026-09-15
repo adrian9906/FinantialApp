@@ -133,7 +133,7 @@ export function useCurrencyInput() {
  * denomination reproducible everywhere.
  */
 export function ensureCurrencyPreference(code?: string) {
-  const { currencies, saveCurrency } = usePreferencesStore.getState()
+  const { currencies, registerCurrency } = usePreferencesStore.getState()
   const missing = getMissingCurrencyPreference(code, currencies)
-  if (missing) saveCurrency(missing)
+  if (missing) registerCurrency(missing)
 }

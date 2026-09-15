@@ -16,4 +16,6 @@ Después ejecuta `pnpm build:web`, `pnpm --dir apps/web android:sync` y, con JAV
 
 Las pruebas de interpretación, presupuesto acumulado, saldo, reintentos y fallos de persistencia pasan. El panel web se verificó a 320 y 375 píxeles sin desbordamiento horizontal.
 
-En este entorno la descarga oficial del SDK de Google devuelve HTTP 404. No se ha generado ni validado la APK. Falta probar en un Android real: reconocimiento y permisos, abrir el panel desde otra aplicación tanto con Plata cerrada como abierta, teclado, rotación, botón Atrás, pantalla bloqueada y retirada de permisos. La tarea permanece en Doing hasta cerrar estas comprobaciones.
+El 15 de septiembre de 2026 se resolvió la descarga usando la ruta de distribución de Google `redirector.gvt1.com/edgedl/android/repository/`: el índice y los archivos descargados se verificaron contra sus hashes oficiales. Se instalaron SDK 35 y build-tools 35.0.0. Gradle completó `assembleDebug` y `assembleRelease`, incluida la comprobación lint de release. La firma de la APK universal se verificó con apksigner. Archivo entregado: `Plata-App-v1.3.0-voz.apk` (SHA-256 `d743d484b2f6db912343fa049a25eba0d1b66a5b05744c9020285148d1460694`).
+
+Falta probar en un Android real: reconocimiento y permisos, abrir el panel desde otra aplicación tanto con Plata cerrada como abierta, teclado, rotación, botón Atrás, pantalla bloqueada y retirada de permisos. La tarea permanece en Doing hasta cerrar estas comprobaciones.

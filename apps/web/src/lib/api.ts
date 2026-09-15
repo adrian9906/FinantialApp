@@ -2,6 +2,15 @@ const defaultApiBaseUrl = 'https://finantialapp.onrender.com'
 const rawApiBaseUrl = import.meta.env?.VITE_API_BASE_URL?.trim() || defaultApiBaseUrl
 const SESSION_TOKEN_KEY = 'plata-session-token'
 
+export class ApiRequestError extends Error {
+  readonly status: number
+  constructor(message: string, status: number) {
+    super(message)
+    this.name = 'ApiRequestError'
+    this.status = status
+  }
+}
+
 function normalizeBaseUrl(baseUrl: string) {
   if (!baseUrl) return ''
   return baseUrl.endsWith('/') ? baseUrl.slice(0, -1) : baseUrl
@@ -61,7 +70,7 @@ export async function requestJson<T>(path: string, init?: RequestInit, options?:
         })())
       : null
     const message = payload?.error ?? text
-    throw new Error(message || `Request failed: ${response.status}`)
+    throw new ApiRequestError(message || `Request failed: ${response.status}`, response.status)
   }
 
   const text = await response.text()

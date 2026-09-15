@@ -90,6 +90,7 @@ export default defineConfig(({ mode }) => {
       }),
     ],
     server: {
+      headers: { 'Cross-Origin-Opener-Policy': 'same-origin-allow-popups' },
       watch: {
         ignored: ['**/android/**', '**/build/**', '**/dist/**'],
       },
@@ -100,6 +101,9 @@ export default defineConfig(({ mode }) => {
           secure: true,
         },
       },
+    },
+    preview: {
+      headers: { 'Cross-Origin-Opener-Policy': 'same-origin-allow-popups' },
     },
     optimizeDeps: {
       entries: ['index.html'],

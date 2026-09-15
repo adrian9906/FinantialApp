@@ -3,5 +3,11 @@
   "buildCommand": "pnpm --filter @plata/shared build && pnpm --filter @plata/web build",
   "installCommand": "pnpm install --frozen-lockfile",
   "outputDirectory": "dist",
-  "framework": "vite"
+  "framework": "vite",
+  "headers": [
+    {
+      "source": "/(.*)",
+      "headers": [{ "key": "Cross-Origin-Opener-Policy", "value": "same-origin-allow-popups" }]
+    }
+  ]
 }
