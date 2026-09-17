@@ -64,6 +64,51 @@ try {
   await syncNow('test-user')
   assert.equal((await readSyncDocument('test-user')).operations.length, 0)
 
+  // A remote download and a local edit can overlap. Both rows must survive.
+  const beforeOverlap = (await readSyncDocument('test-user')).snapshot
+  const localSalary = { id: 'local-salary', amount: 10, balance: 10, month: '2026-09', currencyCode: 'USD' }
+  const remoteSalary = { id: 'remote-salary', amount: 20, balance: 20, month: '2026-09', currencyCode: 'USD' }
+  let releaseDownload!: () => void
+  let downloadStarted!: () => void
+  const downloadGate = new Promise<void>((resolve) => { releaseDownload = resolve })
+  const downloading = new Promise<void>((resolve) => { downloadStarted = resolve })
+  let remoteSnapshot = { ...beforeOverlap, salaries: [remoteSalary] }
+  globalThis.fetch = async (_url, init) => {
+    if (!init?.method) {
+      downloadStarted()
+      await downloadGate
+      return new Response(JSON.stringify({ protocol: SYNC_PROTOCOL, snapshot: remoteSnapshot, versions: { 'salaries/remote-salary': 'remote-v1' }, acknowledged: [] }))
+    }
+    const operation = JSON.parse(String(init.body)).operation
+    const latest = await readSyncDocument('test-user')
+    remoteSnapshot = latest.snapshot
+    return new Response(JSON.stringify({ protocol: SYNC_PROTOCOL, snapshot: latest.snapshot, versions: { 'salaries/remote-salary': 'remote-v1', 'salaries/local-salary': 'local-v1' }, acknowledged: [operation.id] }))
+  }
+  const overlapSync = syncNow('test-user')
+  await downloading
+  await queueLocalChange('test-user', { ...beforeOverlap, salaries: [localSalary] }, beforeOverlap)
+  releaseDownload()
+  await overlapSync
+  assert.deepEqual((await readSyncDocument('test-user')).snapshot.salaries.map((entry) => entry.id).sort(), ['local-salary', 'remote-salary'])
+  const changedRemote = { ...remoteSalary, balance: 30 }
+  await writeSyncDocument('conflict-user', { ...createSyncDocument(), initialized: true, snapshot: { ...empty, salaries: [changedRemote] }, base: { ...empty, salaries: [changedRemote] }, versions: { 'salaries/remote-salary': 'remote-v2' } })
+  const beforeRemoteEdit = { ...empty, salaries: [remoteSalary] }
+  const competingEdit = await queueLocalChange('conflict-user', { ...empty, salaries: [{ ...remoteSalary, balance: 25 }] }, beforeRemoteEdit)
+  assert.equal(competingEdit.operations[0].baseVersion, null, 'una edición remota del mismo ingreso debe producir conflicto revisable')
+
+  const cupExpense = { ...expense, id: 'cup-expense', incomeSourceId: 'cup-source', incomeSourceName: 'Transferencia' }
+  const orphanedSnapshot = { ...empty, transactions: [cupExpense] }
+  await writeSyncDocument('recovery-user', { ...createSyncDocument(), initialized: true, snapshot: orphanedSnapshot, base: empty })
+  let recoveredUploads = 0
+  globalThis.fetch = async (_url, init) => {
+    const operation = init?.method === 'POST' ? JSON.parse(String(init.body)).operation : null
+    if (operation) recoveredUploads++
+    return new Response(JSON.stringify({ protocol: SYNC_PROTOCOL, snapshot: orphanedSnapshot, versions: { 'transactions/cup-expense': 'cup-v1' }, acknowledged: operation ? [operation.id] : [] }))
+  }
+  await syncNow('recovery-user')
+  assert.equal(recoveredUploads, 1, 'un gasto CUP sin marcador pendiente se vuelve a encolar')
+  assert.deepEqual((await readSyncDocument('recovery-user')).snapshot.transactions, [cupExpense])
+
   calls = 0
   globalThis.fetch = async () => {
     calls++

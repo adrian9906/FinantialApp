@@ -13,7 +13,7 @@ const usd = { code: 'USD', name: 'USD', country: '', locale: 'en-US', exchangeRa
 const cup = { code: 'CUP', name: 'CUP', country: 'Cuba', locale: 'es-CU', exchangeRate: 350 }
 const formula = { expenses: 37.5, wants: 0, savings: 62.5, rolloverSavings: false }
 const otherFormula = { expenses: 60, wants: 15, savings: 25, rolloverSavings: true }
-let server = { exists: true, currencies: [usd, cup], activeCurrencyCode: 'CUP', accountSavingsFormulas: { source1: formula } as Record<string, typeof formula>, formula }
+let server = { exists: true, currencies: [usd, cup], activeCurrencyCode: 'CUP', activeIncomeSourceId: 'source1', accountSavingsFormulas: { source1: formula } as Record<string, typeof formula>, formula }
 const patches: Record<string, unknown>[] = []
 let releaseRead!: () => void
 let releaseWrite: (() => void) | undefined
@@ -49,6 +49,10 @@ try {
   assert.ok(patches.every((patch) => !('accountSavingsFormulas' in patch) && !('formula' in patch)), 'detectar CUP no envía mapas ni fórmula locales')
   assert.equal(convertToUsd(3500, loadedCup), 10)
   assert.equal(convertFromUsd(getFormulaBudgets(10, formula).expenses, loadedCup), 1312.5)
+  assert.equal(usePreferencesStore.getState().activeIncomeSourceId, 'source1')
+  usePreferencesStore.getState().setActiveIncomeSource('source2')
+  await usePreferencesStore.getState().syncCurrencyPreferences()
+  assert.equal(server.activeIncomeSourceId, 'source2')
 
   usePreferencesStore.getState().setFormula(defaultFormula)
   await usePreferencesStore.getState().syncCurrencyPreferences()
@@ -83,7 +87,7 @@ try {
   assert.equal(entries.has('plata-financial-preferences-pending:user1'), false)
 
   const savedUser1 = structuredClone(server)
-  server = { exists: true, currencies: [usd], activeCurrencyCode: 'USD', accountSavingsFormulas: {}, formula: otherFormula }
+  server = { exists: true, currencies: [usd], activeCurrencyCode: 'USD', activeIncomeSourceId: '', accountSavingsFormulas: {}, formula: otherFormula }
   useAuthStore.setState({ user: { id: 'user2', name: 'Other', email: 'other@example.com' } })
   await usePreferencesStore.getState().hydrateCurrencyPreferences('user2')
   assert.deepEqual(usePreferencesStore.getState().accountSavingsFormulas, {})

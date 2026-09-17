@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <appwidget-provider xmlns:android="http://schemas.android.com/apk/res/android"
-    android:minWidth="250dp" android:minHeight="160dp"
-    android:minResizeWidth="180dp" android:minResizeHeight="160dp"
+    android:minWidth="250dp" android:minHeight="180dp"
+    android:minResizeWidth="180dp" android:minResizeHeight="180dp"
     android:updatePeriodMillis="1800000"
     android:initialLayout="@layout/plata_summary_widget"
     android:previewLayout="@layout/plata_summary_widget"

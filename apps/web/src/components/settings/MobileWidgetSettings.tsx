@@ -47,7 +47,7 @@ export function MobileWidgetSettings() {
           </div>
           <p className="text-xs text-muted-gray">Última actualización: {summary.updatedLabel}</p>
         </div>
-        <p className="text-sm text-muted-gray">Se actualiza al usar o sincronizar la app. Los accesos abren el formulario para añadir un gasto.</p>
+        <p className="text-sm text-muted-gray">Toca Cuenta o Moneda en el widget para cambiar lo que muestra. La selección se aplica también en la app al abrirla. El resumen se actualiza al usar o sincronizar la app.</p>
         {!supported && <p className="text-sm text-muted-gray">Disponible al instalar la APK Android que incluye esta función.</p>}
         <div className="flex flex-wrap gap-2">
           <Button className="h-auto min-h-10 w-full whitespace-normal py-2 sm:w-auto" onClick={() => { void pin() }} disabled={!supported || busy || !summary.hasAccount}>Añadir widget a inicio</Button>

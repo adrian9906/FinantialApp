@@ -1,6 +1,7 @@
 import {
   getEffectiveExpenseTotal,
   getEffectiveWantTotal,
+  getMonthKey,
   type AllocationFormula,
   type IncomeSource,
   type Salary,
@@ -16,7 +17,7 @@ export interface IncomeAccountView {
 export function getIncomeAccountsForMonth(
   salaries: Salary[],
   sources: IncomeSource[],
-  month = new Date().toISOString().slice(0, 7),
+  month = getMonthKey(),
   currencyCode?: string,
 ): IncomeAccountView[] {
   const sourceById = new Map(

@@ -2,7 +2,7 @@
  * Exporta TODOS los datos de Plata que estan guardados en este navegador.
  *
  * Uso: abre la app, pulsa F12 -> pestana "Console", pega todo esto y Enter.
- * Se descargara un archivo plata-backup-<fecha>.json.
+ * Se descargara un archivo plata-backup-<fecha>.json. No incluye sesiones ni tokens.
  *
  * No necesita conexion con la base de datos: lee la copia local que la app
  * mantiene en IndexedDB y localStorage.
@@ -47,12 +47,21 @@
   for (let index = 0; index < localStorage.length; index += 1) {
     const key = localStorage.key(index)
     if (!key) continue
-    if (!key.startsWith('plata')) continue
+    if (!(
+      key === 'plata-guest-finance' ||
+      key === 'plata-preferences' ||
+      key.startsWith('plata-financial-preferences:') ||
+      key.startsWith('plata-financial-preferences-pending:') ||
+      key.startsWith('plata-currency-preferences-pending:') ||
+      key.startsWith('plata-bootstrap:') ||
+      key.startsWith('plata-bootstrap-dirty:')
+    )) continue
     const raw = localStorage.getItem(key)
     try { localStorageData[key] = JSON.parse(raw) } catch { localStorageData[key] = raw }
   }
 
   const backup = {
+    format: 'plata-browser-recovery-v2',
     exportedAt: new Date().toISOString(),
     origin: location.origin,
     indexedDb: indexedDbData,
@@ -60,7 +69,10 @@
   }
 
   // Resumen para comprobar que trae lo esperado antes de confiar en el archivo.
-  const snapshots = Object.values(indexedDbData['bootstrap-snapshots'] ?? {})
+  const snapshots = [
+    ...Object.values(indexedDbData['bootstrap-snapshots'] ?? {}),
+    ...Object.values(indexedDbData['sync-documents'] ?? {}),
+  ]
   for (const snapshot of snapshots) {
     const payload = snapshot && snapshot.snapshot ? snapshot.snapshot : snapshot
     if (!payload || typeof payload !== 'object') continue
@@ -68,6 +80,7 @@
     for (const [key, value] of Object.entries(payload)) {
       if (Array.isArray(value)) console.log(`  ${key}: ${value.length}`)
     }
+    if (Array.isArray(snapshot.operations)) console.log(`  cambios pendientes: ${snapshot.operations.length}`)
   }
 
   const json = JSON.stringify(backup, null, 2)

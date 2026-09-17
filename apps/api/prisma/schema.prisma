@@ -208,6 +208,7 @@ model PreferenciaUsuario {
   usuarioId    String   @id
   monedas      Json
   monedaActiva String   @default("USD")
+  fuenteIngresoActiva String @default("")
   // Savings percentage per income account, keyed by income source id.
   ahorroPorCuenta Json  @default("{}")
   // Shared fallback formula; null preserves legacy profiles until first save.

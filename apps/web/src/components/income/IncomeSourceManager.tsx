@@ -46,6 +46,7 @@ export function IncomeSourceManager() {
   const [editId, setEditId] = useState<string | null>(null)
   const [name, setName] = useState('')
   const [amount, setAmount] = useState('')
+  const [originalAmount, setOriginalAmount] = useState('')
   const [currencyCode, setCurrencyCode] = useState(activeCurrencyCode)
   const [recurring, setRecurring] = useState(true)
   const [balanceMode, setBalanceMode] = useState<'fixed' | 'zero'>('fixed')
@@ -56,6 +57,7 @@ export function IncomeSourceManager() {
   function resetForm() {
     setName('')
     setAmount('')
+    setOriginalAmount('')
     setCurrencyCode(activeCurrencyCode)
     setRecurring(true)
     setBalanceMode('fixed')
@@ -78,7 +80,9 @@ export function IncomeSourceManager() {
     const latestIncome = salaryHistory.find((entry) => entry.sourceId === id)
     const accountIncome = currentIncome ?? latestIncome
     const accountCurrencyCode = source.currencyCode ?? accountIncome?.currencyCode ?? activeCurrencyCode
-    setAmount(currentIncome ? convertUsdToInput(currentIncome.balance ?? currentIncome.amount, getCurrencyByCode(accountCurrencyCode)) : '0')
+    const displayedAmount = currentIncome ? convertUsdToInput(currentIncome.balance ?? currentIncome.amount, getCurrencyByCode(accountCurrencyCode)) : '0'
+    setAmount(displayedAmount)
+    setOriginalAmount(displayedAmount)
     setCurrencyCode(accountCurrencyCode)
     setRecurring(source.recurring)
     setBalanceMode(source.balanceMode === 'zero' ? 'zero' : 'fixed')
@@ -136,7 +140,12 @@ export function IncomeSourceManager() {
         if (!source) throw new Error('No se pudo encontrar la cuenta de ingreso.')
         await updateIncomeSource(editId, sourceData)
         const currentIncome = currentIncomes.find((entry) => entry.sourceId === source.id)
-        const incomeData = { ...initialIncome, sourceId: source.id, sourceName: trimmed }
+        // Changing only the account's currency label must keep its canonical
+        // USD amount and available balance. A changed amount is an explicit edit.
+        const amountWasEdited = parsedAmount !== Number(originalAmount.trim().replace(',', '.'))
+        const incomeData = currentIncome && !amountWasEdited
+          ? { ...initialIncome, amount: currentIncome.amount, balance: currentIncome.balance ?? currentIncome.amount, sourceId: source.id, sourceName: trimmed }
+          : { ...initialIncome, sourceId: source.id, sourceName: trimmed }
         if (currentIncome) await updateSalary(currentIncome.id, incomeData)
         else await addSalary(incomeData)
       } else {

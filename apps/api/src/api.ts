@@ -238,6 +238,7 @@ async function loadCurrencyPreferences(userId: string) {
       exists: false,
       currencies: [USD_CURRENCY_PREFERENCE],
       activeCurrencyCode: 'USD',
+      activeIncomeSourceId: '',
       accountSavingsFormulas: {},
       formula: null,
     }
@@ -252,6 +253,7 @@ async function loadCurrencyPreferences(userId: string) {
     exists: true,
     currencies,
     activeCurrencyCode,
+    activeIncomeSourceId: entry.fuenteIngresoActiva,
     accountSavingsFormulas: normalizeAccountSavingsFormulas(entry.ahorroPorCuenta),
     formula: entry.formulaGlobal ? normalizeFormula(entry.formulaGlobal as unknown as AllocationFormula) : null,
   }
@@ -260,6 +262,7 @@ async function loadCurrencyPreferences(userId: string) {
 export function mergeCurrencyPreferences(current: {
   currencies: CurrencyPreferencePayload[]
   activeCurrencyCode: string
+  activeIncomeSourceId: string
   accountSavingsFormulas: ReturnType<typeof normalizeAccountSavingsFormulas>
   formula: AllocationFormula | null
 }, body: JsonRecord) {
@@ -278,6 +281,9 @@ export function mergeCurrencyPreferences(current: {
   const currencies = [...currenciesByCode.values()]
   const requestedActiveCode = String(body.activeCurrencyCode ?? current.activeCurrencyCode).trim().toUpperCase()
   const activeCurrencyCode = currenciesByCode.has(requestedActiveCode) ? requestedActiveCode : 'USD'
+  const activeIncomeSourceId = body.activeIncomeSourceId === undefined
+    ? current.activeIncomeSourceId
+    : String(body.activeIncomeSourceId).trim().slice(0, 128)
   const accountSavingsFormulas = { ...(body.resetAccountFormulas === true ? {} : current.accountSavingsFormulas), ...normalizeAccountSavingsFormulas(body.accountSavingsFormulas) }
   let formula = current.formula
   if (body.formula !== undefined) {
@@ -290,7 +296,7 @@ export function mergeCurrencyPreferences(current: {
     }
     formula = normalizeFormula(raw)
   }
-  return { exists: true, currencies, activeCurrencyCode, accountSavingsFormulas, formula }
+  return { exists: true, currencies, activeCurrencyCode, activeIncomeSourceId, accountSavingsFormulas, formula }
 }
 
 async function saveCurrencyPreferences(userId: string, body: JsonRecord) {
@@ -301,12 +307,14 @@ async function saveCurrencyPreferences(userId: string, body: JsonRecord) {
     const result = mergeCurrencyPreferences({
       currencies: normalizeCurrencyPreferences(entry?.monedas),
       activeCurrencyCode: entry?.monedaActiva ?? 'USD',
+      activeIncomeSourceId: entry?.fuenteIngresoActiva ?? '',
       accountSavingsFormulas: normalizeAccountSavingsFormulas(entry?.ahorroPorCuenta),
       formula: entry?.formulaGlobal ? normalizeFormula(entry.formulaGlobal as unknown as AllocationFormula) : null,
     }, body)
     const data = {
       monedas: result.currencies as unknown as Prisma.InputJsonValue,
       monedaActiva: result.activeCurrencyCode,
+      fuenteIngresoActiva: result.activeIncomeSourceId,
       ahorroPorCuenta: result.accountSavingsFormulas as unknown as Prisma.InputJsonValue,
       ...(result.formula ? { formulaGlobal: result.formula as unknown as Prisma.InputJsonValue } : {}),
     }

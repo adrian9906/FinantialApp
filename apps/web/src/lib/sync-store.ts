@@ -7,6 +7,7 @@ const BOOTSTRAP_STORE = 'bootstrap-snapshots'
 const SYNC_STORE = 'sync-documents'
 const LEGACY_BOOTSTRAP_PREFIX = 'plata-bootstrap'
 const LEGACY_DIRTY_PREFIX = 'plata-bootstrap-dirty'
+const documentUpdates = new Map<string, Promise<unknown>>()
 
 function getIndexedDb() {
   if (typeof window === 'undefined') return null
@@ -169,6 +170,27 @@ export async function readSyncDocument(userId: string): Promise<SyncDocument> {
 
 export function writeSyncDocument(userId: string, document: SyncDocument): Promise<boolean> {
   return writeRecord(SYNC_STORE, userId, document)
+}
+
+/** Serialize read/modify/write cycles so a network reply cannot erase a newer
+ * offline edit that was queued while the request was in flight. */
+export function updateSyncDocument(
+  userId: string,
+  update: (current: SyncDocument) => SyncDocument,
+): Promise<SyncDocument> {
+  const previous = documentUpdates.get(userId) ?? Promise.resolve()
+  const result = previous.catch(() => undefined).then(async () => {
+    const next = update(await readSyncDocument(userId))
+    if (!await writeSyncDocument(userId, next)) {
+      throw new Error('No se pudo guardar la sincronización en este dispositivo.')
+    }
+    return next
+  })
+  documentUpdates.set(userId, result)
+  void result.finally(() => {
+    if (documentUpdates.get(userId) === result) documentUpdates.delete(userId)
+  }).catch(() => {})
+  return result
 }
 
 export async function clearSyncDocument(userId: string) {

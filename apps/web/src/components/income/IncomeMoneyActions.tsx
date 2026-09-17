@@ -14,6 +14,7 @@ import { getIncomesForMonth, getMonthKey } from '@plata/shared'
 
 export function IncomeMoneyActions() {
   const salaries = useFinanceStore((state) => state.salaries)
+  const incomeSources = useFinanceStore((state) => state.incomeSources)
   const transferIncomeMoney = useFinanceStore((state) => state.transferIncomeMoney)
   const month = getMonthKey()
   const currentIncomes = useMemo(() => getIncomesForMonth(salaries, month), [salaries, month])
@@ -28,8 +29,10 @@ export function IncomeMoneyActions() {
   const sourceSalary = currentIncomes.find((income) => income.id === sourceSalaryId)
   const destinationSalary = currentIncomes.find((income) => income.sourceId === destinationSourceId)
   const destinationIncomes = currentIncomes.filter((income) => income.sourceId !== sourceSalary?.sourceId)
-  const sourceCurrency = getCurrencyByCode(sourceSalary?.currencyCode)
-  const targetCurrency = getCurrencyByCode(destinationSalary?.currencyCode)
+  const accountCurrencyCode = (sourceId?: string, salaryCode?: string) =>
+    incomeSources.find((source) => source.id === sourceId)?.currencyCode ?? salaryCode
+  const sourceCurrency = getCurrencyByCode(accountCurrencyCode(sourceSalary?.sourceId, sourceSalary?.currencyCode))
+  const targetCurrency = getCurrencyByCode(accountCurrencyCode(destinationSalary?.sourceId, destinationSalary?.currencyCode))
   const nativeAmount = Number(amount.replace(',', '.')) || 0
   const amountUsd = convertToUsd(nativeAmount, sourceCurrency)
   const convertedAmount = convertFromUsd(amountUsd, targetCurrency)
@@ -101,7 +104,7 @@ export function IncomeMoneyActions() {
                 <SelectContent>
                   {sourceIncomes.map((income) => (
                     <SelectItem key={income.id} value={income.id}>
-                      {income.sourceName ?? 'Ingreso'} · {formatMoneyWithCode(Number(income.balance ?? income.amount), getCurrencyByCode(income.currencyCode))}
+                      {income.sourceName ?? 'Ingreso'} · {formatMoneyWithCode(Number(income.balance ?? income.amount), getCurrencyByCode(accountCurrencyCode(income.sourceId, income.currencyCode)))}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -112,12 +115,12 @@ export function IncomeMoneyActions() {
               <Label>Cuenta de destino</Label>
               <Select value={destinationSourceId} disabled={!sourceSalary} onValueChange={(value) => setDestinationSourceId(value ?? '')}>
                 <SelectTrigger className="border-graphite bg-abyss">
-                  <SelectValue>{destinationSalary ? `${destinationSalary.sourceName ?? 'Ingreso'} · ${destinationSalary.currencyCode ?? 'USD'}` : 'Seleccionar cuenta'}</SelectValue>
+                  <SelectValue>{destinationSalary ? `${destinationSalary.sourceName ?? 'Ingreso'} · ${targetCurrency.code}` : 'Seleccionar cuenta'}</SelectValue>
                 </SelectTrigger>
                 <SelectContent>
                   {destinationIncomes.map((income) => (
                     <SelectItem key={income.id} value={income.sourceId ?? income.id}>
-                      {income.sourceName ?? 'Ingreso'} · {income.currencyCode ?? 'USD'}
+                      {income.sourceName ?? 'Ingreso'} · {accountCurrencyCode(income.sourceId, income.currencyCode) ?? 'USD'}
                     </SelectItem>
                   ))}
                 </SelectContent>

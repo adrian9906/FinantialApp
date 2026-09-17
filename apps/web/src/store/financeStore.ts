@@ -38,6 +38,7 @@ import { ensureSavingsCurrencyAccounts, getAccountAllocationFormula, normalizeLe
 const GUEST_FINANCE_STORAGE_KEY = 'plata-guest-finance'
 let voiceBatchSaving = false
 const pendingSnapshotWrites = new Set<Promise<void>>()
+let localRevision = 0
 
 type DebtInput = Omit<Debt, 'id' | 'paidAmount' | 'remainingAmount' | 'progress' | 'isSettled'> & {
   initialPayment?: number
@@ -356,7 +357,7 @@ function makeId(prefix: string) {
   return `${prefix}-${crypto.randomUUID()}`
 }
 
-function persistLocalSnapshot(snapshot: BootstrapPayload) {
+function persistLocalSnapshot(snapshot: BootstrapPayload, previous?: BootstrapPayload) {
   if (isGuestMode()) {
     persistGuestSnapshot(snapshot)
     return Promise.resolve()
@@ -367,7 +368,7 @@ function persistLocalSnapshot(snapshot: BootstrapPayload) {
 
   // Queue the change on-device before anything touches the network. The
   // operation log is the pending marker, so a crash here loses nothing.
-  return queueLocalChange(userId, snapshot).then(() => undefined)
+  return queueLocalChange(userId, snapshot, previous).then(() => undefined)
 }
 
 function updateLocalState(
@@ -376,14 +377,17 @@ function updateLocalState(
 ) {
   if (voiceBatchSaving) return Promise.reject(new Error('Espera a que termine el guardado del dictado.'))
   let snapshot: BootstrapPayload | null = null
+  let previous: BootstrapPayload | undefined
 
   set((state) => {
+    previous = buildSnapshotFromState(state)
     const next = recipe(state)
     snapshot = buildSnapshotFromState(state, next)
     return next
   })
+  if (snapshot) localRevision += 1
 
-  const pendingWrite = snapshot ? persistLocalSnapshot(snapshot) : Promise.resolve()
+  const pendingWrite = snapshot ? persistLocalSnapshot(snapshot, previous) : Promise.resolve()
   pendingSnapshotWrites.add(pendingWrite)
   void pendingWrite.finally(() => pendingSnapshotWrites.delete(pendingWrite)).catch(() => {})
 
@@ -448,17 +452,19 @@ export const useFinanceStore = create<FinanceStore>()((set, get) => ({
 
     const carried = { ...cachedSnapshot, salaries }
     if (JSON.stringify(carried) !== JSON.stringify(document.snapshot)) {
-      await persistLocalSnapshot(carried)
+      await persistLocalSnapshot(carried, document.snapshot)
       set({ ...carried, hasLoaded: true, loadedKey: activeKey })
     }
 
     if (!isOnline()) return
 
     try {
+      const revision = localRevision
       const synced = await syncNow(userId)
       if (!synced) return
+      if (localRevision !== revision || get().loadedKey !== activeKey) return
 
-      const normalized = normalizeBootstrapSnapshot(synced.snapshot, userId)
+      const normalized = normalizeBootstrapSnapshot((await readSyncDocument(userId)).snapshot, userId)
       set({
         ...normalized,
         hasLoaded: true,
@@ -476,24 +482,30 @@ export const useFinanceStore = create<FinanceStore>()((set, get) => ({
     if (!userId || !isOnline()) return false
 
     try {
+      await Promise.all([...pendingSnapshotWrites])
+      const revision = localRevision
       const synced = await syncNow(userId, reason)
       if (!synced) return false
       if (voiceBatchSaving) return false
+      if (localRevision !== revision || get().loadedKey !== `user:${userId}`) return false
 
-      const normalized = normalizeBootstrapSnapshot(synced.snapshot, userId)
+      const latest = await readSyncDocument(userId)
+      if (localRevision !== revision) return false
+      const normalized = normalizeBootstrapSnapshot(latest.snapshot, userId)
       set({
         ...normalized,
         hasLoaded: true,
         loadedKey: `user:${userId}`,
       })
 
-      return synced.operations.length === 0 && synced.conflicts.length === 0
+      return latest.operations.length === 0 && latest.conflicts.length === 0
     } catch {
       // Pending operations stay queued for the next attempt.
       return false
     }
   },
   reset: () => {
+    localRevision += 1
     set({
       ...getEmptyState(),
       hasLoaded: false,
@@ -639,7 +651,7 @@ export const useFinanceStore = create<FinanceStore>()((set, get) => ({
       const prepared = prepareVoiceBatch(buildSnapshotFromState(previous, {}), inputs, (accountId) => getAccountAllocationFormula(preferences.accountSavingsFormulas, accountId, preferences.formula))
       if (!prepared.created.length) return []
       return await persistPreparedVoiceBatch(prepared,
-        () => persistLocalSnapshot(buildSnapshotFromState(previous, prepared)),
+        () => persistLocalSnapshot(buildSnapshotFromState(previous, prepared), buildSnapshotFromState(previous)),
         () => set({ transactions: prepared.transactions, salaries: prepared.salaries }),
         () => get().loadedKey === key && isLocalMutationMode())
     } finally {

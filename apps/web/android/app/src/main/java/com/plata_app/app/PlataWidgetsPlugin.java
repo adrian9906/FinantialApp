@@ -10,19 +10,68 @@ import com.getcapacitor.Plugin;
 import com.getcapacitor.PluginCall;
 import com.getcapacitor.PluginMethod;
 import com.getcapacitor.annotation.CapacitorPlugin;
+import org.json.JSONArray;
+import org.json.JSONException;
+import org.json.JSONObject;
 
 @CapacitorPlugin(name = "PlataWidgets")
 public class PlataWidgetsPlugin extends Plugin {
     @PluginMethod public void updateSummary(PluginCall call) {
-        SharedPreferences.Editor prefs = PlataWidgetProvider.preferences(getContext()).edit();
+        SharedPreferences current = PlataWidgetProvider.preferences(getContext());
+        SharedPreferences.Editor prefs = current.edit();
         prefs.putBoolean("hasAccount", Boolean.TRUE.equals(call.getBoolean("hasAccount", false)));
         for (String key : new String[]{"accountName", "balance", "todayExpenses", "dateKey", "updatedLabel"}) {
             String value = call.getString(key, "");
             prefs.putString(key, value.length() > 160 ? value.substring(0, 160) : value);
         }
+        String catalogJson = call.getString("catalogJson", "");
+        try {
+            JSONObject catalog = new JSONObject(catalogJson);
+            if (!(catalog.opt("accounts") instanceof JSONArray) || !(catalog.opt("currencies") instanceof JSONArray)) {
+                call.reject("Invalid widget catalog");
+                return;
+            }
+            prefs.putString("catalogJson", catalogJson);
+        } catch (JSONException error) {
+            call.reject("Invalid widget catalog", error);
+            return;
+        }
+        String requestedAccount = call.getString("selectedAccountId", "");
+        String requestedCurrency = call.getString("selectedCurrencyCode", "USD");
+        boolean changed = current.getBoolean("selectionChanged", false);
+        try {
+            JSONArray availableCurrencies = new JSONObject(catalogJson).getJSONArray("currencies");
+            boolean stillAvailable = false;
+            for (int index = 0; index < availableCurrencies.length(); index++) {
+                if (current.getString("selectedCurrencyCode", "USD").equals(availableCurrencies.optString(index))) {
+                    stillAvailable = true;
+                    break;
+                }
+            }
+            if (!stillAvailable) changed = false;
+        } catch (JSONException error) {
+            call.reject("Invalid widget catalog", error);
+            return;
+        }
+        if (!changed || (requestedAccount.equals(current.getString("selectedAccountId", ""))
+            && requestedCurrency.equals(current.getString("selectedCurrencyCode", "USD")))) {
+            prefs.putString("selectedAccountId", requestedAccount);
+            prefs.putString("selectedCurrencyCode", requestedCurrency);
+            prefs.putBoolean("selectionChanged", false);
+        }
         prefs.apply();
+        PlataWidgetProvider.refreshSummary(getContext());
         PlataWidgetProvider.updateAll(getContext());
         call.resolve();
+    }
+
+    @PluginMethod public void getSelection(PluginCall call) {
+        SharedPreferences prefs = PlataWidgetProvider.preferences(getContext());
+        JSObject result = new JSObject();
+        result.put("accountId", prefs.getString("selectedAccountId", ""));
+        result.put("currencyCode", prefs.getString("selectedCurrencyCode", "USD"));
+        result.put("changed", prefs.getBoolean("selectionChanged", false));
+        call.resolve(result);
     }
 
     @PluginMethod public void clearSummary(PluginCall call) {

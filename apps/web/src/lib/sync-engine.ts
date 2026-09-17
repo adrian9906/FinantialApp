@@ -1,9 +1,9 @@
 import type { BootstrapPayload, SyncDocument, SyncResponse } from '@plata/shared'
-import { SYNC_PROTOCOL, acceptSyncResponse, queueSnapshot, resolveSyncConflict } from '@plata/shared'
+import { SYNC_PROTOCOL, acceptSyncResponse, applyOperation, canonicalJson, getSyncValue, queueSnapshot, resolveSyncConflict, syncCollections, syncKey } from '@plata/shared'
 import type { SyncOperation } from '@plata/shared'
 
 import { ApiRequestError, isNetworkRequestError, requestJson } from '@/lib/api'
-import { readSyncDocument, writeSyncDocument } from '@/lib/sync-store'
+import { updateSyncDocument } from '@/lib/sync-store'
 
 export type SyncStage = 'idle' | 'preparing' | 'uploading' | 'downloading' | 'done' | 'conflict' | 'failed'
 
@@ -86,7 +86,14 @@ async function exchange(operation?: SyncOperation): Promise<SyncResponse> {
  * duplicated. Stops early on a conflict and leaves the remaining work queued.
  */
 async function runSync(userId: string, visible: boolean): Promise<SyncDocument | null> {
-  let document = await readSyncDocument(userId)
+  let document = await updateSyncDocument(userId, (current) => {
+    if (!current.initialized) return current
+    // Older builds could leave a locally saved snapshot without its pending
+    // marker. Recreate only those missing per-record operations before a
+    // download has a chance to replace the local copy.
+    const projected = current.operations.reduce(applyOperation, current.base)
+    return queueSnapshot({ ...current, snapshot: projected }, current.snapshot, makeId)
+  })
   const total = document.operations.length
 
   runCounter += 1
@@ -134,8 +141,7 @@ async function runSync(userId: string, visible: boolean): Promise<SyncDocument |
       })
 
       const response = await exchange(next)
-      document = acceptSyncResponse(document, response, makeId)
-      await writeSyncDocument(userId, document)
+      document = await updateSyncDocument(userId, (latest) => acceptSyncResponse(latest, response, makeId))
 
       if (response.conflict) {
         blockedKeys.add(response.conflict.key)
@@ -238,10 +244,32 @@ export function syncNow(
 export async function queueLocalChange(
   userId: string,
   next: BootstrapPayload,
+  previous?: BootstrapPayload,
 ): Promise<SyncDocument> {
-  const document = await readSyncDocument(userId)
-  const updated = queueSnapshot(document, next, makeId)
-  if (!await writeSyncDocument(userId, updated)) throw new Error('No se pudo guardar el movimiento en este dispositivo.')
+  const updated = await updateSyncDocument(userId, (document) => {
+    if (!previous) return queueSnapshot(document, next, makeId)
+    let merged = document.snapshot
+    const diverged = new Set<string>()
+    for (const collection of syncCollections) {
+      const ids = new Set([...previous[collection], ...next[collection]].map((entry) => entry.id))
+      for (const entityId of ids) {
+        const before = getSyncValue(previous, collection, entityId)
+        const after = getSyncValue(next, collection, entityId)
+        if (canonicalJson(before) === canonicalJson(after)) continue
+        if (canonicalJson(before) !== canonicalJson(getSyncValue(document.snapshot, collection, entityId))) {
+          diverged.add(syncKey(collection, entityId))
+        }
+        merged = applyOperation(merged, { id: '', collection, entityId, baseVersion: null, value: after })
+      }
+    }
+    const queued = queueSnapshot(document, merged, makeId)
+    const existingIds = new Set(document.operations.map((operation) => operation.id))
+    return { ...queued, operations: queued.operations.map((operation) =>
+      !existingIds.has(operation.id) && diverged.has(syncKey(operation.collection, operation.entityId))
+        ? { ...operation, baseVersion: null }
+        : operation,
+    ) }
+  })
 
   emit({
     pending: updated.operations.length,
@@ -260,9 +288,7 @@ export async function resolveConflict(
   key: string,
   choice: 'local' | 'remote',
 ): Promise<SyncDocument> {
-  const document = await readSyncDocument(userId)
-  const updated = resolveSyncConflict(document, key, choice, makeId)
-  await writeSyncDocument(userId, updated)
+  const updated = await updateSyncDocument(userId, (document) => resolveSyncConflict(document, key, choice, makeId))
 
   emit({
     pending: updated.operations.length,

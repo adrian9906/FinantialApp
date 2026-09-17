@@ -113,6 +113,7 @@ interface CurrencyPreferencesResponse {
   exists: boolean
   currencies: CurrencyPreference[]
   activeCurrencyCode: string
+  activeIncomeSourceId: string
   accountSavingsFormulas?: AccountSavingsFormulas
   formula?: AllocationFormula | null
 }
@@ -121,6 +122,7 @@ interface FinancialPreferencesPatch {
   currencies?: CurrencyPreference[]
   discoveredCurrencies?: CurrencyPreference[]
   activeCurrencyCode?: string
+  activeIncomeSourceId?: string
   accountSavingsFormulas?: AccountSavingsFormulas
   formula?: AllocationFormula
   removedCurrencyCodes?: string[]
@@ -192,6 +194,7 @@ function applyRemotePreferences(userId: string, remote: CurrencyPreferencesRespo
   const values = {
     currencies,
     activeCurrencyCode: currencies.some((currency) => currency.code === requestedActiveCode) ? requestedActiveCode : 'USD',
+    activeIncomeSourceId: pending.activeIncomeSourceId ?? remote.activeIncomeSourceId ?? '',
     accountSavingsFormulas: { ...(pending.resetAccountFormulas ? {} : remote.accountSavingsFormulas), ...pending.accountSavingsFormulas },
     formula: normalizeFormula(pending.formula ?? remote.formula ?? usePreferencesStore.getState().formula),
     financialPreferencesUserId: userId,
@@ -339,7 +342,10 @@ export const usePreferencesStore = create<PreferencesStore>()(
         })
         scheduleCurrencySync({ activeCurrencyCode: code.trim().toUpperCase() })
       },
-      setActiveIncomeSource: (activeIncomeSourceId) => set({ activeIncomeSourceId }),
+      setActiveIncomeSource: (activeIncomeSourceId) => {
+        set({ activeIncomeSourceId })
+        scheduleCurrencySync({ activeIncomeSourceId })
+      },
       saveCurrency: (currency) => {
         set((state) => {
           const normalized = normalizeCurrencyPreference(currency)

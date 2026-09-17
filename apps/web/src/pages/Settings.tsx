@@ -33,6 +33,7 @@ import { useAuthStore } from '@/store/authStore'
 import { AutomationSettings } from '@/components/settings/AutomationSettings'
 import { NotificationSettings } from '@/components/settings/NotificationSettings'
 import { MobileWidgetSettings } from '@/components/settings/MobileWidgetSettings'
+import { OfflineBackupCard } from '@/components/settings/OfflineBackupCard'
 import { IncomeAccountSelect } from '@/components/income/IncomeAccountSelect'
 import { getAccountAllocationFormula, isSavingsIncomeSource } from '@/lib/account-savings'
 import { getIncomeAccountsForMonth, type IncomeAccountView } from '@/lib/income-account-view'
@@ -1409,6 +1410,7 @@ export default function Settings() {
 
           <NotificationSettings />
           <MobileWidgetSettings />
+          <OfflineBackupCard />
           <VoiceSettings />
 
           <MonthlyResetCard />

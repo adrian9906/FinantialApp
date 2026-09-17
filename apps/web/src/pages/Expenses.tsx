@@ -1,7 +1,7 @@
 import { validatePlannedMovement } from '@/lib/planned-movement-validation'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useShallow } from 'zustand/react/shallow'
-import { buildExpenseTransferSavingDescription, createLearnedCategorizationRule, findCategorizationRule, isCashPayment, MAX_PLACE_LENGTH, sanitizeAttachments, sanitizePlace, type ReceiptOCRLineItem, type ReceiptOCRParsedDraft } from '@plata/shared'
+import { buildExpenseTransferSavingDescription, createLearnedCategorizationRule, findCategorizationRule, getTransactionsInFinancialPeriod, isCashPayment, MAX_PLACE_LENGTH, sanitizeAttachments, sanitizePlace, type ReceiptOCRLineItem, type ReceiptOCRParsedDraft } from '@plata/shared'
 import { ArrowLeftRight, Banknote, Check, Dumbbell, HeartPulse, House, Package, Pencil, Plus, ScanLine, ShoppingBasket, Trash2, Wifi, type LucideIcon } from 'lucide-react'
 import { useFinanceStore } from '@/store/financeStore'
 import { buildExpenseDescription, createCustomExpenseCategory, getExpenseCategoryLabel, getPlannedExpenseTotal, parseExpenseDescription, type ExpenseBuiltInCategory, type ExpenseCategory } from '@/lib/expense-utils'
@@ -251,7 +251,7 @@ export default function Expenses() {
   const [formIncomeSourcePreference, setFormIncomeSourceId] = useState('')
   const formIncomeSourceId = accounts.some((account) => account.source.id === formIncomeSourcePreference)
     ? formIncomeSourcePreference
-    : accounts[0]?.source.id ?? ''
+    : selectedIncomeSourceId || accounts[0]?.source.id || ''
   const selectedAccount = accounts.find((account) => account.source.id === selectedIncomeSourceId)
   const formAccount = accounts.find((account) => account.source.id === formIncomeSourceId)
   const accountCurrency = getCurrencyByCode(selectedAccount?.salary.currencyCode)
@@ -259,7 +259,12 @@ export default function Expenses() {
   const accountFormula = getAccountAllocationFormula(accountSavingsFormulas, selectedIncomeSourceId, formula)
   const formAccountFormula = getAccountAllocationFormula(accountSavingsFormulas, formIncomeSourceId, formula)
   const accountOverview = getIncomeAccountOverview(selectedAccount, overview.periodTransactions, accountFormula)
-  const formAccountOverview = getIncomeAccountOverview(formAccount, overview.periodTransactions, formAccountFormula)
+  const formPeriodTransactions = getTransactionsInFinancialPeriod(transactions, {
+    periodStart: overview.periodStart,
+    strictSameDayBoundary: overview.strictSameDayBoundary,
+    excludedTransactionIds: overview.excludedTransactionIds,
+  })
+  const formAccountOverview = getIncomeAccountOverview(formAccount, formPeriodTransactions, formAccountFormula)
   const formatAccountMoney = (value: number) => formatMoneyWithCode(value, accountCurrency)
   const receiptCategoryGroups = useMemo(() => buildReceiptCategoryGroups(transactions), [transactions])
   const categoryWasChanged = useRef(false)
@@ -350,7 +355,7 @@ export default function Expenses() {
   ) {
     // The dialog picks the account by currency and payment method, so budgets
     // must be checked against that account and not the one selected on screen.
-    const receiptOverview = getIncomeAccountOverview(receiptAccount, overview.periodTransactions, formula)
+    const receiptOverview = getIncomeAccountOverview(receiptAccount, formPeriodTransactions, getAccountAllocationFormula(accountSavingsFormulas, receiptAccount.source.id, formula))
     const receiptCurrency = getCurrencyByCode(receiptAccount.salary.currencyCode)
     const formatReceiptMoney = (value: number) => formatMoneyWithCode(value, receiptCurrency)
     const totals = getReceiptTotalsByType(reviewed)
@@ -440,7 +445,14 @@ export default function Expenses() {
       }
 
       resetForm()
+      if (formAccount.source.id !== selectedIncomeSourceId) {
+        setSelectedIncomeSourceId(formAccount.source.id)
+        setFormIncomeSourceId(formAccount.source.id)
+      }
       setOpen(false)
+      toast.success('Gasto guardado en ' + formAccount.source.name + '.')
+    } catch (error) {
+      setFormError(error instanceof Error ? error.message : 'No se pudo guardar el gasto.')
     } finally {
       setIsSaving(false)
     }
