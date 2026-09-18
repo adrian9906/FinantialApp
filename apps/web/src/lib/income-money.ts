@@ -80,6 +80,7 @@ export function applyIncomeMoneyMovement(
     if (salary.id === sourceSalary?.id && !movement.preserveSourceBalance) return {
       ...salary,
       balance: Math.max(0, Number(salary.balance ?? salary.amount) - amountUsd),
+      transferAdjustment: Number(salary.transferAdjustment ?? 0) - amountUsd,
     }
     if (salary.id === target?.id) return {
       ...salary,
@@ -87,6 +88,7 @@ export function applyIncomeMoneyMovement(
       // the month. A deposit without an origin is new income and does increase it.
       amount: salary.amount + (isTransfer ? 0 : amountUsd),
       balance: Number(salary.balance ?? salary.amount) + amountUsd,
+      transferAdjustment: Number(salary.transferAdjustment ?? 0) + (isTransfer && !movement.preserveSourceBalance ? amountUsd : 0),
     }
     return salary
   })
@@ -96,6 +98,7 @@ export function applyIncomeMoneyMovement(
       id: createId('salary'),
       amount: isTransfer ? 0 : amountUsd,
       balance: amountUsd,
+      transferAdjustment: isTransfer && !movement.preserveSourceBalance ? amountUsd : 0,
       month: movement.month,
       currencyCode: normalizedCurrency,
       sourceId: destinationSource.id,

@@ -1,8 +1,9 @@
 import assert from 'node:assert/strict'
 
-import type { IncomeSource, Salary, Transaction } from '@plata/shared'
+import { createEmptyBootstrapPayload, getSalaryPlanningBase, normalizeBootstrapPayload, type IncomeSource, type Salary, type Transaction } from '@plata/shared'
 import { reconcileIncomeAccountCharge } from './income-account.ts'
-import { getIncomeAccountsForMonth } from './income-account-view.ts'
+import { getIncomeAccountOverview, getIncomeAccountsForMonth } from './income-account-view.ts'
+import { applyIncomeMoneyMovement } from './income-money.ts'
 
 const salaries: Salary[] = [
   { id: 'usd', amount: 100, balance: 100, month: '2026-09', sourceId: 'salary', sourceName: 'Salario', currencyCode: 'USD' },
@@ -63,5 +64,31 @@ assert.throws(
   () => reconcileIncomeAccountCharge(salaries, undefined, { ...expense, amount: 101 }),
   /saldo suficiente/,
 )
+
+// A transfer funds the destination's expense budget even when it registered no income.
+const emptyTransferAccount: Salary = { id: 'transfer', amount: 0, balance: 0, month: '2026-09', sourceId: 'transfer-source', sourceName: 'Transferencia', currencyCode: 'CUP' }
+const transferSource: IncomeSource = { id: 'transfer-source', name: 'Transferencia CUP', recurring: true, isCash: false }
+const movedMoney = applyIncomeMoneyMovement(
+  { salaries: [salaries[0], emptyTransferAccount], incomeSources: [sources[0], transferSource] },
+  { sourceSalaryId: 'usd', amountUsd: 30, month: '2026-09', destination: { sourceId: 'transfer-source', currencyCode: 'CUP' } },
+  () => 'unused',
+)
+const persisted = normalizeBootstrapPayload({ ...createEmptyBootstrapPayload(), ...movedMoney })
+const destination = getIncomeAccountsForMonth(persisted.salaries, persisted.incomeSources, '2026-09').find((account) => account.source.id === 'transfer-source')!
+const origin = getIncomeAccountsForMonth(persisted.salaries, persisted.incomeSources, '2026-09').find((account) => account.source.id === 'salary')!
+const expenseFormula = { expenses: 100, wants: 0, savings: 0, rolloverSavings: false }
+assert.equal(getSalaryPlanningBase(destination.salary), 30)
+assert.equal(getIncomeAccountOverview(destination, [], expenseFormula).budgetExpenses, 30)
+assert.equal(getIncomeAccountOverview(origin, [], expenseFormula).budgetExpenses, 70)
+const transferExpense = { ...expense, id: 'expense-transfer', amount: 20, incomeSourceId: 'transfer-source' }
+const afterSpending = reconcileIncomeAccountCharge(persisted.salaries, undefined, transferExpense)
+assert.equal(afterSpending.find((salary) => salary.id === 'transfer')?.balance, 10)
+assert.equal(getIncomeAccountOverview({ ...destination, salary: afterSpending.find((salary) => salary.id === 'transfer')! }, [transferExpense], expenseFormula).budgetExpenses, 30)
+const legacy = normalizeBootstrapPayload({
+  ...createEmptyBootstrapPayload(),
+  salaries: [{ ...emptyTransferAccount, balance: 18 }],
+  incomeSources: [transferSource],
+})
+assert.equal(legacy.salaries[0].transferAdjustment, 18, 'una transferencia anterior también queda disponible')
 
 console.log('Income account charge tests passed')

@@ -5,6 +5,7 @@ import {
   getFinancialPeriodStart,
   getMonthKey,
   getMonthlyOverview,
+  getSalaryPlanningBase,
   getSavingsFundingBreakdown,
   getWishlistReservedAmount,
   isWishlistPurchased,
@@ -33,7 +34,9 @@ export function useMonthlyOverview() {
     const accountTransactions = activeIncomeSourceId
       ? transactions.filter((transaction) => transaction.incomeSourceId === activeIncomeSourceId)
       : []
-    const accountSalaries = activeAccount ? [activeAccount.salary] : []
+    const accountSalaries = activeAccount
+      ? [{ ...activeAccount.salary, amount: getSalaryPlanningBase(activeAccount.salary) }]
+      : []
     const accountDebts = debts.filter((debt) => debt.incomeSourceId === activeIncomeSourceId)
     const accountWishlist = wishlist.filter((item) => item.incomeSourceId === activeIncomeSourceId)
     const accountSavingsGoals = savingsGoals.filter((goal) => goal.incomeSourceId === activeIncomeSourceId)

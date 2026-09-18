@@ -26,6 +26,8 @@ assert.equal(transferred.salaries.find((entry) => entry.id === 'salary-usd')?.am
 assert.equal(transferred.salaries.find((entry) => entry.id === 'transfer-cup')?.amount, 10)
 assert.equal(transferred.salaries.find((entry) => entry.id === 'salary-usd')?.balance, 55)
 assert.equal(transferred.salaries.find((entry) => entry.id === 'transfer-cup')?.balance, 35)
+assert.equal(transferred.salaries.find((entry) => entry.id === 'salary-usd')?.transferAdjustment, -25)
+assert.equal(transferred.salaries.find((entry) => entry.id === 'transfer-cup')?.transferAdjustment, 25)
 assert.equal(transferred.salaries.find((entry) => entry.id === 'transfer-cup')?.currencyCode, 'CUP')
 
 const assigned = applyIncomeMoneyMovement(transferred, {
@@ -54,6 +56,7 @@ assert.equal(movedToNewAccount.salaries.find((entry) => entry.id === 'salary-usd
 assert.equal(movedToNewAccount.salaries.find((entry) => entry.id === 'salary-usd')?.balance, 55)
 assert.equal(savingsSalary?.amount, 0)
 assert.equal(savingsSalary?.balance, 25)
+assert.equal(savingsSalary?.transferAdjustment, 25)
 
 const allocatedToSavings = applyIncomeMoneyMovement(initial, {
   sourceSalaryId: 'salary-usd',
@@ -64,6 +67,7 @@ const allocatedToSavings = applyIncomeMoneyMovement(initial, {
 }, makeId)
 assert.equal(allocatedToSavings.salaries.find((entry) => entry.id === 'salary-usd')?.amount, 100)
 assert.equal(allocatedToSavings.salaries.find((entry) => entry.id === 'salary-usd')?.balance, 80)
+assert.equal(allocatedToSavings.salaries.find((entry) => entry.id === 'salary-usd')?.transferAdjustment, undefined)
 assert.equal(allocatedToSavings.salaries.find((entry) => entry.sourceName === 'Ahorro USD')?.balance, 25)
 
 assert.throws(() => applyIncomeMoneyMovement(initial, {

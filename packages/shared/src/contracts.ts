@@ -68,6 +68,12 @@ export function normalizeBootstrapPayload(payload?: Partial<BootstrapPayload> | 
       currencyCode: String(payload?.incomeSources?.find((source) => source.id === salary.sourceId)?.currencyCode ?? salary.currencyCode ?? 'USD').trim().toUpperCase() || 'USD',
       balanceMode: salary.balanceMode === 'zero' ? 'zero' : 'fixed',
       balance: Number(salary.balance ?? salary.amount ?? 0),
+      transferAdjustment: Number(salary.transferAdjustment ?? (
+        (payload?.incomeSources?.find((source) => source.id === salary.sourceId)?.name ?? '')
+          .trim().toLocaleLowerCase('es').startsWith('ahorro ')
+          ? 0
+          : Math.max(0, Number(salary.balance ?? salary.amount ?? 0) - Number(salary.amount ?? 0))
+      )),
     })),
     incomeSources: (payload?.incomeSources ?? []).map((source) => ({
       ...source,

@@ -8,7 +8,7 @@ function parse(collection: string, value: unknown) {
 const account = { incomeSourceId: 'source-1', incomeSourceName: 'Cuenta CUP' }
 const expense = { id: 'record-1', amount: 5, type: 'expense', description: 'food::pending::0::Pan', date: '2026-09-15', createdAt: '2026-09-15T12:00:00.000Z', isCash: false, ...account }
 assert.deepEqual(parse('transactions', expense).value, expense, 'un gasto debe conservar su cuenta y método de pago')
-const salary = { id: 'record-1', amount: 400, balance: 395, month: '2026-09', currencyCode: 'CUP', balanceMode: 'zero', sourceId: 'source-1', sourceName: 'Cuenta CUP', kind: 'recurring' }
+const salary = { id: 'record-1', amount: 400, balance: 395, transferAdjustment: 25, month: '2026-09', currencyCode: 'CUP', balanceMode: 'zero', sourceId: 'source-1', sourceName: 'Cuenta CUP', kind: 'recurring' }
 assert.deepEqual(parse('salaries', salary).value, salary, 'el saldo y moneda no deben desaparecer al validar')
 const source = { id: 'record-1', name: 'Cuenta CUP', recurring: true, archived: false, currencyCode: 'CUP', balanceMode: 'zero', isCash: false }
 assert.deepEqual(parse('incomeSources', source).value, source)

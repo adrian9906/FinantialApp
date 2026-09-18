@@ -2,6 +2,7 @@ import {
   getEffectiveExpenseTotal,
   getEffectiveWantTotal,
   getMonthKey,
+  getSalaryPlanningBase,
   type AllocationFormula,
   type IncomeSource,
   type Salary,
@@ -47,7 +48,7 @@ export function getIncomeAccountOverview(
   const periodTransactions = account
     ? transactions.filter((transaction) => transaction.incomeSourceId === account.source.id)
     : []
-  const base = account?.salary.amount ?? 0
+  const base = account ? getSalaryPlanningBase(account.salary) : 0
   const budgetExpenses = base * (formula.expenses / 100)
   const budgetWants = base * (formula.wants / 100)
 

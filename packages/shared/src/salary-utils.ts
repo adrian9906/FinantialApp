@@ -52,6 +52,11 @@ export function getTotalIncomeForMonth(salaries: Salary[], month = getMonthKey()
   return getIncomesForMonth(salaries, month).reduce((sum, salary) => sum + salary.amount, 0)
 }
 
+/** Money assigned to this account's formula after transfers, without changing income. */
+export function getSalaryPlanningBase(salary: Salary) {
+  return Math.max(0, salary.amount + Number(salary.transferAdjustment ?? 0))
+}
+
 /**
  * The income in effect for a month. Falls back to the most recent earlier
  * entry so a month with nothing registered still reports the last known pay,
@@ -128,6 +133,12 @@ export function carrySalaryForwardToMonth(
         month,
         amount: income,
         balance: (previous.balance ?? 0) + income,
+        // Keep only transferred money that is still in the account. It is
+        // spendable next month without becoming a second income payment.
+        transferAdjustment: Math.min(
+          Math.max(0, previous.balance ?? 0),
+          Math.max(0, previous.transferAdjustment ?? 0),
+        ),
       }
       carried.push(next)
       previousBySource.set(getIncomeKey(source), next)

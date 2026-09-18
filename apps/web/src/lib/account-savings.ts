@@ -1,4 +1,4 @@
-import { normalizeFormula, type AllocationFormula, type BootstrapPayload, type IncomeSource, type Salary } from '@plata/shared'
+import { getSalaryPlanningBase, normalizeFormula, type AllocationFormula, type BootstrapPayload, type IncomeSource, type Salary } from '@plata/shared'
 
 import type { IncomeAccountView } from '@/lib/income-account-view'
 
@@ -108,7 +108,7 @@ export function getAccountSavingsAmount(account: IncomeAccountView, rate: number
   const normalizedRate = Math.min(100, Math.max(0, rate))
   if (normalizedRate <= 0) return 0
 
-  const base = Number(account.salary.amount)
+  const base = getSalaryPlanningBase(account.salary)
   const balance = Number(account.salary.balance ?? account.salary.amount)
   if (!Number.isFinite(base) || !Number.isFinite(balance)) return 0
 
@@ -302,7 +302,7 @@ export function getAccountSavingsGoals(
     // The account's own savings account is not a source of new savings.
     if (savingsAccount?.id === account.source.id) return []
 
-    const goalUsd = Math.max(0, Number(account.salary.amount) * (rate / 100))
+    const goalUsd = getSalaryPlanningBase(account.salary) * (rate / 100)
     const savedUsd = savingsAccount
       ? getSavingsAccountBalance(salaries, savingsAccount.id, month)
       : 0

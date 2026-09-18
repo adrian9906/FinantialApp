@@ -151,4 +151,12 @@ const bonus = (id: string, amount: number, month: string, name = 'Bonus'): Salar
   console.log('PASS 10: arrastre por cuenta y moneda, ahorro e idempotencia')
 }
 
+{
+  const receiving: Salary = { ...job('received', 0, '2026-09', 'transfer', 'Transferencia'), balance: 12, transferAdjustment: 30, balanceMode: 'zero' }
+  const october = getIncomesForMonth(carrySalaryForwardToMonth([receiving], '2026-10', makeId), '2026-10')[0]
+  assert.equal(october.amount, 0, 'la transferencia no crea ingreso nuevo')
+  assert.equal(october.balance, 12, 'el saldo transferido pendiente permanece')
+  assert.equal(october.transferAdjustment, 12, 'solo el remanente transferido sigue disponible para planificar')
+}
+
 console.log('\nIngresos multiples correctos.')

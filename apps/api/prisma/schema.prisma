@@ -83,6 +83,7 @@ model Salario {
   id        String   @id @default(uuid())
   salario   Float
   saldo     Float
+  ajusteTransferencias Float @default(0)
   moneda    String   @default("USD")
   modoSaldo String   @default("fixed")
   fuenteId    String?

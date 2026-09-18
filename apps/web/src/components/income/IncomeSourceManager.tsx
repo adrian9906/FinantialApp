@@ -98,8 +98,10 @@ export function IncomeSourceManager() {
       return
     }
 
-    const parsedAmount = Number(amount.trim().replace(',', '.'))
-    if (amount.trim() === '' || !Number.isFinite(parsedAmount) || parsedAmount < 0) {
+    const parsedAmount = !editId && amount.trim() === ''
+      ? 0
+      : Number(amount.trim().replace(',', '.'))
+    if ((editId && amount.trim() === '') || !Number.isFinite(parsedAmount) || parsedAmount < 0) {
       setError('Escribe una cantidad válida para esta cuenta. Puede ser 0.')
       return
     }
@@ -295,7 +297,9 @@ export function IncomeSourceManager() {
               </div>
             </div>
             <p className="-mt-2 text-xs text-muted-gray">
-              Puedes poner 0 y después asignarle o transferirle dinero.
+              {editId
+                ? 'Puedes poner 0 y después asignarle o transferirle dinero.'
+                : 'Déjalo vacío o escribe 0 para iniciar sin dinero. Después podrás asignarle o transferirle dinero.'}
             </p>
 
             <div className="grid gap-2">

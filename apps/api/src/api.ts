@@ -327,6 +327,7 @@ function serializeSalary(entry: {
   id: string
   salario: number
   saldo: number
+  ajusteTransferencias: number
   moneda: string
   modoSaldo: string
   fecha: Date
@@ -338,6 +339,7 @@ function serializeSalary(entry: {
     id: entry.id,
     amount: entry.salario,
     balance: entry.saldo,
+    transferAdjustment: entry.ajusteTransferencias,
     month: toMonthString(entry.fecha),
     currencyCode: entry.moneda || 'USD',
     balanceMode: entry.modoSaldo === 'zero' ? 'zero' : 'fixed',
@@ -697,6 +699,7 @@ async function loadBootstrap(userId: string, prisma: Prisma.TransactionClient, m
 
   const carriedSalaries: Array<Omit<typeof recurringSalaries[number], 'id' | 'createdAt' | 'updatedAt' | 'usuario'>> = []
   for (const [sourceKey, latestSalary] of latestBySource) {
+    let previousSalary = latestSalary
     let month = new Date(latestSalary.fecha)
     month.setUTCMonth(month.getUTCMonth() + 1)
 
@@ -705,9 +708,11 @@ async function loadBootstrap(userId: string, prisma: Prisma.TransactionClient, m
       const coverageKey = `${monthKey}/${sourceKey}`
       if (!covered.has(coverageKey)) {
         covered.add(coverageKey)
-        carriedSalaries.push({
-          salario: latestSalary.modoSaldo === 'zero' ? 0 : latestSalary.salario,
-          saldo: latestSalary.modoSaldo === 'zero' ? 0 : latestSalary.salario,
+        const income = latestSalary.modoSaldo === 'zero' ? 0 : latestSalary.salario
+        const carried = {
+          salario: income,
+          saldo: previousSalary.saldo + income,
+          ajusteTransferencias: Math.min(Math.max(0, previousSalary.saldo), Math.max(0, previousSalary.ajusteTransferencias)),
           moneda: latestSalary.moneda,
           modoSaldo: latestSalary.modoSaldo,
           fuenteId: latestSalary.fuenteId,
@@ -715,7 +720,9 @@ async function loadBootstrap(userId: string, prisma: Prisma.TransactionClient, m
           tipo: latestSalary.tipo,
           fecha: toMonthDate(monthKey),
           usuarioId: userId,
-        })
+        }
+        carriedSalaries.push(carried)
+        previousSalary = { ...previousSalary, ...carried }
       }
       month.setUTCMonth(month.getUTCMonth() + 1)
     }
@@ -888,6 +895,7 @@ async function writeSyncRecord(userId: string, operation: SyncOperation, tx: Pri
           id: entry.id,
           salario: Number(entry.amount ?? 0),
           saldo: Number(entry.balance ?? entry.amount ?? 0),
+          ajusteTransferencias: Number(entry.transferAdjustment ?? 0),
           moneda: String(source?.moneda ?? entry.currencyCode ?? 'USD').trim().toUpperCase() || 'USD',
           modoSaldo: entry.balanceMode === 'zero' ? 'zero' : 'fixed',
           fecha: toMonthDate(String(entry.month ?? toMonthString(new Date()))),

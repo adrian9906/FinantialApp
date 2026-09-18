@@ -1,4 +1,4 @@
-import { getPlannedExpenseTotal, getPlannedWantTotal, type AllocationFormula, type BootstrapPayload, type Transaction } from '@plata/shared'
+import { getPlannedExpenseTotal, getPlannedWantTotal, getSalaryPlanningBase, type AllocationFormula, type BootstrapPayload, type Transaction } from '@plata/shared'
 import { isVoiceExpenseCategory, isVoiceWantCategory } from './voice-parser.ts'
 import { reconcileIncomeAccountCharge } from './income-account.ts'
 import { validatePlannedMovement } from './planned-movement-validation.ts'
@@ -27,7 +27,7 @@ export function prepareVoiceBatch(snapshot: BootstrapPayload, inputs: Transactio
     if (percentage === 0) throw new Error('Esa sección está desactivada para esta cuenta.')
     const period = transactions.filter((entry) => entry.incomeSourceId === source.id)
     const plannedTotal = input.type === 'expense' ? getPlannedExpenseTotal(period) : getPlannedWantTotal(period)
-    const error = validatePlannedMovement({ amount: input.amount, plannedTotal, budget: salary.amount * percentage / 100, balance: Number(salary.balance ?? salary.amount) })
+    const error = validatePlannedMovement({ amount: input.amount, plannedTotal, budget: getSalaryPlanningBase(salary) * percentage / 100, balance: Number(salary.balance ?? salary.amount) })
     if (error) throw new Error(error)
     const transaction = { ...input, incomeSourceName: source.name, isCash: source.isCash !== false }
     salaries = reconcileIncomeAccountCharge(salaries, undefined, transaction)

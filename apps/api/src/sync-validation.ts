@@ -16,7 +16,7 @@ const balanceMode = z.enum(['fixed', 'zero'])
 const planning = z.object({ amount, itemName: text, category: text, status: z.enum(['pending', 'checked']), date, unnecessary: z.boolean().optional(), ...account })
 const hostedImageUrl = z.string().url().max(2_000).refine((value) => /^https:\/\//i.test(value), 'La imagen debe usar una URL HTTPS.')
 const schemas = {
-  salaries: z.object({ id, amount, month, balance: z.number().finite().optional(), currencyCode: currencyCode.optional(), balanceMode: balanceMode.optional(), sourceId: id.optional(), sourceName: text.optional(), kind: z.enum(['recurring', 'one-off']).optional() }),
+  salaries: z.object({ id, amount, month, balance: z.number().finite().optional(), transferAdjustment: z.number().finite().optional(), currencyCode: currencyCode.optional(), balanceMode: balanceMode.optional(), sourceId: id.optional(), sourceName: text.optional(), kind: z.enum(['recurring', 'one-off']).optional() }),
   incomeSources: z.object({ id, name: text, recurring: z.boolean(), archived: z.boolean().optional(), currencyCode: currencyCode.optional(), balanceMode: balanceMode.optional(), isCash: z.boolean().optional() }),
   transactions: z.object({ id, amount, type: z.enum(['expense', 'want', 'saving']), description: text.optional(), date, createdAt: date.optional(), place: place.optional(), attachments: attachments.optional(), isCash: z.boolean().optional(), ...account }),
   debts: z.object({ id, direction: z.enum(['payable', 'receivable']).optional(), counterparty: text.optional(), amount, history: text, startDate: date, endDate: date, interest: amount.optional(), paidAmount: amount, remainingAmount: amount, progress: z.number().finite(), isSettled: z.boolean(), payments: z.array(payment).max(10000).optional(), ...account }),
@@ -49,7 +49,7 @@ export function getLegacySyncOperation(operation: SyncOperation): SyncOperation 
   if (!operation.value) return operation
   const value = { ...operation.value } as Record<string, unknown>
   if (operation.collection === 'salaries') {
-    delete value.balance; delete value.currencyCode; delete value.balanceMode
+    delete value.balance; delete value.transferAdjustment; delete value.currencyCode; delete value.balanceMode
   } else if (operation.collection === 'incomeSources') {
     delete value.currencyCode; delete value.balanceMode; delete value.isCash
   } else {

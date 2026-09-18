@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState, type ChangeEvent, type Dispatch, type ReactNode, type SetStateAction } from 'react'
 import { toast } from 'sonner'
 import { VoiceSettings } from '@/components/voice/VoiceSettings'
-import { getFinancialPeriodStart, getFormulaBudgets } from '@plata/shared'
+import { getFinancialPeriodStart, getFormulaBudgets, getSalaryPlanningBase } from '@plata/shared'
 
 import {
   AlertDialog,
@@ -262,7 +262,7 @@ function FormulaInputs({
 
 /** Shows the real amounts the percentages produce for this month's income. */
 function FormulaPreview({ draftFormula, account }: { draftFormula: AllocationFormula; account?: IncomeAccountView }) {
-  const income = Number(account?.salary.amount ?? 0)
+  const income = account ? getSalaryPlanningBase(account.salary) : 0
   const budgets = getFormulaBudgets(income, draftFormula)
   const currency = getCurrencyByCode(account?.salary.currencyCode)
   const formatAccountMoney = (value: number) => formatMoneyWithCode(value, currency)
