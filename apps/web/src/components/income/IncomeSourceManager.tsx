@@ -18,7 +18,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { convertUsdToInput, ensureCurrencyPreference, formatMoneyWithCode, getCurrencyByCode } from '@/lib/currency'
 import { useFinanceStore } from '@/store/financeStore'
 import { usePreferencesStore } from '@/store/preferencesStore'
-import { getIncomesForMonth, getMonthKey, normalizeSalaryHistory } from '@plata/shared'
+import { getIncomesForMonth, getMonthKey, getSalaryPlanningBase, normalizeSalaryHistory } from '@plata/shared'
 import { isSavingsIncomeSource } from '@/lib/account-savings'
 
 export function IncomeSourceManager() {
@@ -210,6 +210,7 @@ export function IncomeSourceManager() {
             const currentIncome = currentIncomes.find((entry) => entry.sourceId === source.id)
             const latestIncome = salaryHistory.find((entry) => entry.sourceId === source.id)
             const accountCurrency = getCurrencyByCode(source.currencyCode ?? currentIncome?.currencyCode ?? latestIncome?.currencyCode ?? activeCurrencyCode)
+            const accountIncome = currentIncome ? getSalaryPlanningBase(currentIncome) : latestIncome?.amount ?? 0
             const accountBalance = currentIncome?.balance ?? currentIncome?.amount ?? 0
 
             return (
@@ -221,9 +222,12 @@ export function IncomeSourceManager() {
                   <div className="min-w-0">
                     <p className="truncate text-sm font-medium text-on-surface">{source.name}</p>
                     <p className="mt-1 text-2xl font-semibold tracking-tight text-on-surface">
-                      {formatMoneyWithCode(accountBalance, accountCurrency)}
+                      {formatMoneyWithCode(accountIncome, accountCurrency)}
                     </p>
-                    <p className="text-xs text-muted-gray">Saldo disponible · {accountCurrency.name}</p>
+                    <p className="text-xs text-muted-gray">Ingreso del mes · {accountCurrency.name}</p>
+                    <p className="mt-1 text-xs text-medium-gray">
+                      Saldo disponible: {formatMoneyWithCode(accountBalance, accountCurrency)}
+                    </p>
                   </div>
                   <div className="flex shrink-0 gap-1">
                     <Button size="sm" variant="ghost" aria-label={`Editar ${source.name}`} onClick={() => openEdit(source.id)}>

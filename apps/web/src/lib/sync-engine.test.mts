@@ -64,6 +64,11 @@ try {
   await syncNow('test-user')
   assert.equal((await readSyncDocument('test-user')).operations.length, 0)
 
+  await syncNow('test-user', 'startup')
+  assert.equal(getSyncProgress().visible, true, 'el arranque conectado muestra el indicador compacto')
+  await syncNow('test-user')
+  assert.equal(getSyncProgress().visible, false, 'la sincronización rutinaria permanece silenciosa')
+
   // A remote download and a local edit can overlap. Both rows must survive.
   const beforeOverlap = (await readSyncDocument('test-user')).snapshot
   const localSalary = { id: 'local-salary', amount: 10, balance: 10, month: '2026-09', currencyCode: 'USD' }

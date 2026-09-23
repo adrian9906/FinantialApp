@@ -38,6 +38,7 @@ const expense: Transaction = {
 
 const charged = reconcileIncomeAccountCharge(salaries, undefined, expense)
 assert.equal(charged.find((salary) => salary.id === 'usd')?.balance, 90)
+assert.equal(charged.find((salary) => salary.id === 'usd')?.amount, 100, 'el gasto no debe reducir el ingreso original')
 assert.equal(charged.find((salary) => salary.id === 'cup')?.balance, 20)
 
 const edited = reconcileIncomeAccountCharge(charged, expense, { ...expense, amount: 25 })

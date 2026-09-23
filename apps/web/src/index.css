@@ -612,3 +612,22 @@
 .driver-popover.plata-app-tour .driver-popover-arrow-side-bottom {
   border-bottom-color: var(--surface);
 }
+
+@keyframes plata-sync-slide {
+  0% { transform: translateX(-110%); }
+  55% { transform: translateX(90%); }
+  100% { transform: translateX(240%); }
+}
+
+.plata-sync-indeterminate {
+  width: 42%;
+  animation: plata-sync-slide 1.25s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .plata-sync-indeterminate {
+    width: 100%;
+    animation: none;
+    opacity: 0.72;
+  }
+}

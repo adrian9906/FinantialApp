@@ -24,7 +24,7 @@ import {
 
 import { buildExpenseDescription, parseExpenseDescription } from '@/lib/expense-utils'
 import { isOnline } from '@/lib/offline'
-import { queueLocalChange, syncNow, waitForCurrentSync } from '@/lib/sync-engine'
+import { queueLocalChange, syncNow, waitForCurrentSync, type SyncReason } from '@/lib/sync-engine'
 import { readSyncDocument } from '@/lib/sync-store'
 import { prepareVoiceBatch, persistPreparedVoiceBatch } from '@/lib/voice-batch'
 import { parseWantDescription } from '@/lib/want-utils'
@@ -48,7 +48,7 @@ interface FinanceStore extends BootstrapPayload {
   hasLoaded: boolean
   loadedKey: string | null
   hydrate: () => Promise<void>
-  syncPendingChanges: (reason?: 'silent' | 'reconnect') => Promise<boolean>
+  syncPendingChanges: (reason?: SyncReason) => Promise<boolean>
   reset: () => void
   addSalary: (salary: Omit<Salary, 'id'>) => Promise<void>
   updateSalary: (id: string, data: Partial<Omit<Salary, 'id'>>) => Promise<void>

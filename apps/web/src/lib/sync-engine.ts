@@ -6,6 +6,8 @@ import { ApiRequestError, isNetworkRequestError, requestJson } from '@/lib/api'
 import { updateSyncDocument } from '@/lib/sync-store'
 
 export type SyncStage = 'idle' | 'preparing' | 'uploading' | 'downloading' | 'done' | 'conflict' | 'failed'
+export type SyncReason = 'silent' | 'startup' | 'reconnect'
+const SYNC_TIMEOUT_MS = 30_000
 
 export interface SyncProgress {
   /** Increments once per sync run, so the UI can tell a new run from a repeat. */
@@ -71,13 +73,13 @@ let rerunVisible = false
 
 async function exchange(operation?: SyncOperation): Promise<SyncResponse> {
   if (!operation) {
-    return requestJson<SyncResponse>('/sync')
+    return requestJson<SyncResponse>('/sync', undefined, { timeoutMs: SYNC_TIMEOUT_MS })
   }
 
   return requestJson<SyncResponse>('/sync', {
     method: 'POST',
     body: JSON.stringify({ protocol: SYNC_PROTOCOL, operation }),
-  })
+  }, { timeoutMs: SYNC_TIMEOUT_MS })
 }
 
 /**
@@ -203,21 +205,21 @@ async function runSync(userId: string, visible: boolean): Promise<SyncDocument |
 
 /**
  * `reason` decides whether the user sees this run. Saving while online uploads
- * silently; reconnecting after being offline shows the progress dialog.
+ * silently; startup and reconnection use the compact progress indicator.
  */
 export function syncNow(
   userId: string,
-  reason: 'silent' | 'reconnect' = 'silent',
+  reason: SyncReason = 'silent',
 ): Promise<SyncDocument | null> {
   if (inFlight) {
     rerunRequested = true
     // A visible request wins: if a reconnect lands while a silent upload is
     // running, the follow-up run still shows its progress.
-    if (reason === 'reconnect') rerunVisible = true
+    if (reason !== 'silent') rerunVisible = true
     return inFlight
   }
 
-  inFlight = runSync(userId, reason === 'reconnect').finally(() => {
+  inFlight = runSync(userId, reason !== 'silent').finally(() => {
     inFlight = null
   })
 
