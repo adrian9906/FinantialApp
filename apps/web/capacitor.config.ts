@@ -9,7 +9,10 @@ const config: CapacitorConfig = {
       enabled: true,
     },
     CapacitorHttp: {
-      enabled: true,
+      // Use the WebView fetch implementation for every API method. The native
+      // patch routes GET and POST through different transports, which can
+      // leave a sync half-finished after Android reconnects to the network.
+      enabled: false,
     },
     SplashScreen: {
       androidSplashResourceName: 'splash',

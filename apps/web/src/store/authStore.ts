@@ -1,7 +1,7 @@
 import { create } from 'zustand'
 import type { AuthCredentials, AuthMode, AuthUser, RegisterPayload } from '@plata/shared'
 
-import { isNetworkRequestError, requestJson } from '@/lib/api'
+import { ApiRequestError, isNetworkRequestError, requestJson } from '@/lib/api'
 import { clearCachedAuthUser, clearCachedBootstrap, isOnline, persistCachedAuthUser, readCachedAuthUser } from '@/lib/offline'
 
 const GUEST_AUTH_STORAGE_KEY = 'plata-auth-mode'
@@ -12,11 +12,13 @@ interface AuthStore {
   user: AuthUser | null
   isChecking: boolean
   hasChecked: boolean
+  sessionExpired: boolean
   checkSession: () => Promise<void>
   login: (payload: AuthCredentials) => Promise<void>
   loginWithGoogle: (idToken: string, rememberMe?: boolean) => Promise<void>
   register: (payload: RegisterPayload) => Promise<void>
   continueAsGuest: () => void
+  expireSession: () => void
   logout: () => Promise<void>
 }
 
@@ -57,6 +59,7 @@ function setAuthenticatedUser(set: (partial: Partial<AuthStore>) => void, user: 
     user,
     isChecking: false,
     hasChecked: true,
+    sessionExpired: false,
   })
 }
 
@@ -65,6 +68,7 @@ export const useAuthStore = create<AuthStore>()((set) => ({
   user: null,
   isChecking: true,
   hasChecked: false,
+  sessionExpired: false,
   checkSession: async () => {
     set({ isChecking: true })
 
@@ -75,6 +79,7 @@ export const useAuthStore = create<AuthStore>()((set) => ({
       return
     }
 
+    let sessionExpired: boolean
     try {
       const payload = await requestJson<{ user: AuthUser }>('/auth/me')
       setAuthenticatedUser(set, payload.user)
@@ -94,6 +99,11 @@ export const useAuthStore = create<AuthStore>()((set) => ({
         })
         return
       }
+
+      sessionExpired = cachedUser !== null
+        && hasStoredToken()
+        && error instanceof ApiRequestError
+        && error.status === 401
     }
 
     removeStoredToken()
@@ -104,6 +114,7 @@ export const useAuthStore = create<AuthStore>()((set) => ({
       user: null,
       isChecking: false,
       hasChecked: true,
+      sessionExpired,
     })
   },
   loginWithGoogle: async (idToken: string, rememberMe = true) => {
@@ -141,6 +152,21 @@ export const useAuthStore = create<AuthStore>()((set) => ({
       user: null,
       isChecking: false,
       hasChecked: true,
+      sessionExpired: false,
+    })
+  },
+  expireSession: () => {
+    // Deliberately keep the per-user IndexedDB sync document. Logging in again
+    // with the same account resumes the pending queue without losing a record.
+    removeStoredToken()
+    persistGuestMode(false)
+    clearCachedAuthUser()
+    set({
+      authMode: 'anonymous',
+      user: null,
+      isChecking: false,
+      hasChecked: true,
+      sessionExpired: true,
     })
   },
   logout: async () => {
@@ -169,6 +195,7 @@ export const useAuthStore = create<AuthStore>()((set) => ({
       user: null,
       isChecking: false,
       hasChecked: true,
+      sessionExpired: false,
     })
   },
 }))

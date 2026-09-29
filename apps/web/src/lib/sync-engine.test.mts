@@ -64,6 +64,18 @@ try {
   await syncNow('test-user')
   assert.equal((await readSyncDocument('test-user')).operations.length, 0)
 
+  calls = 0
+  globalThis.fetch = async (_url, init) => {
+    calls++
+    if (calls === 1) throw new TypeError('Failed to fetch')
+    return new Response(JSON.stringify({
+      protocol: SYNC_PROTOCOL, snapshot, versions: { 'transactions/expense-1': 'version-1' },
+      acknowledged: init?.method === 'POST' ? [JSON.parse(String(init.body)).operation.id] : [],
+    }))
+  }
+  await syncNow('test-user')
+  assert.equal(calls, 2, 'un fallo temporal de red debe reintentarse automáticamente')
+
   await syncNow('test-user', 'startup')
   assert.equal(getSyncProgress().visible, true, 'el arranque conectado muestra el indicador compacto')
   await syncNow('test-user')
@@ -141,7 +153,17 @@ try {
   assert.equal(useFinanceStore.getState().loadedKey, 'user:test-user')
   assert.deepEqual(useFinanceStore.getState().transactions, [expense])
   assert.ok((await readSyncDocument('test-user')).operations.length > 0)
-  console.log('Sync engine: conserva gastos ante 400, no reintenta de inmediato, recupera cola y gestiona rechazos de fondo')
+
+  useAuthStore.setState({ authMode: 'authenticated', user: { id: 'test-user', name: 'Test', email: 'test@example.com' } })
+  globalThis.fetch = async () => new Response(JSON.stringify({ error: 'No autorizado.' }), { status: 401 })
+  await assert.rejects(
+    useFinanceStore.getState().syncPendingChanges('startup'),
+    (error: unknown) => error instanceof ApiRequestError && error.status === 401,
+  )
+  assert.equal(useAuthStore.getState().authMode, 'anonymous', 'una sesión vencida debe pedir acceso otra vez')
+  assert.ok((await readSyncDocument('test-user')).operations.length > 0, 'volver a iniciar sesión no debe borrar la cola local')
+
+  console.log('Sync engine: conserva gastos, reintenta red y protege la cola al vencer la sesión')
 } finally {
   globalThis.window = originalWindow
   globalThis.fetch = originalFetch

@@ -7,7 +7,8 @@ import { updateSyncDocument } from '@/lib/sync-store'
 
 export type SyncStage = 'idle' | 'preparing' | 'uploading' | 'downloading' | 'done' | 'conflict' | 'failed'
 export type SyncReason = 'silent' | 'startup' | 'reconnect'
-const SYNC_TIMEOUT_MS = 30_000
+const SYNC_TIMEOUT_MS = 60_000
+const SYNC_RETRY_DELAYS_MS = [1_500, 4_000]
 
 export interface SyncProgress {
   /** Increments once per sync run, so the UI can tell a new run from a repeat. */
@@ -71,7 +72,7 @@ let inFlight: Promise<SyncDocument | null> | null = null
 let rerunRequested = false
 let rerunVisible = false
 
-async function exchange(operation?: SyncOperation): Promise<SyncResponse> {
+async function exchangeOnce(operation?: SyncOperation): Promise<SyncResponse> {
   if (!operation) {
     return requestJson<SyncResponse>('/sync', undefined, { timeoutMs: SYNC_TIMEOUT_MS })
   }
@@ -80,6 +81,27 @@ async function exchange(operation?: SyncOperation): Promise<SyncResponse> {
     method: 'POST',
     body: JSON.stringify({ protocol: SYNC_PROTOCOL, operation }),
   }, { timeoutMs: SYNC_TIMEOUT_MS })
+}
+
+function isRetryableExchangeError(error: unknown) {
+  return isNetworkRequestError(error)
+    || (error instanceof ApiRequestError && (error.status === 408 || error.status === 429 || error.status >= 500))
+}
+
+function wait(delayMs: number) {
+  return new Promise<void>((resolve) => window.setTimeout(resolve, delayMs))
+}
+
+async function exchange(operation?: SyncOperation): Promise<SyncResponse> {
+  for (let attempt = 0; ; attempt += 1) {
+    try {
+      return await exchangeOnce(operation)
+    } catch (error) {
+      const retryDelay = SYNC_RETRY_DELAYS_MS[attempt]
+      if (retryDelay === undefined || !isRetryableExchangeError(error)) throw error
+      await wait(retryDelay)
+    }
+  }
 }
 
 /**
@@ -193,7 +215,9 @@ async function runSync(userId: string, visible: boolean): Promise<SyncDocument |
       total: queued,
       pending: document.operations.length,
       conflicts: document.conflicts.length,
-      message: error instanceof ApiRequestError && (error.status === 400 || error.status === 426)
+      message: error instanceof ApiRequestError && error.status === 401
+        ? 'Tu sesión venció. Inicia sesión de nuevo; tus datos siguen guardados en el móvil.'
+        : error instanceof ApiRequestError && (error.status === 400 || error.status === 426)
         ? error.message
         : isNetworkRequestError(error)
         ? 'Se interrumpió la sincronización. Tus cambios pendientes siguen guardados.'

@@ -23,6 +23,7 @@ import {
 } from '@plata/shared'
 
 import { buildExpenseDescription, parseExpenseDescription } from '@/lib/expense-utils'
+import { ApiRequestError } from '@/lib/api'
 import { isOnline } from '@/lib/offline'
 import { queueLocalChange, syncNow, waitForCurrentSync, type SyncReason } from '@/lib/sync-engine'
 import { readSyncDocument } from '@/lib/sync-store'
@@ -30,6 +31,8 @@ import { prepareVoiceBatch, persistPreparedVoiceBatch } from '@/lib/voice-batch'
 import { parseWantDescription } from '@/lib/want-utils'
 import { applyIncomeMoneyMovement, type IncomeMoneyDestination } from '@/lib/income-money'
 import { reconcileIncomeAccountCharge } from '@/lib/income-account'
+import { resetIncomeCycle } from '@/lib/reset-income-cycle'
+import { reconcileSavingsAccountTransaction } from '@/lib/savings-account-ledger'
 import { ensureCurrencyPreference } from '@/lib/currency'
 import { useAuthStore } from '@/store/authStore'
 import { usePreferencesStore } from '@/store/preferencesStore'
@@ -470,9 +473,12 @@ export const useFinanceStore = create<FinanceStore>()((set, get) => ({
         hasLoaded: true,
         loadedKey: activeKey,
       })
-    } catch {
+    } catch (error) {
       // A rejected change is not an expired session. Keep the device copy and
       // pending queue; logging out here would delete them on a validation error.
+      if (error instanceof ApiRequestError && error.status === 401) {
+        useAuthStore.getState().expireSession()
+      }
       return
     }
   },
@@ -499,8 +505,12 @@ export const useFinanceStore = create<FinanceStore>()((set, get) => ({
       })
 
       return latest.operations.length === 0 && latest.conflicts.length === 0
-    } catch {
+    } catch (error) {
       // Pending operations stay queued for the next attempt.
+      if (error instanceof ApiRequestError && error.status === 401) {
+        useAuthStore.getState().expireSession()
+        throw error
+      }
       return false
     }
   },
@@ -625,10 +635,24 @@ export const useFinanceStore = create<FinanceStore>()((set, get) => ({
       throw new Error('La sección Gustos está desactivada porque su porcentaje es 0%.')
     }
 
-    const created = { ...transaction, id: makeId(transaction.type), createdAt: new Date().toISOString() }
+    const fallbackSource = transaction.type === 'saving' && !transaction.incomeSourceId
+      ? get().incomeSources.find((source) => source.id === preferences.activeIncomeSourceId)
+      : undefined
+    const created = {
+      ...transaction,
+      ...(fallbackSource ? { incomeSourceId: fallbackSource.id, incomeSourceName: fallbackSource.name } : {}),
+      id: makeId(transaction.type),
+      createdAt: new Date().toISOString(),
+    }
     await updateLocalState(set, (state) => ({
       transactions: [created, ...state.transactions],
-      salaries: reconcileIncomeAccountCharge(state.salaries, undefined, created),
+      salaries: reconcileSavingsAccountTransaction(
+        reconcileIncomeAccountCharge(state.salaries, undefined, created),
+        state.incomeSources,
+        undefined,
+        created,
+        preferences.activeIncomeSourceId,
+      ),
     }))
     return created
   },
@@ -665,9 +689,16 @@ export const useFinanceStore = create<FinanceStore>()((set, get) => ({
         const previous = state.transactions.find((entry) => entry.id === id)
         if (!previous) return {}
         const next = { ...previous, ...data }
+        const charged = reconcileIncomeAccountCharge(state.salaries, previous, next)
         return {
           transactions: state.transactions.map((entry) => (entry.id === id ? next : entry)),
-          salaries: reconcileIncomeAccountCharge(state.salaries, previous, next),
+          salaries: reconcileSavingsAccountTransaction(
+            charged,
+            state.incomeSources,
+            previous,
+            next,
+            usePreferencesStore.getState().activeIncomeSourceId,
+          ),
         }
       })
       return
@@ -677,9 +708,16 @@ export const useFinanceStore = create<FinanceStore>()((set, get) => ({
     if (isLocalMutationMode()) {
       await updateLocalState(set, (state) => {
         const previous = state.transactions.find((entry) => entry.id === id)
+        const charged = reconcileIncomeAccountCharge(state.salaries, previous, undefined)
         return {
           transactions: state.transactions.filter((entry) => entry.id !== id),
-          salaries: reconcileIncomeAccountCharge(state.salaries, previous, undefined),
+          salaries: reconcileSavingsAccountTransaction(
+            charged,
+            state.incomeSources,
+            previous,
+            undefined,
+            usePreferencesStore.getState().activeIncomeSourceId,
+          ),
         }
       })
       return
@@ -717,11 +755,15 @@ export const useFinanceStore = create<FinanceStore>()((set, get) => ({
     )
 
     if (isLocalMutationMode()) {
-      await updateLocalState(set, (state) => ({
-        transactions: nextTransactions,
-        savingsGoals: state.savingsGoals.map((goal) => ({ ...goal, currentAmount: 0 })),
-        monthlyPlanningHistory: [snapshot, ...state.monthlyPlanningHistory],
-      }))
+      await updateLocalState(set, (state) => {
+        const resetIncome = resetIncomeCycle(state.salaries, state.incomeSources)
+        return {
+          ...resetIncome,
+          transactions: nextTransactions,
+          savingsGoals: state.savingsGoals.map((goal) => ({ ...goal, currentAmount: 0 })),
+          monthlyPlanningHistory: [snapshot, ...state.monthlyPlanningHistory],
+        }
+      })
       return
     }
   },

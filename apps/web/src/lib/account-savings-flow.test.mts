@@ -22,7 +22,7 @@ function salaryById(id: string) {
   return state.salaries.find((salary) => salary.id === id)!
 }
 
-// El 50% del salario sale de la cuenta y entra al ahorro USD en efectivo.
+// El 50% del salario se asigna al ahorro USD sin alterar el ingreso original.
 const salaryPlan = getAccountSavingsPlan(
   { source: salarySource, salary: salaryById('s1') },
   { salary: 50, cup: 10 },
@@ -40,16 +40,17 @@ state = applyIncomeMoneyMovement(state, {
     recurring: true,
     balanceMode: 'fixed',
   },
+  preserveSourceBalance: true,
 }, makeId)
 
-assert.equal(salaryById('s1').balance, 200, 'se descuenta de la cuenta de origen')
-const usdSavings = state.incomeSources.find((source) => source.name === 'Ahorro USD Efectivo')!
+assert.equal(salaryById('s1').balance, 400, 'el ingreso original permanece intacto')
+const usdSavings = state.incomeSources.find((source) => source.name === 'Ahorro USD')!
 assert.ok(usdSavings, 'se crea la cuenta de ahorro USD')
 assert.equal(usdSavings.isCash, true)
 const usdSavingsSalary = state.salaries.find((salary) => salary.sourceId === usdSavings.id)!
 assert.equal(usdSavingsSalary.balance, 200, 'el dinero llega al ahorro')
 assert.equal(usdSavingsSalary.currencyCode, 'USD')
-console.log('PASS 1: el 50% del salario se descuenta y llega al ahorro USD efectivo')
+console.log('PASS 1: el 50% del salario llega al ahorro USD sin reducir el ingreso original')
 
 // La cuenta CUP de transferencia ahorra en SU propia cuenta, no en la del salario.
 const cupPlan = getAccountSavingsPlan(
@@ -58,7 +59,7 @@ const cupPlan = getAccountSavingsPlan(
   state.incomeSources,
 )!
 assert.equal(cupPlan.amountUsd, 100)
-assert.equal(cupPlan.savingsAccountName, 'Ahorro CUP Transferencia')
+assert.equal(cupPlan.savingsAccountName, 'Ahorro CUP')
 state = applyIncomeMoneyMovement(state, {
   sourceSalaryId: cupPlan.salaryId,
   amountUsd: cupPlan.amountUsd,
@@ -70,37 +71,30 @@ state = applyIncomeMoneyMovement(state, {
     recurring: true,
     balanceMode: 'fixed',
   },
+  preserveSourceBalance: true,
 }, makeId)
 
-const cupSavings = state.incomeSources.find((source) => source.name === 'Ahorro CUP Transferencia')!
+const cupSavings = state.incomeSources.find((source) => source.name === 'Ahorro CUP')!
 assert.notEqual(cupSavings.id, usdSavings.id, 'no se mezcla con el ahorro del salario')
-assert.equal(cupSavings.isCash, false, 'conserva la forma de pago de origen')
+assert.equal(cupSavings.isCash, false, 'el movimiento conserva la forma de pago indicada')
 const cupSavingsSalary = state.salaries.find((salary) => salary.sourceId === cupSavings.id)!
 assert.equal(cupSavingsSalary.currencyCode, 'CUP', 'conserva la moneda de origen')
 assert.equal(cupSavingsSalary.balance, 100)
-assert.equal(salaryById('s2').balance, 900)
+assert.equal(salaryById('s2').balance, 1000)
 assert.equal(state.salaries.find((salary) => salary.sourceId === usdSavings.id)!.balance, 200, 'el ahorro USD no se toca')
 console.log('PASS 2: la cuenta CUP transferencia ahorra en su propia cuenta, sin mezclar')
 
-// Aplicarlo otra vez acumula en la misma cuenta en vez de duplicarla.
+// La asignación del ciclo ya quedó completa y no se ofrece una segunda vez.
 const againPlan = getAccountSavingsPlan(
   { source: salarySource, salary: salaryById('s1') },
   { salary: 50 },
   state.incomeSources,
-)!
-assert.equal(againPlan.existingSavingsSourceId, usdSavings.id, 'reutiliza la cuenta existente')
-state = applyIncomeMoneyMovement(state, {
-  sourceSalaryId: againPlan.salaryId,
-  amountUsd: againPlan.amountUsd,
-  month: '2026-09',
-  destination: {
-    sourceId: againPlan.existingSavingsSourceId,
-    currencyCode: againPlan.currencyCode,
-    isCash: againPlan.isCash,
-  },
-}, makeId)
-assert.equal(state.incomeSources.filter((source) => source.name === 'Ahorro USD Efectivo').length, 1, 'no se duplica la cuenta')
-assert.equal(state.salaries.find((salary) => salary.sourceId === usdSavings.id)!.balance, 300, 'el ahorro se acumula')
-console.log('PASS 3: aplicar de nuevo reutiliza la cuenta y acumula')
+  state.salaries,
+  '2026-09',
+)
+assert.equal(againPlan, null, 'no permite aplicar dos veces la misma asignación')
+assert.equal(state.incomeSources.filter((source) => source.name === 'Ahorro USD').length, 1, 'no se duplica la cuenta')
+assert.equal(state.salaries.find((salary) => salary.sourceId === usdSavings.id)!.balance, 200, 'el ahorro queda acumulado')
+console.log('PASS 3: la asignación solo se aplica una vez por ciclo')
 
 console.log('Flujo completo de ahorro por cuenta correcto.')

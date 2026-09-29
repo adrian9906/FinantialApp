@@ -46,7 +46,7 @@ export function SyncProgressDialog({ progress }: { progress: SyncProgress }) {
   const title = progress.stage === 'done'
     ? 'Datos actualizados'
     : progress.stage === 'failed'
-      ? 'Sincronización pendiente'
+      ? progress.message || 'Sincronización pendiente'
       : progress.stage === 'downloading'
         ? 'Actualizando datos…'
         : 'Sincronizando…'
@@ -67,7 +67,7 @@ export function SyncProgressDialog({ progress }: { progress: SyncProgress }) {
           ) : (
             <LoaderCircle className="size-3.5 shrink-0 animate-spin text-primary" aria-hidden="true" />
           )}
-          <span className="truncate text-[11px] font-medium tracking-wide">{title}</span>
+          <span className="max-w-[72vw] truncate text-[11px] font-medium tracking-wide" title={title}>{title}</span>
           {isActive && progress.total > 0 ? (
             <span className="ml-auto text-[10px] tabular-nums text-muted-gray">{value}%</span>
           ) : null}

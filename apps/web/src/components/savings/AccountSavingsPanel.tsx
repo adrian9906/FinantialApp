@@ -1,66 +1,63 @@
-import { useMemo, useState } from 'react'
-import { toast } from 'sonner'
+import { useMemo } from 'react'
 import { PiggyBank } from 'lucide-react'
-import { getMonthKey } from '@plata/shared'
-
-import { Button } from '@/components/ui/button'
-import { Card } from '@/components/ui/card'
 import {
-  getAccountSavingsGoals,
-  getAccountSavingsPlans,
-  type AccountSavingsPlan,
-} from '@/lib/account-savings'
+  getFinancialPeriodStart,
+  getSalaryPlanningBase,
+  getTransactionsInFinancialPeriod,
+} from '@plata/shared'
+
+import { Card } from '@/components/ui/card'
+import { getAccountAllocationFormula } from '@/lib/account-savings'
 import { formatMoneyWithCode, getCurrencyByCode } from '@/lib/currency'
 import type { IncomeAccountView } from '@/lib/income-account-view'
 import { useFinanceStore } from '@/store/financeStore'
 import { usePreferencesStore } from '@/store/preferencesStore'
 
 export function AccountSavingsPanel({ accounts }: { accounts: IncomeAccountView[] }) {
-  const salaries = useFinanceStore((state) => state.salaries)
-  const incomeSources = useFinanceStore((state) => state.incomeSources)
-  const transferIncomeMoney = useFinanceStore((state) => state.transferIncomeMoney)
+  const transactions = useFinanceStore((state) => state.transactions)
+  const monthlyPlanningHistory = useFinanceStore((state) => state.monthlyPlanningHistory)
+  const formula = usePreferencesStore((state) => state.formula)
   const accountSavingsFormulas = usePreferencesStore((state) => state.accountSavingsFormulas)
-  const [applyingId, setApplyingId] = useState<string | null>(null)
 
-  const month = getMonthKey()
-  const plans = useMemo(
-    () => getAccountSavingsPlans(accounts, accountSavingsFormulas, incomeSources, salaries, month),
-    [accounts, accountSavingsFormulas, incomeSources, month, salaries],
-  )
-  const goals = useMemo(
-    () => getAccountSavingsGoals(accounts, accountSavingsFormulas, incomeSources, salaries, month),
-    [accounts, accountSavingsFormulas, incomeSources, month, salaries],
-  )
+  const goals = useMemo(() => {
+    const periodStart = getFinancialPeriodStart(monthlyPlanningHistory)
+    const latestReset = monthlyPlanningHistory.find((entry) => entry.createdAt === periodStart)
+    const periodTransactions = getTransactionsInFinancialPeriod(transactions, {
+      periodStart,
+      periodEnd: new Date().toISOString().slice(0, 10),
+      strictSameDayBoundary: Boolean(latestReset),
+      excludedTransactionIds: latestReset?.savingTransactionIds,
+    })
 
-  async function handleApply(plan: AccountSavingsPlan) {
-    if (applyingId) return
-    setApplyingId(plan.sourceId)
-    try {
-      // Savings keep the origin's currency and payment rail, so each combination
-      // lands in its own savings account instead of a single shared one.
-      await transferIncomeMoney({
-        sourceSalaryId: plan.salaryId,
-        amountUsd: plan.amountUsd,
-        month,
-        preserveSourceBalance: true,
-        destination: {
-          sourceId: plan.existingSavingsSourceId,
-          newSourceName: plan.existingSavingsSourceId ? undefined : plan.savingsAccountName,
-          currencyCode: plan.currencyCode,
-          isCash: plan.isCash,
-          recurring: true,
-          balanceMode: 'fixed',
-        },
-      })
-      toast.success(`Se movieron ${formatMoneyWithCode(plan.amountUsd, getCurrencyByCode(plan.currencyCode))} a «${plan.savingsAccountName}».`)
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : 'No se pudo aplicar el ahorro.')
-    } finally {
-      setApplyingId(null)
-    }
-  }
+    return accounts.flatMap((account) => {
+      const accountFormula = getAccountAllocationFormula(accountSavingsFormulas, account.source.id, formula)
+      if (accountFormula.savings <= 0) return []
 
-  if (plans.length === 0 && goals.length === 0) return null
+      const target = getSalaryPlanningBase(account.salary) * (accountFormula.savings / 100)
+      if (target <= 0) return []
+
+      const saved = periodTransactions
+        .filter((transaction) => transaction.type === 'saving'
+          && transaction.amount > 0
+          && transaction.incomeSourceId === account.source.id)
+        .reduce((sum, transaction) => sum + transaction.amount, 0)
+      const progress = Math.min(100, Math.round((saved / target) * 100))
+
+      return [{
+        sourceId: account.source.id,
+        sourceName: account.source.name,
+        currencyCode: account.salary.currencyCode ?? account.source.currencyCode ?? 'USD',
+        rate: accountFormula.savings,
+        target,
+        saved,
+        remaining: Math.max(0, target - saved),
+        progress,
+        isComplete: saved + 1e-9 >= target,
+      }]
+    })
+  }, [accountSavingsFormulas, accounts, formula, monthlyPlanningHistory, transactions])
+
+  if (goals.length === 0) return null
 
   return (
     <Card className="border-graphite bg-surface p-5 shadow-vault">
@@ -71,77 +68,41 @@ export function AccountSavingsPanel({ accounts }: { accounts: IncomeAccountView[
         <div className="min-w-0">
           <h2 className="text-lg font-semibold text-on-surface">Ahorro por cuenta</h2>
           <p className="mt-1 text-sm text-muted-gray">
-            Según la fórmula que definiste en Ajustes. La asignación mantiene intacto el ingreso registrado
-            y suma el ahorro a la cuenta interna de su moneda.
+            La fórmula define la meta. Cada ahorro que registras en una cuenta actualiza su progreso automáticamente.
           </p>
         </div>
       </div>
 
-      {goals.length > 0 ? (
-        <div className="mt-4 space-y-2">
-          <p className="text-xs uppercase tracking-[0.14em] text-medium-gray">Meta por cuenta</p>
-          {goals.map((goal) => {
-            const currency = getCurrencyByCode(goal.currencyCode)
-            return (
-              <div key={goal.sourceId} className="rounded-2xl border border-graphite bg-surface-container-low p-3">
-                <div className="flex flex-wrap items-center justify-between gap-2">
-                  <p className="min-w-0 truncate text-sm font-medium text-on-surface">
-                    {goal.sourceName} · {goal.rate}%
-                  </p>
-                  <span className={`rounded-full px-2 py-0.5 text-[11px] ${goal.isComplete ? 'bg-success/10 text-success' : 'bg-primary/10 text-primary'}`}>
-                    {goal.isComplete ? 'Meta cumplida' : `${goal.progress}% completado`}
-                  </span>
-                </div>
-                <p className="mt-1.5 text-sm tabular-nums text-on-surface">
-                  {formatMoneyWithCode(goal.savedUsd, currency)}
-                  <span className="text-xs font-normal text-muted-gray">
-                    {' '}de {formatMoneyWithCode(goal.goalUsd, currency)}
-                  </span>
-                </p>
-                <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-surface-container-highest">
-                  <div
-                    className={`h-full rounded-full transition-[width] duration-700 ${goal.isComplete ? 'bg-success' : 'bg-primary'}`}
-                    style={{ width: `${goal.progress}%` }}
-                  />
-                </div>
-                <p className="mt-1.5 text-[11px] text-muted-gray">
-                  {goal.isComplete
-                    ? `Guardado en «${goal.savingsAccountName}».`
-                    : `Faltan ${formatMoneyWithCode(goal.remainingUsd, currency)} en «${goal.savingsAccountName}».`}
-                </p>
-              </div>
-            )
-          })}
-        </div>
-      ) : null}
-
       <div className="mt-4 space-y-2">
-        {plans.length > 0 ? (
-          <p className="text-xs uppercase tracking-[0.14em] text-medium-gray">Pendiente de aplicar</p>
-        ) : null}
-        {plans.map((plan) => {
-          const currency = getCurrencyByCode(plan.currencyCode)
+        {goals.map((goal) => {
+          const currency = getCurrencyByCode(goal.currencyCode)
           return (
-            <div
-              key={plan.sourceId}
-              className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-graphite bg-surface-container-low p-3"
-            >
-              <div className="min-w-0">
-                <p className="truncate text-sm font-medium text-on-surface">
-                  {plan.sourceName} · {plan.rate}%
+            <div key={goal.sourceId} className="rounded-2xl border border-graphite bg-surface-container-low p-3">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <p className="min-w-0 truncate text-sm font-medium text-on-surface">
+                  {goal.sourceName} · {goal.rate}%
                 </p>
-                <p className="mt-0.5 truncate text-xs text-muted-gray">
-                  {formatMoneyWithCode(plan.amountUsd, currency)} → {plan.savingsAccountName}
-                </p>
+                <span className={`rounded-full px-2 py-0.5 text-[11px] ${goal.isComplete ? 'bg-success/10 text-success' : 'bg-primary/10 text-primary'}`}>
+                  {goal.isComplete ? 'Meta cumplida' : `${goal.progress}% completado`}
+                </span>
               </div>
-              <Button
-                size="sm"
-                loading={applyingId === plan.sourceId}
-                disabled={applyingId !== null && applyingId !== plan.sourceId}
-                onClick={() => void handleApply(plan)}
-              >
-                Aplicar
-              </Button>
+              <p className="mt-1.5 text-sm tabular-nums text-on-surface">
+                {formatMoneyWithCode(goal.saved, currency)}
+                <span className="text-xs font-normal text-muted-gray">
+                  {' '}de {formatMoneyWithCode(goal.target, currency)}
+                </span>
+              </p>
+              <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-surface-container-highest">
+                <div
+                  className={`h-full rounded-full transition-[width] duration-700 ${goal.isComplete ? 'bg-success' : 'bg-primary'}`}
+                  style={{ width: `${goal.progress}%` }}
+                />
+              </div>
+              <p className="mt-1.5 text-[11px] text-muted-gray">
+                {goal.isComplete
+                  ? 'La meta se completó con los ahorros registrados en esta cuenta.'
+                  : `Faltan ${formatMoneyWithCode(goal.remaining, currency)} por registrar.`}
+              </p>
             </div>
           )
         })}

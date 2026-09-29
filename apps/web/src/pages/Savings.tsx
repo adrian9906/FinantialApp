@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { buildSavingWithdrawalDescription, getMonthKey, getSalaryPlanningBase, parseSavingDescription } from '@plata/shared'
+import { buildSavingWithdrawalDescription, getMonthKey, getSalaryPlanningBase, getSavingsFundingBreakdown, getWishlistReservedAmount, isWishlistPurchased, parseSavingDescription } from '@plata/shared'
 import { useFinanceStore } from '@/store/financeStore'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -11,7 +11,6 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, Di
 import { Plus, Trash2, PiggyBank, Pencil, ArrowUpRight } from 'lucide-react'
 import { useMonthlyOverview } from '@/lib/useMonthlyOverview'
 import { formatMoney, formatMoneyWithCode, getCurrencyByCode, useCurrencyInput } from '@/lib/currency'
-import { Badge } from '@/components/ui/badge'
 import { exportSavingsReport } from '@/lib/reportExports'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { usePreferencesStore } from '@/store/preferencesStore'
@@ -21,25 +20,14 @@ import { IncomeAccountSelect } from '@/components/income/IncomeAccountSelect'
 import { findSavingsAccount, getAccountAllocationFormula, getSavingsAccountBalance } from '@/lib/account-savings'
 import { useActiveIncomeAccount } from '@/lib/useActiveIncomeAccount'
 
-const GOAL_CATEGORY_LABELS = {
-  emergency: 'Emergencia',
-  travel: 'Viaje',
-  rent: 'Renta',
-  phone: 'Teléfono',
-  custom: 'Personalizada',
-} as const
-
 export default function Savings() {
   const transactions = useFinanceStore((state) => state.transactions)
   const addTransaction = useFinanceStore((state) => state.addTransaction)
   const updateTransaction = useFinanceStore((state) => state.updateTransaction)
   const removeTransaction = useFinanceStore((state) => state.removeTransaction)
-  const allSavingsGoals = useFinanceStore((state) => state.savingsGoals)
   const salaries = useFinanceStore((state) => state.salaries)
   const incomeSources = useFinanceStore((state) => state.incomeSources)
-  const addSavingsGoal = useFinanceStore((state) => state.addSavingsGoal)
-  const updateSavingsGoal = useFinanceStore((state) => state.updateSavingsGoal)
-  const removeSavingsGoal = useFinanceStore((state) => state.removeSavingsGoal)
+  const wishlist = useFinanceStore((state) => state.wishlist)
   const overview = useMonthlyOverview()
   const moneyInput = useCurrencyInput()
   const formula = usePreferencesStore((state) => state.formula)
@@ -55,16 +43,6 @@ export default function Savings() {
   const savingsCurrencyCode = activeCurrencyCode === 'CUP' ? 'CUP' : 'USD'
   const selectedSavingsSource = findSavingsAccount(incomeSources, savingsCurrencyCode, true)
   const sourceById = useMemo(() => new Map(incomeSources.map((source) => [source.id, source])), [incomeSources])
-  const savingsGoals = useMemo(
-    () => allSavingsGoals.filter((goal) => {
-      if (goal.incomeSourceId === selectedSavingsSource?.id) return true
-      const legacySource = goal.incomeSourceId ? sourceById.get(goal.incomeSourceId) : undefined
-      return Boolean(legacySource)
-        && !legacySource!.name.toLocaleLowerCase('es').startsWith('ahorro ')
-        && (legacySource!.currencyCode ?? 'USD').trim().toUpperCase() === savingsCurrencyCode
-    }),
-    [allSavingsGoals, savingsCurrencyCode, selectedSavingsSource?.id, sourceById],
-  )
   const selectedFormula = getAccountAllocationFormula(accountSavingsFormulas, selectedAccountId, formula)
   const wantsEnabled = selectedFormula.wants > 0
   const [open, setOpen] = useState(false)
@@ -73,17 +51,6 @@ export default function Savings() {
   const [formError, setFormError] = useState<string | null>(null)
   const [isSaving, setIsSaving] = useState(false)
   const [isExporting, setIsExporting] = useState(false)
-  const [goalOpen, setGoalOpen] = useState(false)
-  const [goalEditId, setGoalEditId] = useState<string | null>(null)
-  const [goalError, setGoalError] = useState<string | null>(null)
-  const [isGoalSaving, setIsGoalSaving] = useState(false)
-  const [goalForm, setGoalForm] = useState({
-    name: '',
-    category: 'emergency' as 'emergency' | 'travel' | 'rent' | 'phone' | 'custom',
-    targetAmount: '',
-    currentAmount: '',
-    monthlyContribution: '',
-  })
   const [withdrawOpen, setWithdrawOpen] = useState(false)
   const [withdrawError, setWithdrawError] = useState<string | null>(null)
   const [isWithdrawing, setIsWithdrawing] = useState(false)
@@ -92,8 +59,6 @@ export default function Savings() {
     target: 'purpose' as 'expense' | 'want' | 'purpose',
     itemName: '',
     date: getTodayDateKey(),
-    sourceGoalId: '',
-    sourceGoalName: '',
   })
 
   function resetForm() {
@@ -108,22 +73,8 @@ export default function Savings() {
       target: 'purpose',
       itemName: '',
       date: getTodayDateKey(),
-      sourceGoalId: '',
-      sourceGoalName: '',
     })
     setWithdrawError(null)
-  }
-
-  function resetGoalForm() {
-    setGoalForm({
-      name: '',
-      category: 'emergency',
-      targetAmount: '',
-      currentAmount: '',
-      monthlyContribution: '',
-    })
-    setGoalEditId(null)
-    setGoalError(null)
   }
 
   function handleOpen(entry?: (typeof transactions)[number]) {
@@ -138,31 +89,12 @@ export default function Savings() {
     setOpen(true)
   }
 
-  function handleOpenGoal(entry?: typeof savingsGoals[number]) {
-    if (entry) {
-      setGoalEditId(entry.id)
-      setGoalForm({
-        name: entry.name,
-        category: entry.category,
-        targetAmount: moneyInput.fromUsd(entry.targetAmount),
-        currentAmount: moneyInput.fromUsd(entry.currentAmount),
-        monthlyContribution: moneyInput.fromUsd(entry.monthlyContribution),
-      })
-    } else {
-      resetGoalForm()
-    }
-    setGoalError(null)
-    setGoalOpen(true)
-  }
-
-  function handleOpenWithdraw(goal?: typeof savingsGoals[number]) {
+  function handleOpenWithdraw() {
     setWithdrawForm({
-      amount: moneyInput.fromUsd(Math.max(0, goal?.currentAmount ?? accountAccumulatedSavings)),
+      amount: moneyInput.fromUsd(Math.max(0, accountAccumulatedSavings)),
       target: 'purpose',
       itemName: '',
       date: getTodayDateKey(),
-      sourceGoalId: goal?.id ?? '',
-      sourceGoalName: goal?.name ?? '',
     })
     setWithdrawError(null)
     setWithdrawOpen(true)
@@ -224,81 +156,21 @@ export default function Savings() {
   const generatedSavingsBalance = selectedSavingsSource
     ? getSavingsAccountBalance(salaries, selectedSavingsSource.id, getMonthKey())
     : 0
-  const accountAccumulatedSavings = generatedSavingsBalance
-    + savingsList.reduce((sum, transaction) => sum + transaction.amount, 0)
-  const availableSavings = Math.max(0, accountAccumulatedSavings)
-  const assignedToGoals = savingsGoals.reduce((sum, goal) => sum + goal.currentAmount, 0)
-  const freeSavings = Math.max(0, availableSavings - assignedToGoals)
-  const selectedSourceGoal = withdrawForm.sourceGoalId
-    ? savingsGoals.find((goal) => goal.id === withdrawForm.sourceGoalId) ?? null
-    : null
-  const availableWithdrawAmount = selectedSourceGoal
-    ? Math.max(0, selectedSourceGoal.currentAmount)
-    : availableSavings
-
-  async function handleSaveGoal() {
-    if (isGoalSaving) return
-
-    const targetAmount = moneyInput.toUsd(goalForm.targetAmount)
-    const currentAmount = moneyInput.toUsd(goalForm.currentAmount || 0)
-    const monthlyContribution = moneyInput.toUsd(goalForm.monthlyContribution || 0)
-
-    if (!goalForm.name.trim()) {
-      setGoalError('El nombre de la meta es obligatorio.')
-      return
-    }
-    if (!Number.isFinite(targetAmount) || targetAmount <= 0) {
-      setGoalError('El monto objetivo debe ser mayor que cero.')
-      return
-    }
-    if (!Number.isFinite(currentAmount) || currentAmount < 0) {
-      setGoalError('El monto actual no puede ser negativo.')
-      return
-    }
-    if (!Number.isFinite(monthlyContribution) || monthlyContribution < 0) {
-      setGoalError('El aporte mensual no puede ser negativo.')
-      return
-    }
-
-    const currentGoalAmount = goalEditId
-      ? savingsGoals.find((goal) => goal.id === goalEditId)?.currentAmount ?? 0
-      : 0
-    const availableForGoal = Math.max(0, freeSavings + currentGoalAmount)
-
-    if (currentAmount > availableForGoal) {
-      setGoalError(`Solo puedes asignar hasta ${formatMoney(availableForGoal)} según el ahorro libre actual.`)
-      return
-    }
-
-    const payload = {
-      name: goalForm.name.trim(),
-      category: goalForm.category,
-      targetAmount,
-      currentAmount,
-      monthlyContribution,
-      incomeSourceId: selectedSavingsSource?.id,
-      incomeSourceName: selectedSavingsSource?.name ?? `Ahorro ${savingsCurrencyCode}`,
-    }
-
-    setIsGoalSaving(true)
-
-    try {
-      if (goalEditId) {
-        await updateSavingsGoal(goalEditId, payload)
-      } else {
-        await addSavingsGoal(payload)
-      }
-
-      resetGoalForm()
-      setGoalOpen(false)
-    } finally {
-      setIsGoalSaving(false)
-    }
-  }
+  const currencyWishlist = wishlist
+    .filter((item) => (item.sourceCurrency ?? 'USD').trim().toUpperCase() === savingsCurrencyCode)
+  const purchasedWishlistAmount = currencyWishlist
+    .filter((item) => isWishlistPurchased(item))
+    .reduce((sum, item) => sum + getWishlistReservedAmount(item), 0)
+  const accountAccumulatedSavings = Math.max(0, generatedSavingsBalance - purchasedWishlistAmount)
+  const availableSavings = accountAccumulatedSavings
+  const fundingBreakdown = getSavingsFundingBreakdown(savingsList, currencyWishlist)
+  const borrowedSavings = Math.min(availableSavings, Math.max(0, fundingBreakdown.borrowedBalance))
+  const ownSavings = Math.max(0, availableSavings - borrowedSavings)
+  const availableWithdrawAmount = availableSavings
 
   async function handleWithdraw() {
     if (isWithdrawing) return
-    if (!selectedSourceGoal && withdrawForm.target === 'want' && !wantsEnabled) {
+    if (withdrawForm.target === 'want' && !wantsEnabled) {
       setWithdrawError('No puedes enviar dinero a Gustos porque esa sección tiene una asignación de 0%.')
       return
     }
@@ -310,9 +182,7 @@ export default function Savings() {
     }
     if (amount > availableWithdrawAmount) {
       setWithdrawError(
-        selectedSourceGoal
-          ? `Solo puedes sacar hasta ${formatMoney(availableWithdrawAmount)} del bolsillo ${selectedSourceGoal.name}.`
-          : `Solo puedes sacar hasta ${formatMoney(availableWithdrawAmount)} de tus ahorros.`,
+        `Solo puedes sacar hasta ${formatMoney(availableWithdrawAmount)} de tus ahorros.`,
       )
       return
     }
@@ -322,14 +192,10 @@ export default function Savings() {
     }
 
     const movementDate = withdrawForm.date || new Date().toISOString().slice(0, 10)
-    const withdrawalTarget = selectedSourceGoal ? 'purpose' : withdrawForm.target
     const savingWithdrawal = {
       amount: -amount,
       type: 'saving' as const,
-      description: buildSavingWithdrawalDescription(withdrawalTarget, withdrawForm.itemName, {
-        sourceGoalId: selectedSourceGoal?.id,
-        sourceGoalName: selectedSourceGoal?.name,
-      }),
+      description: buildSavingWithdrawalDescription(withdrawForm.target, withdrawForm.itemName),
       date: movementDate,
       incomeSourceId: selectedAccount?.source.id,
       incomeSourceName: selectedAccount?.source.name,
@@ -338,22 +204,7 @@ export default function Savings() {
     setIsWithdrawing(true)
 
     try {
-      if (selectedSourceGoal) {
-        await updateSavingsGoal(selectedSourceGoal.id, {
-          currentAmount: Math.max(0, selectedSourceGoal.currentAmount - amount),
-        })
-
-        try {
-          await addTransaction(savingWithdrawal)
-        } catch (error) {
-          await updateSavingsGoal(selectedSourceGoal.id, {
-            currentAmount: selectedSourceGoal.currentAmount,
-          })
-          throw error
-        }
-      } else {
-        await addTransaction(savingWithdrawal)
-      }
+      await addTransaction(savingWithdrawal)
 
       resetWithdrawForm()
       setWithdrawOpen(false)
@@ -380,13 +231,6 @@ export default function Savings() {
         </div>
         <div className="flex flex-col gap-3 sm:flex-row">
           <ExportExcelButton loading={isExporting} onClick={handleExport} />
-          <Button
-            variant="secondary"
-            onClick={() => handleOpenGoal()}
-            className="bg-primary/10 text-primary hover:bg-primary/15"
-          >
-            <PiggyBank className="size-4" /> Nueva meta
-          </Button>
           <Button
             variant="secondary"
             disabled={availableSavings <= 0}
@@ -436,7 +280,7 @@ export default function Savings() {
 
       <AccountSavingsPanel accounts={accounts} />
 
-      <section className="grid gap-4 xl:grid-cols-[1.35fr_0.65fr]">
+      <section>
         <Card className="relative overflow-hidden border-success/20 bg-surface p-6 shadow-vault md:p-8">
           <div className="absolute right-0 top-0 size-40 translate-x-12 -translate-y-12 rounded-full bg-success/10" />
           <div className="relative">
@@ -445,129 +289,22 @@ export default function Savings() {
               {formatMoney(accountAccumulatedSavings)}
             </p>
             <p className="mt-3 max-w-xl text-sm text-muted-gray">
-              Este es tu saldo real después de compras de deseos, retiros y pagos de deuda.
+              Saldo acumulado de la cuenta, después de compras de deseos, retiros y pagos de deuda.
             </p>
 
             <div className="mt-6 grid gap-3 sm:grid-cols-2">
               <div className="rounded-xl border border-success/15 bg-success/5 p-4">
                 <p className="text-[10px] uppercase tracking-[0.18em] text-medium-gray">Ahorro propio disponible</p>
-                <p className="mt-2 text-xl font-semibold tabular-nums text-success">{formatMoney(overview.ownSavings)}</p>
+                <p className="mt-2 text-xl font-semibold tabular-nums text-success">{formatMoney(ownSavings)}</p>
               </div>
               <div className="rounded-xl border border-amber-500/20 bg-amber-500/8 p-4">
                 <p className="text-[10px] uppercase tracking-[0.18em] text-amber-200">Adquirido en deuda disponible</p>
-                <p className="mt-2 text-xl font-semibold tabular-nums text-amber-200">{formatMoney(overview.borrowedSavings)}</p>
+                <p className="mt-2 text-xl font-semibold tabular-nums text-amber-200">{formatMoney(borrowedSavings)}</p>
               </div>
             </div>
           </div>
         </Card>
 
-        <Card className="border-primary/20 bg-surface p-5 shadow-vault md:p-6">
-          <p className="text-xs uppercase tracking-[0.22em] text-primary">Metas de ahorro</p>
-          <p className="mt-5 text-2xl font-semibold tabular-nums text-on-surface">
-            {formatMoney(accountAccumulatedSavings)}
-          </p>
-          <p className="mt-2 text-sm text-muted-gray">
-            Esta vista muestra únicamente el ahorro de la cuenta seleccionada y conserva su moneda.
-          </p>
-          <p className="mt-4 text-xs text-muted-gray">
-            Las cuentas con 0% de ahorro no tienen meta y no aparecen.
-          </p>
-        </Card>
-      </section>
-
-      <section className="grid gap-4 xl:grid-cols-[0.78fr_1.22fr]">
-        <Card className="border-graphite bg-surface shadow-vault">
-          <div className="border-b border-graphite p-5">
-            <p className="text-xs uppercase tracking-[0.22em] text-medium-gray">Metas por objetivo</p>
-            <h2 className="mt-3 text-2xl font-semibold text-on-surface">Bolsillos de ahorro</h2>
-            <p className="mt-2 text-sm text-muted-gray">
-              Separa tu ahorro en emergencia, viaje, renta, teléfono o cualquier meta personalizada con aporte mensual.
-            </p>
-          </div>
-          <div className="grid gap-3 p-5 md:grid-cols-2">
-            <Card className="border-graphite bg-abyss p-4 shadow-vault-sm">
-              <p className="text-xs uppercase tracking-[0.18em] text-medium-gray">Ahorro libre</p>
-              <p className="mt-2 text-2xl font-semibold text-on-surface">{formatMoney(freeSavings)}</p>
-              <p className="mt-1 text-xs text-muted-gray">Disponible para asignar a nuevas metas.</p>
-            </Card>
-            <Card className="border-graphite bg-abyss p-4 shadow-vault-sm">
-              <p className="text-xs uppercase tracking-[0.18em] text-medium-gray">Aporte mensual total</p>
-              <p className="mt-2 text-2xl font-semibold text-on-surface">
-                {formatMoney(savingsGoals.reduce((sum, goal) => sum + goal.monthlyContribution, 0))}
-              </p>
-              <p className="mt-1 text-xs text-muted-gray">Cuánto piensas meter cada mes entre todas tus metas.</p>
-            </Card>
-          </div>
-        </Card>
-
-        <div className="grid gap-4 md:grid-cols-2">
-          {savingsGoals.length > 0 ? savingsGoals.map((goal) => {
-            const progress = goal.targetAmount > 0 ? Math.min(100, Math.round((goal.currentAmount / goal.targetAmount) * 100)) : 0
-            const remainingGoal = Math.max(0, goal.targetAmount - goal.currentAmount)
-
-            return (
-              <Card key={goal.id} className="border-graphite bg-surface shadow-vault">
-                <div className="border-b border-graphite p-5">
-                  <div className="flex items-start justify-between gap-3">
-                    <div>
-                      <p className="text-lg font-semibold text-on-surface">{goal.name}</p>
-                      <p className="mt-1 text-xs uppercase tracking-[0.18em] text-medium-gray">
-                        {GOAL_CATEGORY_LABELS[goal.category]}
-                      </p>
-                    </div>
-                    <div className="flex gap-1">
-                      <Button aria-label={`Editar meta ${goal.name}`} variant="ghost" size="icon" className="text-muted-gray hover:text-primary" onClick={() => handleOpenGoal(goal)}>
-                        <Pencil data-icon="inline-start" />
-                      </Button>
-                      <Button aria-label={`Eliminar meta ${goal.name}`} variant="ghost" size="icon" className="text-muted-gray hover:text-error" onClick={() => void removeSavingsGoal(goal.id)}>
-                        <Trash2 data-icon="inline-start" />
-                      </Button>
-                    </div>
-                  </div>
-                </div>
-                <div className="space-y-4 p-5">
-                  <div className="flex items-end justify-between gap-3">
-                    <div>
-                      <p className="text-xs uppercase tracking-[0.18em] text-medium-gray">Guardado</p>
-                      <p className="mt-2 text-2xl font-semibold text-on-surface">{formatMoney(goal.currentAmount)}</p>
-                    </div>
-                    <Badge variant="secondary" className="bg-surface-container-high text-on-surface">
-                      Restan {formatMoney(remainingGoal)}
-                    </Badge>
-                  </div>
-                  <div className="h-2 overflow-hidden rounded-full bg-surface-container-highest">
-                    <div className="h-full rounded-full bg-primary transition-[width] duration-700" style={{ width: `${progress}%` }} />
-                  </div>
-                  <div className="grid gap-3 sm:grid-cols-2">
-                    <div className="rounded-xl bg-abyss p-3 shadow-vault-sm">
-                      <p className="text-xs uppercase tracking-[0.16em] text-medium-gray">Meta</p>
-                      <p className="mt-2 text-lg font-semibold text-on-surface">{formatMoney(goal.targetAmount)}</p>
-                    </div>
-                    <div className="rounded-xl bg-abyss p-3 shadow-vault-sm">
-                      <p className="text-xs uppercase tracking-[0.16em] text-medium-gray">Aporte mensual</p>
-                      <p className="mt-2 text-lg font-semibold text-success">{formatMoney(goal.monthlyContribution)}</p>
-                    </div>
-                  </div>
-                  <Button
-                    variant="secondary"
-                    disabled={goal.currentAmount <= 0}
-                    onClick={() => handleOpenWithdraw(goal)}
-                    className="w-full bg-surface-container-high text-on-surface hover:bg-surface-container-higher disabled:opacity-40 disabled:cursor-not-allowed"
-                  >
-                    <ArrowUpRight className="size-4" /> Sacar de este bolsillo
-                  </Button>
-                </div>
-              </Card>
-            )
-          }) : (
-            <Card className="border-dashed border-graphite bg-surface/80 p-8 shadow-vault md:col-span-2">
-              <div className="flex flex-col items-center gap-3 text-center text-sm text-muted-gray">
-                <PiggyBank className="size-8 text-primary" />
-                <p>Aún no tienes bolsillos de ahorro. Crea metas como emergencia, viaje, renta o teléfono.</p>
-              </div>
-            </Card>
-          )}
-        </div>
       </section>
 
       {savingsList.length === 0 ? (
@@ -676,13 +413,11 @@ export default function Savings() {
           <DialogHeader>
             <DialogTitle className="text-on-surface">Sacar dinero de ahorros</DialogTitle>
             <DialogDescription>
-              {selectedSourceGoal
-                ? 'Registra para qué se usó el dinero. Se restará del bolsillo y del ahorro total, sin pasarlo a otra sección.'
-                : 'Usa esta opción cuando necesites sacar dinero guardado para un gasto, un gusto o un propósito puntual.'}
+              Usa esta opción cuando necesites sacar dinero guardado para un gasto, un gusto o un propósito puntual.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
-            <div className={selectedSourceGoal ? 'grid gap-4' : 'grid gap-4 lg:grid-cols-2'}>
+            <div className="grid gap-4 lg:grid-cols-2">
               <div className="space-y-2">
                 <Label className="text-medium-gray">Monto ({moneyInput.currency.code})</Label>
                 <Input
@@ -696,43 +431,30 @@ export default function Savings() {
                   className="bg-abyss border-graphite text-on-surface"
                 />
                 <p className="text-xs text-muted-gray">
-                  Disponible: {formatMoney(availableWithdrawAmount)}
-                  {selectedSourceGoal ? ` en ${selectedSourceGoal.name}` : ' en ahorro total'}
+                  Disponible: {formatMoney(availableWithdrawAmount)} en ahorro total
                 </p>
               </div>
 
-              {!selectedSourceGoal ? (
-                <div className="space-y-2">
-                  <Label className="text-medium-gray">Pasarlo a</Label>
-                  <Select
-                    value={withdrawForm.target}
-                    onValueChange={(value) => {
-                      setWithdrawError(null)
-                      setWithdrawForm((current) => ({ ...current, target: value as 'expense' | 'want' | 'purpose' }))
-                    }}
-                  >
-                    <SelectTrigger className="bg-abyss border-graphite text-on-surface">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent className="border-graphite bg-surface">
-                      <SelectItem value="purpose">Proposito</SelectItem>
-                      <SelectItem value="expense">Gasto</SelectItem>
-                      <SelectItem value="want" disabled={!wantsEnabled}>Gusto</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-              ) : null}
+              <div className="space-y-2">
+                <Label className="text-medium-gray">Pasarlo a</Label>
+                <Select
+                  value={withdrawForm.target}
+                  onValueChange={(value) => {
+                    setWithdrawError(null)
+                    setWithdrawForm((current) => ({ ...current, target: value as 'expense' | 'want' | 'purpose' }))
+                  }}
+                >
+                  <SelectTrigger className="bg-abyss border-graphite text-on-surface">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent className="border-graphite bg-surface">
+                    <SelectItem value="purpose">Proposito</SelectItem>
+                    <SelectItem value="expense">Gasto</SelectItem>
+                    <SelectItem value="want" disabled={!wantsEnabled}>Gusto</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
-
-            {selectedSourceGoal ? (
-              <Card className="border-graphite bg-abyss p-4 shadow-vault-sm">
-                <p className="text-xs uppercase tracking-[0.18em] text-medium-gray">Bolsillo origen</p>
-                <p className="mt-2 text-lg font-semibold text-on-surface">{selectedSourceGoal.name}</p>
-                <p className="mt-1 text-xs text-muted-gray">
-                  Este dinero saldra del bolsillo y del ahorro total. No se registrara en otra seccion.
-                </p>
-              </Card>
-            ) : null}
 
             <div className="space-y-2">
               <Label className="text-medium-gray">Concepto</Label>
@@ -761,7 +483,7 @@ export default function Savings() {
                 setWithdrawForm((current) => ({ ...current, date: value }))
               }}
               description={
-                selectedSourceGoal || withdrawForm.target === 'purpose'
+                withdrawForm.target === 'purpose'
                   ? 'La fecha se guarda en la salida del ahorro para dejar constancia del pago realizado.'
                   : 'La misma fecha se usa para la salida del ahorro y para el movimiento destino.'
               }
@@ -792,121 +514,6 @@ export default function Savings() {
         </DialogContent>
       </Dialog>
 
-      <Dialog open={goalOpen} onOpenChange={(nextOpen) => { if (!isGoalSaving) setGoalOpen(nextOpen) }}>
-        <DialogContent className="border-graphite bg-surface sm:max-w-3xl">
-          <DialogHeader>
-            <DialogTitle className="text-on-surface">{goalEditId ? 'Editar meta' : 'Crear meta de ahorro'}</DialogTitle>
-            <DialogDescription>
-              Define el bolsillo, el monto objetivo, cuanto ya tiene guardado y el aporte mensual que quieres sostener.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4">
-            <div className="grid gap-4 lg:grid-cols-2">
-              <div className="space-y-2">
-                <Label className="text-medium-gray">Nombre</Label>
-                <Input
-                  placeholder="Fondo de emergencia"
-                  value={goalForm.name}
-                  onChange={(e) => {
-                    setGoalError(null)
-                    setGoalForm((current) => ({ ...current, name: e.target.value }))
-                  }}
-                  className="bg-abyss border-graphite text-on-surface"
-                />
-              </div>
-              <div className="space-y-2">
-                <Label className="text-medium-gray">Categoría</Label>
-                <Select
-                  value={goalForm.category}
-                  onValueChange={(value) => {
-                    setGoalError(null)
-                    setGoalForm((current) => ({ ...current, category: value as typeof current.category }))
-                  }}
-                >
-                  <SelectTrigger className="bg-abyss border-graphite text-on-surface">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent className="border-graphite bg-surface">
-                    <SelectItem value="emergency">Emergencia</SelectItem>
-                    <SelectItem value="travel">Viaje</SelectItem>
-                    <SelectItem value="rent">Renta</SelectItem>
-                    <SelectItem value="phone">Teléfono</SelectItem>
-                    <SelectItem value="custom">Personalizada</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-
-            <div className="grid gap-4 lg:grid-cols-3">
-              <div className="space-y-2">
-                <Label className="text-medium-gray">Monto objetivo ({moneyInput.currency.code})</Label>
-                <Input
-                  type="number"
-                  value={goalForm.targetAmount}
-                  onChange={(e) => {
-                    setGoalError(null)
-                    setGoalForm((current) => ({ ...current, targetAmount: e.target.value }))
-                  }}
-                  className="bg-abyss border-graphite text-on-surface"
-                />
-              </div>
-              <div className="space-y-2">
-                <Label className="text-medium-gray">Monto actual ({moneyInput.currency.code})</Label>
-                <Input
-                  type="number"
-                  value={goalForm.currentAmount}
-                  onChange={(e) => {
-                    setGoalError(null)
-                    setGoalForm((current) => ({ ...current, currentAmount: e.target.value }))
-                  }}
-                  className="bg-abyss border-graphite text-on-surface"
-                />
-              </div>
-              <div className="space-y-2">
-                <Label className="text-medium-gray">Aporte mensual ({moneyInput.currency.code})</Label>
-                <Input
-                  type="number"
-                  value={goalForm.monthlyContribution}
-                  onChange={(e) => {
-                    setGoalError(null)
-                    setGoalForm((current) => ({ ...current, monthlyContribution: e.target.value }))
-                  }}
-                  className="bg-abyss border-graphite text-on-surface"
-                />
-              </div>
-            </div>
-
-            <Card className="border-graphite bg-abyss p-4 shadow-vault-sm">
-              <p className="text-xs uppercase tracking-[0.18em] text-medium-gray">Ahorro libre actual</p>
-              <p className="mt-2 text-lg font-semibold text-on-surface">{formatMoney(freeSavings)}</p>
-              <p className="mt-1 text-xs text-muted-gray">
-                Si editas una meta, se te permite reutilizar tambien lo que ya tiene asignado esa meta.
-              </p>
-            </Card>
-            {goalError ? <p className="text-sm text-error">{goalError}</p> : null}
-          </div>
-          <DialogFooter>
-            <Button
-              variant="ghost"
-              disabled={isGoalSaving}
-              onClick={() => {
-                resetGoalForm()
-                setGoalOpen(false)
-              }}
-              className="text-muted-gray"
-            >
-              Cancelar
-            </Button>
-            <Button
-              loading={isGoalSaving}
-              onClick={() => void handleSaveGoal()}
-              className="bg-primary-container text-white hover:bg-primary-container/80 shadow-vault"
-            >
-              Guardar meta
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
     </div>
   )
 }

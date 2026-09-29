@@ -533,6 +533,7 @@ export default function Login() {
   const continueAsGuest = useAuthStore((state) => state.continueAsGuest)
   const isChecking = useAuthStore((state) => state.isChecking)
   const hasChecked = useAuthStore((state) => state.hasChecked)
+  const sessionExpired = useAuthStore((state) => state.sessionExpired)
   const [state, dispatch] = useReducer(authUiReducer, initialAuthUiState)
 
   const currentView: AuthView =
@@ -545,6 +546,11 @@ export default function Login() {
       void useAuthStore.getState().checkSession()
     }
   }, [hasChecked])
+
+  useEffect(() => {
+    if (!sessionExpired) return
+    toast.warning('Tu sesión venció. Inicia sesión de nuevo; tus datos del móvil siguen guardados.')
+  }, [sessionExpired])
 
   if (!isChecking && authMode === 'authenticated') {
     return <Navigate to={redirectTo} replace />

@@ -19,7 +19,6 @@ export function useMonthlyOverview() {
   const transactions = useFinanceStore((state) => state.transactions)
   const debts = useFinanceStore((state) => state.debts)
   const wishlist = useFinanceStore((state) => state.wishlist)
-  const savingsGoals = useFinanceStore((state) => state.savingsGoals)
   const monthlyPlanningHistory = useFinanceStore((state) => state.monthlyPlanningHistory)
   const subscriptions = useFinanceStore((state) => state.subscriptions)
   const formula = usePreferencesStore((state) => state.formula)
@@ -39,7 +38,6 @@ export function useMonthlyOverview() {
       : []
     const accountDebts = debts.filter((debt) => debt.incomeSourceId === activeIncomeSourceId)
     const accountWishlist = wishlist.filter((item) => item.incomeSourceId === activeIncomeSourceId)
-    const accountSavingsGoals = savingsGoals.filter((goal) => goal.incomeSourceId === activeIncomeSourceId)
     const overview = getMonthlyOverview(accountSalaries, accountTransactions, accountDebts, accountFormula, {
       periodStart,
       periodEnd,
@@ -57,16 +55,18 @@ export function useMonthlyOverview() {
     const generatedSavingsBalance = savingsSource
       ? getSavingsAccountBalance(salaries, savingsSource.id, getMonthKey())
       : 0
-    const totalSavings = Math.max(0, overview.totalSavings + generatedSavingsBalance)
-    const accumulatedSavings = funding.totalBalance + generatedSavingsBalance
-    const assignedSavingsGoals = accountSavingsGoals.reduce((sum, goal) => sum + goal.currentAmount, 0)
-    const freeSavings = Math.max(0, accumulatedSavings - assignedSavingsGoals)
-    const activeSubscriptions = subscriptions.filter((subscription) => subscription.incomeSourceId === activeIncomeSourceId && subscription.status === 'active')
-    const monthlySubscriptions = activeSubscriptions.reduce((sum, subscription) => sum + subscription.amount, 0)
     const reservedForPurchasedWishlist = accountWishlist.reduce(
       (sum, item) => sum + (isWishlistPurchased(item) ? getWishlistReservedAmount(item) : 0),
       0,
     )
+    const totalSavings = Math.max(0, overview.totalSavings)
+    const accumulatedSavings = Math.max(0, generatedSavingsBalance - reservedForPurchasedWishlist)
+    const borrowedSavings = Math.min(accumulatedSavings, Math.max(0, funding.borrowedBalance))
+    const ownSavings = Math.max(0, accumulatedSavings - borrowedSavings)
+    const assignedSavingsGoals = 0
+    const freeSavings = accumulatedSavings
+    const activeSubscriptions = subscriptions.filter((subscription) => subscription.incomeSourceId === activeIncomeSourceId && subscription.status === 'active')
+    const monthlySubscriptions = activeSubscriptions.reduce((sum, subscription) => sum + subscription.amount, 0)
     const savingsRollover = accountFormula.rolloverSavings && accountFormula.wants > 0
       ? Math.max(0, overview.budgetSavings - totalSavings)
       : 0
@@ -93,13 +93,13 @@ export function useMonthlyOverview() {
       remainingWants: budgetWants - overview.totalWants,
       remainingSavings: overview.budgetSavings - totalSavings,
       reservedForPurchasedWishlist,
-      ownSavings: funding.ownBalance,
-      borrowedSavings: funding.borrowedBalance,
+      ownSavings,
+      borrowedSavings,
       borrowedSavingsAcquired: funding.borrowedAcquired,
       borrowedSavingsUsed: funding.borrowedUsed,
       savingsUsages: funding.usages,
       activeSubscriptions,
       monthlySubscriptions,
     }
-  }, [accountSavingsFormulas, activeAccount, activeIncomeSourceId, debts, formula, incomeSources, monthlyPlanningHistory, salaries, savingsGoals, subscriptions, transactions, wishlist])
+  }, [accountSavingsFormulas, activeAccount, activeIncomeSourceId, debts, formula, incomeSources, monthlyPlanningHistory, salaries, subscriptions, transactions, wishlist])
 }

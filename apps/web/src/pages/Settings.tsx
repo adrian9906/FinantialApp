@@ -973,7 +973,7 @@ function MonthlyResetCard() {
         <div className="mt-5 rounded-2xl border border-graphite bg-surface-container-low p-4">
           <p className="text-sm font-medium text-on-surface">Qué hace este reset</p>
           <p className="mt-2 text-sm text-muted-gray">
-            Desde el momento del reset, ingresos, gastos, gustos, ahorros y pagos de deuda se calculan dentro del nuevo ciclo. Tus datos anteriores no se borran; se limpian las listas activas de gastos y gustos, y el avance de las metas de ahorro vuelve a cero.
+            Desde el momento del reset, los ingresos recurrentes recuperan su saldo original, las cuentas de una sola vez desaparecen y se limpian las listas activas de gastos y gustos. Los ahorros acumulados y el historial anterior se conservan; solo el avance mensual de las metas vuelve a cero.
           </p>
 
           <div className="mt-4">

@@ -36,7 +36,7 @@ import { exportWishlistReport } from '@/lib/reportExports'
 import { useFinanceStore } from '@/store/financeStore'
 import { convertToUsd, convertUsdToInput, formatMoney, formatMoneyWithCode, getCurrencyByCode } from '@/lib/currency'
 import { WantCelebration } from '@/components/celebration/WantCelebration'
-import { findSavingsAccount, getSavingsAccountBalance, isSavingsIncomeSource } from '@/lib/account-savings'
+import { findSavingsAccount, getSavingsAccountBalance } from '@/lib/account-savings'
 
 interface FormState {
   name: string
@@ -109,7 +109,6 @@ export default function Wishlist() {
   const transactions = useFinanceStore((state) => state.transactions)
   const salaries = useFinanceStore((state) => state.salaries)
   const incomeSources = useFinanceStore((state) => state.incomeSources)
-  const savingsGoals = useFinanceStore((state) => state.savingsGoals)
   const addWishlistItem = useFinanceStore((state) => state.addWishlistItem)
   const updateWishlistItem = useFinanceStore((state) => state.updateWishlistItem)
   const removeWishlistItem = useFinanceStore((state) => state.removeWishlistItem)
@@ -151,42 +150,23 @@ export default function Wishlist() {
       const generatedBalance = savingsAccount
         ? getSavingsAccountBalance(salaries, savingsAccount.id, getMonthKey())
         : 0
-      const manualBalance = transactions
-        .filter((transaction) => {
-          if (transaction.type !== 'saving') return false
-          const source = transaction.incomeSourceId ? sourceById.get(transaction.incomeSourceId) : undefined
-          return !source || (!isSavingsIncomeSource(source)
-            && (source.currencyCode ?? 'USD').trim().toUpperCase() === currencyCode)
-        })
-        .reduce((sum, transaction) => sum + transaction.amount, 0)
-      const assignedGoals = savingsGoals
-        .filter((goal) => {
-          if (goal.incomeSourceId === savingsAccount?.id) return true
-          const source = goal.incomeSourceId ? sourceById.get(goal.incomeSourceId) : undefined
-          return Boolean(source)
-            && !isSavingsIncomeSource(source!)
-            && (source!.currencyCode ?? 'USD').trim().toUpperCase() === currencyCode
-        })
-        .reduce((sum, goal) => sum + goal.currentAmount, 0)
       const purchasedReserved = wishlist
         .filter((item) => getWishlistCurrency(item) === currencyCode && isWishlistPurchased(item))
         .reduce((sum, item) => sum + getWishlistReservedAmount(item), 0)
 
       return [currencyCode, {
         account: savingsAccount,
-        balance: Math.max(0, generatedBalance + manualBalance),
-        assignedGoals,
+        balance: Math.max(0, generatedBalance),
         purchasedReserved,
-        free: Math.max(0, generatedBalance + manualBalance - assignedGoals - purchasedReserved),
+        free: Math.max(0, generatedBalance - purchasedReserved),
       }]
     })) as Record<SavingsCurrencyCode, {
       account: ReturnType<typeof findSavingsAccount>
       balance: number
-      assignedGoals: number
       purchasedReserved: number
       free: number
     }>
-  }, [incomeSources, salaries, savingsGoals, sourceById, transactions, wishlist])
+  }, [incomeSources, salaries, wishlist])
   const averageMonthlySavingsByCurrency = useMemo(() => {
     return Object.fromEntries((['USD', 'CUP'] as const).map((currencyCode) => {
       const relevant = transactions.filter((transaction) => {
@@ -451,9 +431,9 @@ export default function Wishlist() {
             </p>
             <p className="mt-2 text-sm text-muted-gray">
               Saldo de Ahorro {currencyCode}: {formatMoneyWithCode(savingsByCurrency[currencyCode].balance, getCurrencyByCode(currencyCode))}.
-              {savingsByCurrency[currencyCode].assignedGoals > 0
-                ? ` ${formatMoneyWithCode(savingsByCurrency[currencyCode].assignedGoals, getCurrencyByCode(currencyCode))} están asignados a metas.`
-                : ' Sin dinero asignado a metas.'}
+              {savingsByCurrency[currencyCode].purchasedReserved > 0
+                ? ` ${formatMoneyWithCode(savingsByCurrency[currencyCode].purchasedReserved, getCurrencyByCode(currencyCode))} ya se utilizaron en deseos.`
+                : ''}
             </p>
           </Card>
         ))}
@@ -1060,7 +1040,6 @@ export default function Wishlist() {
                 </p>
                 <p className="mt-1 text-sm text-muted-gray">Cuenta: Ahorro {formCurrencyCode}</p>
                 <p className="mt-1 text-sm text-muted-gray">Ahorro libre ahora mismo: {formatMoneyWithCode(formSavings.free, formCurrency)}</p>
-                <p className="mt-1 text-sm text-muted-gray">Apartado en metas: {formatMoneyWithCode(formSavings.assignedGoals, formCurrency)}</p>
                 <p className="mt-1 text-sm text-muted-gray">
                   Aporte externo para este deseo: {formatMoneyWithCode(formExternalContributionInUsd, formCurrency)}
                 </p>
