@@ -23,7 +23,9 @@ function getSavingsSalary(
   if (!savingsSource) throw new Error(`No existe la cuenta Ahorro ${currencyCode}.`)
 
   const month = getMonthKey()
-  const account = salaries.find((salary) => salary.sourceId === savingsSource.id && salary.month === month)
+  const account = salaries
+    .filter((salary) => salary.sourceId === savingsSource.id && salary.month <= month)
+    .sort((left, right) => right.month.localeCompare(left.month))[0]
   if (!account) throw new Error(`No se encontró el saldo de Ahorro ${currencyCode}.`)
   return account
 }

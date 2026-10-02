@@ -15,24 +15,26 @@ import {
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { convertUsdToInput, ensureCurrencyPreference, formatMoneyWithCode, getCurrencyByCode } from '@/lib/currency'
+import { convertToUsd, convertUsdToInput, ensureCurrencyPreference, formatMoneyWithCode, getCurrencyByCode } from '@/lib/currency'
 import { useFinanceStore } from '@/store/financeStore'
 import { usePreferencesStore } from '@/store/preferencesStore'
-import { getIncomesForMonth, getMonthKey, getSalaryPlanningBase, normalizeSalaryHistory } from '@plata/shared'
+import { getMonthKey, normalizeSalaryHistory } from '@plata/shared'
 import { isSavingsIncomeSource } from '@/lib/account-savings'
+import { getIncomeAccountsForCycle } from '@/lib/income-account-view'
 
 export function IncomeSourceManager() {
   const incomeSources = useFinanceStore((state) => state.incomeSources)
   const salaries = useFinanceStore((state) => state.salaries)
+  const monthlyPlanningHistory = useFinanceStore((state) => state.monthlyPlanningHistory)
   const addIncomeSource = useFinanceStore((state) => state.addIncomeSource)
   const updateIncomeSource = useFinanceStore((state) => state.updateIncomeSource)
   const removeIncomeSource = useFinanceStore((state) => state.removeIncomeSource)
   const addSalary = useFinanceStore((state) => state.addSalary)
   const updateSalary = useFinanceStore((state) => state.updateSalary)
+  const addIncomeAccountFunds = useFinanceStore((state) => state.addIncomeAccountFunds)
   const currencies = usePreferencesStore((state) => state.currencies)
   const activeCurrencyCode = usePreferencesStore((state) => state.activeCurrencyCode)
-  const currentMonth = getMonthKey()
-  const currentIncomes = getIncomesForMonth(salaries, currentMonth)
+  const currentIncomes = getIncomeAccountsForCycle(salaries, incomeSources, monthlyPlanningHistory).map((account) => account.salary)
   const salaryHistory = normalizeSalaryHistory(salaries)
   const visibleSources = incomeSources.filter((source) => {
     if (isSavingsIncomeSource(source)) return false
@@ -46,18 +48,21 @@ export function IncomeSourceManager() {
   const [editId, setEditId] = useState<string | null>(null)
   const [name, setName] = useState('')
   const [amount, setAmount] = useState('')
-  const [originalAmount, setOriginalAmount] = useState('')
   const [currencyCode, setCurrencyCode] = useState(activeCurrencyCode)
   const [recurring, setRecurring] = useState(true)
   const [balanceMode, setBalanceMode] = useState<'fixed' | 'zero'>('fixed')
   const [isCash, setIsCash] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [isSaving, setIsSaving] = useState(false)
+  const [addMoneyOpen, setAddMoneyOpen] = useState(false)
+  const [addMoneySalaryId, setAddMoneySalaryId] = useState('')
+  const [addMoneyAmount, setAddMoneyAmount] = useState('')
+  const [addMoneyError, setAddMoneyError] = useState<string | null>(null)
+  const [isAddingMoney, setIsAddingMoney] = useState(false)
 
   function resetForm() {
     setName('')
     setAmount('')
-    setOriginalAmount('')
     setCurrencyCode(activeCurrencyCode)
     setRecurring(true)
     setBalanceMode('fixed')
@@ -80,9 +85,8 @@ export function IncomeSourceManager() {
     const latestIncome = salaryHistory.find((entry) => entry.sourceId === id)
     const accountIncome = currentIncome ?? latestIncome
     const accountCurrencyCode = source.currencyCode ?? accountIncome?.currencyCode ?? activeCurrencyCode
-    const displayedAmount = currentIncome ? convertUsdToInput(currentIncome.balance ?? currentIncome.amount, getCurrencyByCode(accountCurrencyCode)) : '0'
+    const displayedAmount = convertUsdToInput(accountIncome?.amount ?? 0, getCurrencyByCode(accountCurrencyCode))
     setAmount(displayedAmount)
-    setOriginalAmount(displayedAmount)
     setCurrencyCode(accountCurrencyCode)
     setRecurring(source.recurring)
     setBalanceMode(source.balanceMode === 'zero' ? 'zero' : 'fixed')
@@ -114,6 +118,11 @@ export function IncomeSourceManager() {
       return
     }
 
+    const existingIncome = editId
+      ? currentIncomes.find((entry) => entry.sourceId === editId)
+        ?? salaryHistory.find((entry) => entry.sourceId === editId)
+      : undefined
+
     setIsSaving(true)
     try {
       // Persist the chosen currency as a preference so the account keeps its
@@ -131,7 +140,7 @@ export function IncomeSourceManager() {
       const initialIncome = {
         amount: amountUsd,
         balance: amountUsd,
-        month: currentMonth,
+        month: existingIncome?.month ?? getMonthKey(),
         currencyCode,
         kind: (recurring ? 'recurring' : 'one-off') as 'recurring' | 'one-off',
         balanceMode: recurring && balanceMode === 'zero' ? 'zero' as const : 'fixed' as const,
@@ -141,14 +150,10 @@ export function IncomeSourceManager() {
         const source = incomeSources.find((entry) => entry.id === editId)
         if (!source) throw new Error('No se pudo encontrar la cuenta de ingreso.')
         await updateIncomeSource(editId, sourceData)
-        const currentIncome = currentIncomes.find((entry) => entry.sourceId === source.id)
-        // Changing only the account's currency label must keep its canonical
-        // USD amount and available balance. A changed amount is an explicit edit.
-        const amountWasEdited = parsedAmount !== Number(originalAmount.trim().replace(',', '.'))
-        const incomeData = currentIncome && !amountWasEdited
-          ? { ...initialIncome, amount: currentIncome.amount, balance: currentIncome.balance ?? currentIncome.amount, sourceId: source.id, sourceName: trimmed }
-          : { ...initialIncome, sourceId: source.id, sourceName: trimmed }
-        if (currentIncome) await updateSalary(currentIncome.id, incomeData)
+        // Editing the salary changes its original income amount only. Keep the
+        // current balance and transfer adjustments untouched.
+        const incomeData = { ...initialIncome, balance: existingIncome?.balance ?? amountUsd, sourceId: source.id, sourceName: trimmed }
+        if (existingIncome) await updateSalary(existingIncome.id, incomeData)
         else await addSalary(incomeData)
       } else {
         await addIncomeSource(sourceData, initialIncome)
@@ -161,6 +166,36 @@ export function IncomeSourceManager() {
       setError('No se pudo guardar. Intenta de nuevo.')
     } finally {
       setIsSaving(false)
+    }
+  }
+
+  function openAddMoney(salaryId: string) {
+    setAddMoneySalaryId(salaryId)
+    setAddMoneyAmount('')
+    setAddMoneyError(null)
+    setAddMoneyOpen(true)
+  }
+
+  async function handleAddMoney() {
+    const salary = salaries.find((entry) => entry.id === addMoneySalaryId)
+    const source = salary?.sourceId ? incomeSources.find((entry) => entry.id === salary.sourceId) : undefined
+    const currency = getCurrencyByCode(source?.currencyCode ?? salary?.currencyCode ?? activeCurrencyCode)
+    const parsedAmount = Number(addMoneyAmount.trim().replace(',', '.'))
+    if (!salary || !Number.isFinite(parsedAmount) || parsedAmount <= 0) {
+      setAddMoneyError('Escribe un monto mayor que cero.')
+      return
+    }
+
+    setIsAddingMoney(true)
+    try {
+      await addIncomeAccountFunds({ salaryId: salary.id, amountUsd: convertToUsd(parsedAmount, currency) })
+      toast.success(`Se agregaron ${formatMoneyWithCode(convertToUsd(parsedAmount, currency), currency)} al saldo.`)
+      setAddMoneyOpen(false)
+      setAddMoneyAmount('')
+    } catch (error) {
+      setAddMoneyError(error instanceof Error ? error.message : 'No se pudo agregar el dinero.')
+    } finally {
+      setIsAddingMoney(false)
     }
   }
 
@@ -210,7 +245,7 @@ export function IncomeSourceManager() {
             const currentIncome = currentIncomes.find((entry) => entry.sourceId === source.id)
             const latestIncome = salaryHistory.find((entry) => entry.sourceId === source.id)
             const accountCurrency = getCurrencyByCode(source.currencyCode ?? currentIncome?.currencyCode ?? latestIncome?.currencyCode ?? activeCurrencyCode)
-            const accountIncome = currentIncome ? getSalaryPlanningBase(currentIncome) : latestIncome?.amount ?? 0
+            const accountIncome = currentIncome?.amount ?? latestIncome?.amount ?? 0
             const accountBalance = currentIncome?.balance ?? currentIncome?.amount ?? 0
 
             return (
@@ -222,14 +257,18 @@ export function IncomeSourceManager() {
                   <div className="min-w-0">
                     <p className="truncate text-sm font-medium text-on-surface">{source.name}</p>
                     <p className="mt-1 text-2xl font-semibold tracking-tight text-on-surface">
-                      {formatMoneyWithCode(accountIncome, accountCurrency)}
+                      {formatMoneyWithCode(accountBalance, accountCurrency)}
                     </p>
-                    <p className="text-xs text-muted-gray">Ingreso del mes · {accountCurrency.name}</p>
-                    <p className="mt-1 text-xs text-medium-gray">
-                      Saldo disponible: {formatMoneyWithCode(accountBalance, accountCurrency)}
-                    </p>
+                    <p className="text-xs text-muted-gray">Saldo restante</p>
+                    <p className="mt-1 text-xs text-medium-gray">Ingreso inicial: {formatMoneyWithCode(accountIncome, accountCurrency)}</p>
                   </div>
                   <div className="flex shrink-0 gap-1">
+                    {currentIncome ? (
+                      <Button size="sm" variant="outline" onClick={() => openAddMoney(currentIncome.id)}>
+                        <Plus className="size-4" aria-hidden="true" />
+                        Agregar más dinero
+                      </Button>
+                    ) : null}
                     <Button size="sm" variant="ghost" aria-label={`Editar ${source.name}`} onClick={() => openEdit(source.id)}>
                       <Pencil className="size-4" aria-hidden="true" />
                     </Button>
@@ -260,7 +299,9 @@ export function IncomeSourceManager() {
           <DialogHeader>
             <DialogTitle>{editId ? 'Editar cuenta' : 'Nueva cuenta de ingreso'}</DialogTitle>
             <DialogDescription>
-              Define el nombre, cuánto dinero tiene y en qué moneda está guardado.
+              {editId
+                ? 'Edita el monto original del salario; el saldo restante y las transferencias no se modifican.'
+                : 'Define el nombre, el ingreso inicial y la moneda de la cuenta.'}
             </DialogDescription>
           </DialogHeader>
 
@@ -276,7 +317,7 @@ export function IncomeSourceManager() {
 
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-[minmax(0,1fr)_9rem]">
               <div className="grid gap-2">
-                <Label htmlFor="income-account-amount" className="text-medium-gray">Dinero en la cuenta</Label>
+                <Label htmlFor="income-account-amount" className="text-medium-gray">{editId ? 'Monto del salario' : 'Ingreso inicial'}</Label>
                 <Input
                   id="income-account-amount"
                   type="number"
@@ -302,7 +343,7 @@ export function IncomeSourceManager() {
             </div>
             <p className="-mt-2 text-xs text-muted-gray">
               {editId
-                ? 'Puedes poner 0 y después asignarle o transferirle dinero.'
+                ? 'Este cambio no suma dinero al saldo. Usa “Agregar más dinero” para aumentar el saldo disponible.'
                 : 'Déjalo vacío o escribe 0 para iniciar sin dinero. Después podrás asignarle o transferirle dinero.'}
             </p>
 
@@ -362,6 +403,37 @@ export function IncomeSourceManager() {
           <DialogFooter>
             <Button variant="outline" onClick={() => setOpen(false)}>Cancelar</Button>
             <Button loading={isSaving} onClick={() => void handleSave()}>Guardar</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={addMoneyOpen} onOpenChange={(next) => { if (!isAddingMoney) setAddMoneyOpen(next) }}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Agregar más dinero</DialogTitle>
+            <DialogDescription>El monto se sumará al saldo disponible sin cambiar el salario inicial.</DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-2">
+            <Label htmlFor="income-add-money-amount">Monto ({getCurrencyByCode(
+              incomeSources.find((source) => source.id === salaries.find((salary) => salary.id === addMoneySalaryId)?.sourceId)?.currencyCode
+                ?? salaries.find((salary) => salary.id === addMoneySalaryId)?.currencyCode
+                ?? activeCurrencyCode,
+            ).code})</Label>
+            <Input
+              id="income-add-money-amount"
+              type="number"
+              min="0"
+              step="any"
+              inputMode="decimal"
+              value={addMoneyAmount}
+              onChange={(event) => { setAddMoneyAmount(event.target.value); setAddMoneyError(null) }}
+              placeholder="0"
+            />
+            {addMoneyError ? <p className="text-sm text-error">{addMoneyError}</p> : null}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" disabled={isAddingMoney} onClick={() => setAddMoneyOpen(false)}>Cancelar</Button>
+            <Button loading={isAddingMoney} onClick={() => void handleAddMoney()}>Agregar dinero</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

@@ -9,7 +9,7 @@ import {
   getWantWithdrawalTotal,
 } from './saving-utils.js'
 import { getEffectiveWantTotal } from './want-utils.js'
-import { getMonthKey, getSalaryForMonth, getTotalIncomeForMonth } from './salary-utils.js'
+import { getIncomesForMonth, getMonthKey, getSalaryForMonth, getTotalIncomeForMonth } from './salary-utils.js'
 
 export interface MonthlyOverviewOptions {
   periodStart?: string | null
@@ -17,6 +17,20 @@ export interface MonthlyOverviewOptions {
   salaryMonth?: string
   strictSameDayBoundary?: boolean
   excludedTransactionIds?: string[]
+}
+
+/** Keeps the savings target tied to original income while transfers reshape spending. */
+export function getAdjustedFormulaBudgets(totalSalary: number, formula: AllocationFormula, transferAdjustment = 0) {
+  const original = getFormulaBudgets(totalSalary, formula)
+  const originalSpending = original.expenses + original.wants
+  const remainingSpending = Math.max(0, originalSpending + transferAdjustment)
+  const expenseShare = originalSpending > 0 ? original.expenses / originalSpending : 0
+
+  return {
+    expenses: remainingSpending * expenseShare,
+    wants: remainingSpending * (1 - expenseShare),
+    savings: original.savings,
+  }
 }
 
 export function getFinancialPeriodStart(
@@ -103,8 +117,13 @@ export function getMonthlyOverview(
   const salaryMonth = options.salaryMonth ?? getMonthKey()
   // Every income registered for the month (all jobs plus any one-off bonus).
   // Falls back to the last known recurring pay when the month has none.
+  const registeredIncomes = getIncomesForMonth(salaries, salaryMonth)
   const registered = getTotalIncomeForMonth(salaries, salaryMonth)
-  const grossSalary = registered > 0 ? registered : getSalaryForMonth(salaries, salaryMonth)?.amount ?? 0
+  const fallbackIncome = registered > 0 ? null : getSalaryForMonth(salaries, salaryMonth)
+  const grossSalary = registered > 0 ? registered : fallbackIncome?.amount ?? 0
+  const transferAdjustment = registeredIncomes.length > 0
+    ? registeredIncomes.reduce((sum, salary) => sum + Number(salary.transferAdjustment ?? 0), 0)
+    : Number(fallbackIncome?.transferAdjustment ?? 0)
   const monthlyTransactions = getTransactionsInFinancialPeriod(transactions, {
     periodStart,
     periodEnd,
@@ -138,7 +157,7 @@ export function getMonthlyOverview(
   const totalSalary = grossSalary
 
   // The configured percentages divide the full income among the three envelopes.
-  const baseBudgets = getFormulaBudgets(totalSalary, formula)
+  const baseBudgets = getAdjustedFormulaBudgets(totalSalary, formula, transferAdjustment)
   const baseBudgetExpenses = baseBudgets.expenses
   const baseBudgetSavings = baseBudgets.savings
   const budgetExpenses = Math.max(0, baseBudgetExpenses - transferredFromExpenses + transferredToExpenses)

@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { buildSavingWithdrawalDescription, getMonthKey, getSalaryPlanningBase, getSavingsFundingBreakdown, getWishlistReservedAmount, isWishlistPurchased, parseSavingDescription } from '@plata/shared'
+import { buildSavingWithdrawalDescription, getMonthKey, getSavingsFundingBreakdown, getWishlistReservedAmount, isWishlistPurchased, parseSavingDescription } from '@plata/shared'
 import { useFinanceStore } from '@/store/financeStore'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -17,7 +17,7 @@ import { usePreferencesStore } from '@/store/preferencesStore'
 import { getTodayDateKey } from '@/lib/date'
 import { AccountSavingsPanel } from '@/components/savings/AccountSavingsPanel'
 import { IncomeAccountSelect } from '@/components/income/IncomeAccountSelect'
-import { findSavingsAccount, getAccountAllocationFormula, getSavingsAccountBalance } from '@/lib/account-savings'
+import { findSavingsAccount, getAccountAllocationFormula, getSavingsAccountBalances } from '@/lib/account-savings'
 import { useActiveIncomeAccount } from '@/lib/useActiveIncomeAccount'
 
 export default function Savings() {
@@ -150,11 +150,11 @@ export default function Savings() {
       && transaction.incomeSourceId === selectedAccountId
       && transaction.amount > 0)
     .reduce((sum, transaction) => sum + transaction.amount, 0)
-  const accountBudgetSavings = (selectedAccount ? getSalaryPlanningBase(selectedAccount.salary) : 0) * (selectedFormula.savings / 100)
+  const accountBudgetSavings = (selectedAccount ? selectedAccount.salary.amount : 0) * (selectedFormula.savings / 100)
   const remaining = accountBudgetSavings - accountPeriodSavings
   const budgetFull = remaining <= 0
   const generatedSavingsBalance = selectedSavingsSource
-    ? getSavingsAccountBalance(salaries, selectedSavingsSource.id, getMonthKey())
+    ? getSavingsAccountBalances(salaries, incomeSources, savingsCurrencyCode, getMonthKey())
     : 0
   const currencyWishlist = wishlist
     .filter((item) => (item.sourceCurrency ?? 'USD').trim().toUpperCase() === savingsCurrencyCode)
@@ -250,7 +250,7 @@ export default function Savings() {
         <div className="grid gap-3 sm:grid-cols-2">
           {(['USD', 'CUP'] as const).map((currencyCode) => {
             const source = findSavingsAccount(incomeSources, currencyCode, true)
-            const balance = source ? getSavingsAccountBalance(salaries, source.id, getMonthKey()) : 0
+            const balance = source ? getSavingsAccountBalances(salaries, incomeSources, currencyCode, getMonthKey()) : 0
             const active = savingsCurrencyCode === currencyCode
             return (
               <button

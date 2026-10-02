@@ -43,7 +43,7 @@ export function IncomeAccountSelect({ accounts, value, onValueChange, label = 'I
         </SelectTrigger>
         <SelectContent className="border-graphite bg-surface">
           <SelectGroup>
-            <SelectLabel>Cuentas de ingreso de este mes</SelectLabel>
+            <SelectLabel>Cuentas de ingreso del ciclo actual</SelectLabel>
             {accounts.map((account) => {
               const currency = getCurrencyByCode(account.salary.currencyCode)
               const PaymentIcon = account.source.isCash === false ? ArrowLeftRight : Banknote
@@ -65,7 +65,7 @@ export function IncomeAccountSelect({ accounts, value, onValueChange, label = 'I
           {selected.source.isCash === false ? 'Transferencia' : 'Efectivo'} · Moneda {selected.salary.currencyCode ?? 'USD'}
         </p>
       ) : (
-        <p className="text-xs text-warning">Crea primero un ingreso para este mes.</p>
+        <p className="text-xs text-warning">Crea primero una cuenta de ingreso.</p>
       )}
     </div>
   )

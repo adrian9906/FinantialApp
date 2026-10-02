@@ -39,7 +39,7 @@ import { ReceiptItemsReviewDialog } from '@/components/ocr/ReceiptItemsReviewDia
 import { buildReceiptCategoryGroups, buildReceiptTransaction, getReceiptTotalsByType, type ReceiptReviewResult } from '@/lib/receipt-review'
 import { useAuthStore } from '@/store/authStore'
 import { IncomeAccountSelect } from '@/components/income/IncomeAccountSelect'
-import { getIncomeAccountOverview, getIncomeAccountsForMonth, type IncomeAccountView } from '@/lib/income-account-view'
+import { getIncomeAccountOverview, getIncomeAccountsForCycle, type IncomeAccountView } from '@/lib/income-account-view'
 import { getAccountAllocationFormula } from '@/lib/account-savings'
 import { useActiveIncomeAccount } from '@/lib/useActiveIncomeAccount'
 
@@ -229,8 +229,8 @@ export default function Wants() {
   const { accounts, activeIncomeSourceId: selectedIncomeSourceId, selectAccount: setSelectedIncomeSourceId } = useActiveIncomeAccount()
   // The receipt dialog chooses its own currency, so it needs every account.
   const receiptAccounts = useMemo(
-    () => getIncomeAccountsForMonth(salaries, incomeSources),
-    [incomeSources, salaries],
+    () => getIncomeAccountsForCycle(salaries, incomeSources, monthlyPlanningHistory),
+    [incomeSources, monthlyPlanningHistory, salaries],
   )
   const [formIncomeSourcePreference, setFormIncomeSourceId] = useState('')
   const formIncomeSourceId = accounts.some((account) => account.source.id === formIncomeSourcePreference)

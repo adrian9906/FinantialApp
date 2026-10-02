@@ -1,22 +1,23 @@
 import { useMemo } from 'react'
 
 import { isSavingsIncomeSource } from '@/lib/account-savings'
-import { getIncomeAccountsForMonth } from '@/lib/income-account-view'
+import { getIncomeAccountsForCycle } from '@/lib/income-account-view'
 import { useFinanceStore } from '@/store/financeStore'
 import { usePreferencesStore } from '@/store/preferencesStore'
 
 export function useActiveIncomeAccount() {
   const salaries = useFinanceStore((state) => state.salaries)
   const incomeSources = useFinanceStore((state) => state.incomeSources)
+  const monthlyPlanningHistory = useFinanceStore((state) => state.monthlyPlanningHistory)
   const activeCurrencyCode = usePreferencesStore((state) => state.activeCurrencyCode)
   const preferredSourceId = usePreferencesStore((state) => state.activeIncomeSourceId)
   const setActiveIncomeSource = usePreferencesStore((state) => state.setActiveIncomeSource)
   const setActiveCurrency = usePreferencesStore((state) => state.setActiveCurrency)
 
   const allAccounts = useMemo(
-    () => getIncomeAccountsForMonth(salaries, incomeSources)
+    () => getIncomeAccountsForCycle(salaries, incomeSources, monthlyPlanningHistory)
       .filter((account) => !isSavingsIncomeSource(account.source)),
-    [incomeSources, salaries],
+    [incomeSources, monthlyPlanningHistory, salaries],
   )
   const accounts = useMemo(
     () => allAccounts.filter((account) => (

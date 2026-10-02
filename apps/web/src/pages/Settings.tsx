@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState, type ChangeEvent, type Dispatch, type ReactNode, type SetStateAction } from 'react'
 import { toast } from 'sonner'
 import { VoiceSettings } from '@/components/voice/VoiceSettings'
-import { getFinancialPeriodStart, getFormulaBudgets, getSalaryPlanningBase } from '@plata/shared'
+import { getAdjustedFormulaBudgets, getFinancialPeriodStart } from '@plata/shared'
 
 import {
   AlertDialog,
@@ -36,7 +36,7 @@ import { MobileWidgetSettings } from '@/components/settings/MobileWidgetSettings
 import { OfflineBackupCard } from '@/components/settings/OfflineBackupCard'
 import { IncomeAccountSelect } from '@/components/income/IncomeAccountSelect'
 import { getAccountAllocationFormula, isSavingsIncomeSource } from '@/lib/account-savings'
-import { getIncomeAccountsForMonth, type IncomeAccountView } from '@/lib/income-account-view'
+import { getIncomeAccountsForCycle, type IncomeAccountView } from '@/lib/income-account-view'
 import {
   defaultFormula,
   type AllocationFormula,
@@ -262,8 +262,8 @@ function FormulaInputs({
 
 /** Shows the real amounts the percentages produce for this month's income. */
 function FormulaPreview({ draftFormula, account }: { draftFormula: AllocationFormula; account?: IncomeAccountView }) {
-  const income = account ? getSalaryPlanningBase(account.salary) : 0
-  const budgets = getFormulaBudgets(income, draftFormula)
+  const income = account ? account.salary.amount : 0
+  const budgets = getAdjustedFormulaBudgets(income, draftFormula, Number(account?.salary.transferAdjustment ?? 0))
   const currency = getCurrencyByCode(account?.salary.currencyCode)
   const formatAccountMoney = (value: number) => formatMoneyWithCode(value, currency)
 
@@ -1291,11 +1291,12 @@ export default function Settings() {
   const resetPreferences = usePreferencesStore((state) => state.resetPreferences)
   const salaries = useFinanceStore((state) => state.salaries)
   const incomeSources = useFinanceStore((state) => state.incomeSources)
+  const monthlyPlanningHistory = useFinanceStore((state) => state.monthlyPlanningHistory)
 
   const accounts = useMemo(
-    () => getIncomeAccountsForMonth(salaries, incomeSources, undefined, activeCurrencyCode)
+    () => getIncomeAccountsForCycle(salaries, incomeSources, monthlyPlanningHistory, activeCurrencyCode)
       .filter((account) => !isSavingsIncomeSource(account.source)),
-    [activeCurrencyCode, incomeSources, salaries],
+    [activeCurrencyCode, incomeSources, monthlyPlanningHistory, salaries],
   )
   const [selectedAccountPreference, setSelectedAccountPreference] = useState('')
   const selectedAccountId = accounts.some((account) => account.source.id === selectedAccountPreference)

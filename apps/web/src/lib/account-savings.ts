@@ -1,4 +1,4 @@
-import { getSalaryPlanningBase, normalizeFormula, type AllocationFormula, type BootstrapPayload, type IncomeSource, type Salary } from '@plata/shared'
+import { normalizeFormula, type AllocationFormula, type BootstrapPayload, type IncomeSource, type Salary } from '@plata/shared'
 
 import type { IncomeAccountView } from '@/lib/income-account-view'
 
@@ -108,7 +108,7 @@ export function getAccountSavingsAmount(account: IncomeAccountView, rate: number
   const normalizedRate = Math.min(100, Math.max(0, rate))
   if (normalizedRate <= 0) return 0
 
-  const base = getSalaryPlanningBase(account.salary)
+  const base = account.salary.amount
   const balance = Number(account.salary.balance ?? account.salary.amount)
   if (!Number.isFinite(base) || !Number.isFinite(balance)) return 0
 
@@ -136,6 +136,13 @@ export function findSavingsAccount(
     && isSavingsIncomeSource(source)
     && (source.currencyCode ?? 'USD').trim().toUpperCase() === normalizedCode
   )
+}
+
+export function findSavingsAccounts(sources: IncomeSource[], currencyCode: string): IncomeSource[] {
+  const normalizedCode = currencyCode.trim().toUpperCase()
+  return sources.filter((source) => !source.archived
+    && isSavingsIncomeSource(source)
+    && (source.currencyCode ?? 'USD').trim().toUpperCase() === normalizedCode)
 }
 
 /** Creates the two internal savings ledgers requested by the product model. */
@@ -226,7 +233,7 @@ export function getAccountSavingsPlan(
   // Applying a savings rate to a savings account itself would loop the money.
   if (existing?.id === account.source.id) return null
   const savedUsd = existing && salaries && month
-    ? getSavingsAccountBalance(salaries, existing.id, month)
+    ? getSavingsAccountBalances(salaries, sources, currencyCode, month)
     : 0
   const amountUsd = Math.max(0, goalUsd - savedUsd)
   if (amountUsd <= 0) return null
@@ -258,9 +265,23 @@ export function getAccountSavingsPlans(
 
 /** How much of an account's savings rate is already sitting in its savings account. */
 export function getSavingsAccountBalance(salaries: Salary[], savingsSourceId: string, month: string) {
-  const entry = salaries.find((salary) => salary.sourceId === savingsSourceId && salary.month === month)
+  const entry = salaries
+    .filter((salary) => salary.sourceId === savingsSourceId && salary.month <= month)
+    .sort((left, right) => right.month.localeCompare(left.month))[0]
   if (!entry) return 0
   return Number(entry.balance ?? entry.amount) || 0
+}
+
+export function getSavingsAccountBalances(
+  salaries: Salary[],
+  sources: IncomeSource[],
+  currencyCode: string,
+  month: string,
+) {
+  return findSavingsAccounts(sources, currencyCode).reduce(
+    (total, source) => total + getSavingsAccountBalance(salaries, source.id, month),
+    0,
+  )
 }
 
 export interface AccountSavingsGoal {
@@ -302,9 +323,9 @@ export function getAccountSavingsGoals(
     // The account's own savings account is not a source of new savings.
     if (savingsAccount?.id === account.source.id) return []
 
-    const goalUsd = getSalaryPlanningBase(account.salary) * (rate / 100)
+    const goalUsd = account.salary.amount * (rate / 100)
     const savedUsd = savingsAccount
-      ? getSavingsAccountBalance(salaries, savingsAccount.id, month)
+      ? getSavingsAccountBalances(salaries, sources, currencyCode, month)
       : 0
     const progress = goalUsd > 0 ? Math.min(100, Math.round((savedUsd / goalUsd) * 100)) : 0
 

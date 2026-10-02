@@ -5,12 +5,12 @@ import {
   getFinancialPeriodStart,
   getMonthKey,
   getMonthlyOverview,
-  getSalaryPlanningBase,
   getSavingsFundingBreakdown,
   getWishlistReservedAmount,
   isWishlistPurchased,
 } from '@plata/shared'
-import { findSavingsAccount, getAccountAllocationFormula, getSavingsAccountBalance } from '@/lib/account-savings'
+import { findSavingsAccount, getAccountAllocationFormula, getSavingsAccountBalances } from '@/lib/account-savings'
+import { getIncomeCycleMonth } from '@/lib/income-account-view'
 import { useActiveIncomeAccount } from '@/lib/useActiveIncomeAccount'
 
 export function useMonthlyOverview() {
@@ -26,16 +26,17 @@ export function useMonthlyOverview() {
   const { activeAccount, activeIncomeSourceId } = useActiveIncomeAccount()
 
   return useMemo(() => {
-    const periodStart = getFinancialPeriodStart(monthlyPlanningHistory)
+    const cycleMonth = getIncomeCycleMonth(salaries, monthlyPlanningHistory)
+    const periodStart = monthlyPlanningHistory.length > 0
+      ? getFinancialPeriodStart(monthlyPlanningHistory)
+      : `${cycleMonth ?? getMonthKey()}-01T00:00:00.000Z`
     const periodEnd = new Date().toISOString().slice(0, 10)
     const latestReset = monthlyPlanningHistory.find((entry) => entry.createdAt === periodStart)
     const accountFormula = getAccountAllocationFormula(accountSavingsFormulas, activeIncomeSourceId, formula)
     const accountTransactions = activeIncomeSourceId
       ? transactions.filter((transaction) => transaction.incomeSourceId === activeIncomeSourceId)
       : []
-    const accountSalaries = activeAccount
-      ? [{ ...activeAccount.salary, amount: getSalaryPlanningBase(activeAccount.salary) }]
-      : []
+    const accountSalaries = activeAccount ? [activeAccount.salary] : []
     const accountDebts = debts.filter((debt) => debt.incomeSourceId === activeIncomeSourceId)
     const accountWishlist = wishlist.filter((item) => item.incomeSourceId === activeIncomeSourceId)
     const overview = getMonthlyOverview(accountSalaries, accountTransactions, accountDebts, accountFormula, {
@@ -53,7 +54,12 @@ export function useMonthlyOverview() {
         )
       : undefined
     const generatedSavingsBalance = savingsSource
-      ? getSavingsAccountBalance(salaries, savingsSource.id, getMonthKey())
+      ? getSavingsAccountBalances(
+          salaries,
+          incomeSources,
+          activeAccount?.salary.currencyCode ?? activeAccount?.source.currencyCode ?? 'USD',
+          getMonthKey(),
+        )
       : 0
     const reservedForPurchasedWishlist = accountWishlist.reduce(
       (sum, item) => sum + (isWishlistPurchased(item) ? getWishlistReservedAmount(item) : 0),

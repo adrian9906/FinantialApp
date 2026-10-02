@@ -14,6 +14,7 @@ export interface IncomeMoneyMovement {
   month: string
   destination: IncomeMoneyDestination
   sourceSalaryId?: string
+  destinationSalaryId?: string
   /** Savings allocation keeps the income account's displayed balance intact. */
   preserveSourceBalance?: boolean
 }
@@ -72,9 +73,13 @@ export function applyIncomeMoneyMovement(
     throw new Error('El ingreso de origen no tiene saldo suficiente.')
   }
 
-  const target = state.salaries.find(
-    (salary) => salary.month === movement.month && salary.sourceId === destinationSource.id,
-  )
+  const target = movement.destinationSalaryId
+    ? state.salaries.find((salary) => salary.id === movement.destinationSalaryId)
+    : (sourceSalary
+    ? state.salaries
+      .filter((salary) => salary.sourceId === destinationSource!.id)
+      .sort((left, right) => right.month.localeCompare(left.month))[0]
+    : state.salaries.find((salary) => salary.month === movement.month && salary.sourceId === destinationSource!.id))
   const isTransfer = Boolean(sourceSalary)
   const salaries = state.salaries.map((salary) => {
     if (salary.id === sourceSalary?.id && !movement.preserveSourceBalance) return {
@@ -99,7 +104,7 @@ export function applyIncomeMoneyMovement(
       amount: isTransfer ? 0 : amountUsd,
       balance: amountUsd,
       transferAdjustment: isTransfer && !movement.preserveSourceBalance ? amountUsd : 0,
-      month: movement.month,
+      month: sourceSalary?.month ?? movement.month,
       currencyCode: normalizedCurrency,
       sourceId: destinationSource.id,
       sourceName: destinationSource.name,

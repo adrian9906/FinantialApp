@@ -8,16 +8,25 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { getFinancialPeriodStart, getMonthKey } from '@plata/shared'
 import { convertFromUsd, convertToUsd, formatMoneyInput, formatMoneyWithCode, getCurrencyByCode } from '@/lib/currency'
 import { useFinanceStore } from '@/store/financeStore'
-import { getIncomesForMonth, getMonthKey } from '@plata/shared'
+import { getAccountAllocationFormula } from '@/lib/account-savings'
+import { getIncomeAccountTransferLimit, getIncomeAccountsForCycle, getIncomeCycleMonth } from '@/lib/income-account-view'
+import { usePreferencesStore } from '@/store/preferencesStore'
 
 export function IncomeMoneyActions() {
   const salaries = useFinanceStore((state) => state.salaries)
   const incomeSources = useFinanceStore((state) => state.incomeSources)
+  const transactions = useFinanceStore((state) => state.transactions)
+  const monthlyPlanningHistory = useFinanceStore((state) => state.monthlyPlanningHistory)
   const transferIncomeMoney = useFinanceStore((state) => state.transferIncomeMoney)
-  const month = getMonthKey()
-  const currentIncomes = useMemo(() => getIncomesForMonth(salaries, month), [salaries, month])
+  const fallbackFormula = usePreferencesStore((state) => state.formula)
+  const accountSavingsFormulas = usePreferencesStore((state) => state.accountSavingsFormulas)
+  const currentIncomes = useMemo(
+    () => getIncomeAccountsForCycle(salaries, incomeSources, monthlyPlanningHistory).map((account) => account.salary),
+    [incomeSources, monthlyPlanningHistory, salaries],
+  )
   const sourceIncomes = currentIncomes.filter((income) => Number(income.balance ?? income.amount) > 0)
 
   const [open, setOpen] = useState(false)
@@ -36,6 +45,28 @@ export function IncomeMoneyActions() {
   const nativeAmount = Number(amount.replace(',', '.')) || 0
   const amountUsd = convertToUsd(nativeAmount, sourceCurrency)
   const convertedAmount = convertFromUsd(amountUsd, targetCurrency)
+  const cycleMonth = getIncomeCycleMonth(salaries, monthlyPlanningHistory)
+  const periodStart = monthlyPlanningHistory.length > 0
+    ? getFinancialPeriodStart(monthlyPlanningHistory)
+    : `${cycleMonth ?? getMonthKey()}-01T00:00:00.000Z`
+  const latestReset = monthlyPlanningHistory.find((entry) => entry.createdAt === periodStart)
+  const source = incomeSources.find((entry) => entry.id === sourceSalary?.sourceId)
+  const transferLimit = source && sourceSalary
+    ? getIncomeAccountTransferLimit(
+        { source, salary: sourceSalary },
+        transactions.filter((transaction) => transaction.incomeSourceId === source.id),
+        getAccountAllocationFormula(accountSavingsFormulas, source.id, fallbackFormula),
+        {
+          periodStart,
+          periodEnd: new Date().toISOString().slice(0, 10),
+          strictSameDayBoundary: Boolean(latestReset),
+          excludedTransactionIds: latestReset?.savingTransactionIds,
+        },
+      )
+    : 0
+  const sourceBalance = Number(sourceSalary?.balance ?? sourceSalary?.amount ?? 0)
+  const maxTransferUsd = Math.min(transferLimit, sourceBalance)
+  const maxTransferNative = convertFromUsd(maxTransferUsd, sourceCurrency)
 
   function reset() {
     setAmount('')
@@ -50,7 +81,8 @@ export function IncomeMoneyActions() {
       await transferIncomeMoney({
         sourceSalaryId: sourceSalary.id,
         amountUsd,
-        month,
+        month: sourceSalary.month,
+        destinationSalaryId: destinationSalary.id,
         destination: {
           sourceId: destinationSalary.sourceId,
           currencyCode: targetCurrency.code,
@@ -133,14 +165,16 @@ export function IncomeMoneyActions() {
                 id="transfer-amount"
                 type="number"
                 min="0"
-                max={sourceSalary ? convertFromUsd(Number(sourceSalary.balance ?? sourceSalary.amount), sourceCurrency) : undefined}
+                max={sourceSalary ? maxTransferNative : undefined}
                 inputMode="decimal"
                 value={amount}
                 onChange={(event) => setAmount(event.target.value)}
                 className="border-graphite bg-abyss"
               />
               {sourceSalary ? (
-                <p className="text-xs text-muted-gray">Disponible: {formatMoneyWithCode(Number(sourceSalary.balance ?? sourceSalary.amount), sourceCurrency)}</p>
+                <p className="text-xs text-muted-gray">
+                  Disponible para transferir desde Gastos y Gustos: {formatMoneyInput(maxTransferNative, sourceCurrency)}
+                </p>
               ) : null}
             </div>
 
@@ -155,7 +189,7 @@ export function IncomeMoneyActions() {
 
           <DialogFooter>
             <Button variant="ghost" disabled={isSaving} onClick={() => setOpen(false)}>Cancelar</Button>
-            <Button loading={isSaving} disabled={!sourceSalary || !destinationSalary || amountUsd <= 0} onClick={() => void handleTransfer()}>Transferir</Button>
+            <Button loading={isSaving} disabled={!sourceSalary || !destinationSalary || amountUsd <= 0 || amountUsd > maxTransferUsd + 1e-9} onClick={() => void handleTransfer()}>Transferir</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

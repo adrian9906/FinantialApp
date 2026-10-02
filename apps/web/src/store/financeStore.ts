@@ -15,8 +15,8 @@ import type {
   WishlistItem,
 } from '@plata/shared'
 import {
-  carrySalaryForwardToMonth,
   createEmptyBootstrapPayload,
+  getFinancialPeriodStart,
   getMonthKey,
   normalizeBootstrapPayload,
   normalizeSalaryHistory,
@@ -31,6 +31,7 @@ import { prepareVoiceBatch, persistPreparedVoiceBatch } from '@/lib/voice-batch'
 import { parseWantDescription } from '@/lib/want-utils'
 import { applyIncomeMoneyMovement, type IncomeMoneyDestination } from '@/lib/income-money'
 import { reconcileIncomeAccountCharge } from '@/lib/income-account'
+import { getIncomeAccountTransferLimit, getIncomeCycleMonth } from '@/lib/income-account-view'
 import { resetIncomeCycle } from '@/lib/reset-income-cycle'
 import { reconcileSavingsAccountTransaction } from '@/lib/savings-account-ledger'
 import { ensureCurrencyPreference } from '@/lib/currency'
@@ -63,7 +64,8 @@ interface FinanceStore extends BootstrapPayload {
   updateIncomeSource: (id: string, data: Partial<Omit<IncomeSource, 'id'>>) => Promise<void>
   removeIncomeSource: (id: string) => Promise<void>
   assignIncomeMoney: (input: { amountUsd: number; month: string; destination: IncomeMoneyDestination }) => Promise<void>
-  transferIncomeMoney: (input: { sourceSalaryId: string; amountUsd: number; month: string; destination: IncomeMoneyDestination; preserveSourceBalance?: boolean }) => Promise<void>
+  addIncomeAccountFunds: (input: { salaryId: string; amountUsd: number }) => Promise<void>
+  transferIncomeMoney: (input: { sourceSalaryId: string; destinationSalaryId?: string; amountUsd: number; month: string; destination: IncomeMoneyDestination; preserveSourceBalance?: boolean }) => Promise<void>
   addTransaction: (t: Omit<Transaction, 'id'>) => Promise<Transaction>
   addTransactionsBatch: (inputs: Transaction[]) => Promise<Transaction[]>
   updateTransaction: (id: string, data: Partial<Omit<Transaction, 'id'>>) => Promise<void>
@@ -412,15 +414,8 @@ export const useFinanceStore = create<FinanceStore>()((set, get) => ({
 
     if (activeKey === 'guest') {
       const snapshot = normalizeBootstrapSnapshot(getGuestSnapshot(), 'guest')
-      const salaries = carrySalaryForwardToMonth(
-        snapshot.salaries,
-        getMonthKey(),
-        () => makeId('salary'),
-      )
-      const nextSnapshot = { ...snapshot, salaries }
-      persistGuestSnapshot(nextSnapshot)
       set({
-        ...nextSnapshot,
+        ...snapshot,
         hasLoaded: true,
         loadedKey: activeKey,
       })
@@ -446,18 +441,6 @@ export const useFinanceStore = create<FinanceStore>()((set, get) => ({
     const cachedSnapshot = normalizeBootstrapSnapshot(document.snapshot, userId)
 
     set({ ...cachedSnapshot, hasLoaded: true, loadedKey: activeKey })
-
-    const salaries = carrySalaryForwardToMonth(
-      cachedSnapshot.salaries,
-      getMonthKey(),
-      () => makeId('salary'),
-    )
-
-    const carried = { ...cachedSnapshot, salaries }
-    if (JSON.stringify(carried) !== JSON.stringify(document.snapshot)) {
-      await persistLocalSnapshot(carried, document.snapshot)
-      set({ ...carried, hasLoaded: true, loadedKey: activeKey })
-    }
 
     if (!isOnline()) return
 
@@ -621,8 +604,57 @@ export const useFinanceStore = create<FinanceStore>()((set, get) => ({
   assignIncomeMoney: async (input) => {
     await updateLocalState(set, (state) => applyIncomeMoneyMovement(state, input, makeId))
   },
+  addIncomeAccountFunds: async ({ salaryId, amountUsd }) => {
+    if (!Number.isFinite(amountUsd) || amountUsd <= 0) {
+      throw new Error('Escribe un monto mayor que cero.')
+    }
+    await updateLocalState(set, (state) => {
+      if (!state.salaries.some((salary) => salary.id === salaryId)) {
+        throw new Error('No se encontró la cuenta de ingreso.')
+      }
+      return {
+        salaries: state.salaries.map((salary) => salary.id === salaryId
+          ? { ...salary, balance: Number(salary.balance ?? salary.amount) + amountUsd }
+          : salary),
+      }
+    })
+  },
   transferIncomeMoney: async (input) => {
-    await updateLocalState(set, (state) => applyIncomeMoneyMovement(state, input, makeId))
+    const preferences = usePreferencesStore.getState()
+    await updateLocalState(set, (state) => {
+      const sourceSalary = state.salaries.find((salary) => salary.id === input.sourceSalaryId)
+      const source = sourceSalary?.sourceId
+        ? state.incomeSources.find((entry) => entry.id === sourceSalary.sourceId)
+        : undefined
+      if (!sourceSalary || !source) throw new Error('No se encontró la cuenta de origen.')
+
+      const cycleMonth = getIncomeCycleMonth(state.salaries, state.monthlyPlanningHistory)
+      const periodStart = state.monthlyPlanningHistory.length > 0
+        ? getFinancialPeriodStart(state.monthlyPlanningHistory)
+        : `${cycleMonth ?? sourceSalary.month}-01T00:00:00.000Z`
+      const latestReset = state.monthlyPlanningHistory.find((entry) => entry.createdAt === periodStart)
+      const accountFormula = getAccountAllocationFormula(
+        preferences.accountSavingsFormulas,
+        source.id,
+        preferences.formula,
+      )
+      const transferable = getIncomeAccountTransferLimit(
+        { source, salary: sourceSalary },
+        state.transactions.filter((transaction) => transaction.incomeSourceId === source.id),
+        accountFormula,
+        {
+          periodStart,
+          periodEnd: new Date().toISOString().slice(0, 10),
+          strictSameDayBoundary: Boolean(latestReset),
+          excludedTransactionIds: latestReset?.savingTransactionIds,
+        },
+      )
+      if (input.amountUsd > transferable + 1e-9) {
+        throw new Error(`Solo puedes transferir hasta ${transferable.toFixed(2)} de lo asignado a Gastos y Gustos.`)
+      }
+
+      return applyIncomeMoneyMovement(state, input, makeId)
+    })
   },
   addTransaction: async (transaction) => {
     const preferences = usePreferencesStore.getState()
@@ -647,7 +679,12 @@ export const useFinanceStore = create<FinanceStore>()((set, get) => ({
     await updateLocalState(set, (state) => ({
       transactions: [created, ...state.transactions],
       salaries: reconcileSavingsAccountTransaction(
-        reconcileIncomeAccountCharge(state.salaries, undefined, created),
+        reconcileIncomeAccountCharge(
+          state.salaries,
+          undefined,
+          created,
+          getIncomeCycleMonth(state.salaries, state.monthlyPlanningHistory),
+        ),
         state.incomeSources,
         undefined,
         created,
@@ -689,7 +726,12 @@ export const useFinanceStore = create<FinanceStore>()((set, get) => ({
         const previous = state.transactions.find((entry) => entry.id === id)
         if (!previous) return {}
         const next = { ...previous, ...data }
-        const charged = reconcileIncomeAccountCharge(state.salaries, previous, next)
+        const charged = reconcileIncomeAccountCharge(
+          state.salaries,
+          previous,
+          next,
+          getIncomeCycleMonth(state.salaries, state.monthlyPlanningHistory),
+        )
         return {
           transactions: state.transactions.map((entry) => (entry.id === id ? next : entry)),
           salaries: reconcileSavingsAccountTransaction(
@@ -708,7 +750,12 @@ export const useFinanceStore = create<FinanceStore>()((set, get) => ({
     if (isLocalMutationMode()) {
       await updateLocalState(set, (state) => {
         const previous = state.transactions.find((entry) => entry.id === id)
-        const charged = reconcileIncomeAccountCharge(state.salaries, previous, undefined)
+        const charged = reconcileIncomeAccountCharge(
+          state.salaries,
+          previous,
+          undefined,
+          getIncomeCycleMonth(state.salaries, state.monthlyPlanningHistory),
+        )
         return {
           transactions: state.transactions.filter((entry) => entry.id !== id),
           salaries: reconcileSavingsAccountTransaction(

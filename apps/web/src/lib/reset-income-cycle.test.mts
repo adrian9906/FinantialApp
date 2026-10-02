@@ -19,7 +19,7 @@ const salaries: Salary[] = [
   { id: 'salary-history', sourceId: 'salary', sourceName: 'Salario USD', kind: 'recurring', month: '2026-08', amount: 400, balance: 125, transferAdjustment: -275 },
 ]
 
-const reset = resetIncomeCycle(salaries, sources, '2026-09')
+const reset = resetIncomeCycle(salaries, sources)
 
 assert.equal(reset.salaries.find((entry) => entry.id === 'salary-current')?.balance, 400, 'el salario recupera su monto original')
 assert.equal(reset.salaries.find((entry) => entry.id === 'salary-current')?.transferAdjustment, 0, 'la transferencia deja de alterar el salario')
