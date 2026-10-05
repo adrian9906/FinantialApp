@@ -23,6 +23,8 @@ export interface Salary {
   amount: number
   /** Spendable account balance; amount remains the monthly planning base. */
   balance?: number
+  /** Historical saving transactions have been reconciled into this balance. */
+  savingsLedgerMigrated?: boolean
   /** Net account transfers in this month; changes its planning base, not income. */
   transferAdjustment?: number
   month: string

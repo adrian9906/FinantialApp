@@ -84,6 +84,7 @@ model Salario {
   salario   Float
   saldo     Float
   ajusteTransferencias Float @default(0)
+  ahorroMigrado Boolean @default(false)
   moneda    String   @default("USD")
   modoSaldo String   @default("fixed")
   fuenteId    String?

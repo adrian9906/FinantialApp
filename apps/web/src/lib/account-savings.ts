@@ -183,6 +183,7 @@ export function ensureSavingsCurrencyAccounts(
         id: `${source.id}-${month}`,
         amount: 0,
         balance: Number(latest?.balance ?? 0),
+        savingsLedgerMigrated: latest?.savingsLedgerMigrated,
         month,
         currencyCode,
         sourceId: source.id,
@@ -200,6 +201,45 @@ export function ensureSavingsCurrencyAccounts(
   }
 
   return changed ? { ...snapshot, incomeSources, salaries } : snapshot
+}
+
+/** Recover pre-ledger savings once, without counting recorded balances twice. */
+export function migrateLegacySavingsLedger(snapshot: BootstrapPayload, month: string): BootstrapPayload {
+  const sourceById = new Map(snapshot.incomeSources.map((source) => [source.id, source]))
+  let salaries = snapshot.salaries
+
+  for (const currencyCode of ['USD', 'CUP']) {
+    const sources = findSavingsAccounts(snapshot.incomeSources, currencyCode)
+    const currentEntries = sources.flatMap((source) => {
+      const entry = salaries.filter((salary) => salary.sourceId === source.id && salary.month <= month)
+        .sort((left, right) => right.month.localeCompare(left.month))[0]
+      return entry ? [entry] : []
+    })
+    if (!currentEntries.length || currentEntries.some((entry) => entry.savingsLedgerMigrated)) continue
+
+    const recordedSavings = snapshot.transactions.reduce((total, transaction) => {
+      if (transaction.type !== 'saving') return total
+      const source = sourceById.get(transaction.incomeSourceId ?? '')
+      const code = (source?.currencyCode ?? 'USD').trim().toUpperCase()
+      return code === currencyCode ? total + transaction.amount : total
+    }, 0)
+    const existingBalance = currentEntries.reduce((total, entry) => total + Number(entry.balance ?? entry.amount), 0)
+    // An empty device cache can load before the remote transactions arrive.
+    // Do not declare that empty placeholder migrated and skip recovery later.
+    if (existingBalance === 0 && !snapshot.transactions.some((transaction) => transaction.type === 'saving'
+      && (sourceById.get(transaction.incomeSourceId ?? '')?.currencyCode ?? 'USD').trim().toUpperCase() === currencyCode)) continue
+    const missingBalance = Math.max(0, recordedSavings - existingBalance)
+    const entryIds = new Set(currentEntries.map((entry) => entry.id))
+    salaries = salaries.map((salary) => entryIds.has(salary.id)
+      ? {
+          ...salary,
+          savingsLedgerMigrated: true,
+          balance: Number(salary.balance ?? salary.amount) + (salary.id === currentEntries[0].id ? missingBalance : 0),
+        }
+      : salary)
+  }
+
+  return salaries === snapshot.salaries ? snapshot : { ...snapshot, salaries }
 }
 
 export interface AccountSavingsPlan {

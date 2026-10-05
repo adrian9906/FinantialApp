@@ -63,6 +63,6 @@ export function reconcileSavingsAccountTransaction(
     const delta = deltas.get(salary.id)
     return delta === undefined
       ? salary
-      : { ...salary, balance: Math.max(0, Number(salary.balance ?? salary.amount) + delta) }
+      : { ...salary, savingsLedgerMigrated: true, balance: Math.max(0, Number(salary.balance ?? salary.amount) + delta) }
   })
 }

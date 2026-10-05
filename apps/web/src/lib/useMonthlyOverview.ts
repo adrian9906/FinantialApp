@@ -9,7 +9,7 @@ import {
   getWishlistReservedAmount,
   isWishlistPurchased,
 } from '@plata/shared'
-import { findSavingsAccount, getAccountAllocationFormula, getSavingsAccountBalances } from '@/lib/account-savings'
+import { getAccountAllocationFormula, getSavingsAccountBalances } from '@/lib/account-savings'
 import { getIncomeCycleMonth } from '@/lib/income-account-view'
 import { useActiveIncomeAccount } from '@/lib/useActiveIncomeAccount'
 
@@ -23,6 +23,7 @@ export function useMonthlyOverview() {
   const subscriptions = useFinanceStore((state) => state.subscriptions)
   const formula = usePreferencesStore((state) => state.formula)
   const accountSavingsFormulas = usePreferencesStore((state) => state.accountSavingsFormulas)
+  const activeCurrencyCode = usePreferencesStore((state) => state.activeCurrencyCode)
   const { activeAccount, activeIncomeSourceId } = useActiveIncomeAccount()
 
   return useMemo(() => {
@@ -38,30 +39,20 @@ export function useMonthlyOverview() {
       : []
     const accountSalaries = activeAccount ? [activeAccount.salary] : []
     const accountDebts = debts.filter((debt) => debt.incomeSourceId === activeIncomeSourceId)
-    const accountWishlist = wishlist.filter((item) => item.incomeSourceId === activeIncomeSourceId)
     const overview = getMonthlyOverview(accountSalaries, accountTransactions, accountDebts, accountFormula, {
       periodStart,
       periodEnd,
       strictSameDayBoundary: Boolean(latestReset),
       excludedTransactionIds: latestReset?.savingTransactionIds,
     })
-    const funding = getSavingsFundingBreakdown(accountTransactions, accountWishlist)
-    const savingsSource = activeAccount
-      ? findSavingsAccount(
-          incomeSources,
-          activeAccount.salary.currencyCode ?? activeAccount.source.currencyCode ?? 'USD',
-          activeAccount.source.isCash !== false,
-        )
-      : undefined
-    const generatedSavingsBalance = savingsSource
-      ? getSavingsAccountBalances(
-          salaries,
-          incomeSources,
-          activeAccount?.salary.currencyCode ?? activeAccount?.source.currencyCode ?? 'USD',
-          getMonthKey(),
-        )
-      : 0
-    const reservedForPurchasedWishlist = accountWishlist.reduce(
+    const savingsCurrency = (activeAccount?.salary.currencyCode ?? activeAccount?.source.currencyCode ?? activeCurrencyCode).trim().toUpperCase()
+    const sourceById = new Map(incomeSources.map((source) => [source.id, source]))
+    const currencyTransactions = transactions.filter((transaction) =>
+      (sourceById.get(transaction.incomeSourceId ?? '')?.currencyCode ?? 'USD').trim().toUpperCase() === savingsCurrency)
+    const currencyWishlist = wishlist.filter((item) => (item.sourceCurrency ?? 'USD').trim().toUpperCase() === savingsCurrency)
+    const funding = getSavingsFundingBreakdown(currencyTransactions, currencyWishlist)
+    const generatedSavingsBalance = getSavingsAccountBalances(salaries, incomeSources, savingsCurrency, getMonthKey())
+    const reservedForPurchasedWishlist = currencyWishlist.reduce(
       (sum, item) => sum + (isWishlistPurchased(item) ? getWishlistReservedAmount(item) : 0),
       0,
     )
@@ -107,5 +98,5 @@ export function useMonthlyOverview() {
       activeSubscriptions,
       monthlySubscriptions,
     }
-  }, [accountSavingsFormulas, activeAccount, activeIncomeSourceId, debts, formula, incomeSources, monthlyPlanningHistory, salaries, subscriptions, transactions, wishlist])
+  }, [accountSavingsFormulas, activeAccount, activeCurrencyCode, activeIncomeSourceId, debts, formula, incomeSources, monthlyPlanningHistory, salaries, subscriptions, transactions, wishlist])
 }

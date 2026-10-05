@@ -37,7 +37,7 @@ import { reconcileSavingsAccountTransaction } from '@/lib/savings-account-ledger
 import { ensureCurrencyPreference } from '@/lib/currency'
 import { useAuthStore } from '@/store/authStore'
 import { usePreferencesStore } from '@/store/preferencesStore'
-import { ensureSavingsCurrencyAccounts, getAccountAllocationFormula, normalizeLegacySavingsAccounts } from '@/lib/account-savings'
+import { ensureSavingsCurrencyAccounts, getAccountAllocationFormula, migrateLegacySavingsLedger, normalizeLegacySavingsAccounts } from '@/lib/account-savings'
 
 const GUEST_FINANCE_STORAGE_KEY = 'plata-guest-finance'
 let voiceBatchSaving = false
@@ -169,7 +169,7 @@ function normalizeBootstrapSnapshot(payload?: Partial<BootstrapPayload> | null, 
   const withSavingsAccounts = ownerKey
     ? ensureSavingsCurrencyAccounts(repaired, ownerKey, getMonthKey())
     : repaired
-  return ensureCurrentSubscriptionExpenses(withSavingsAccounts)
+  return ensureCurrentSubscriptionExpenses(migrateLegacySavingsLedger(withSavingsAccounts, getMonthKey()))
 }
 
 function getSubscriptionExpenseMarker(subscriptionId: string, month = getMonthKey()) {
@@ -414,6 +414,7 @@ export const useFinanceStore = create<FinanceStore>()((set, get) => ({
 
     if (activeKey === 'guest') {
       const snapshot = normalizeBootstrapSnapshot(getGuestSnapshot(), 'guest')
+      persistGuestSnapshot(snapshot)
       set({
         ...snapshot,
         hasLoaded: true,
@@ -439,6 +440,8 @@ export const useFinanceStore = create<FinanceStore>()((set, get) => ({
     // that could later be written back over the cache.
     const document = await readSyncDocument(userId)
     const cachedSnapshot = normalizeBootstrapSnapshot(document.snapshot, userId)
+    await queueLocalChange(userId, cachedSnapshot, document.snapshot)
+    if (getActiveKey() !== activeKey) return
 
     set({ ...cachedSnapshot, hasLoaded: true, loadedKey: activeKey })
 
@@ -450,7 +453,10 @@ export const useFinanceStore = create<FinanceStore>()((set, get) => ({
       if (!synced) return
       if (localRevision !== revision || get().loadedKey !== activeKey) return
 
-      const normalized = normalizeBootstrapSnapshot((await readSyncDocument(userId)).snapshot, userId)
+      const latest = await readSyncDocument(userId)
+      const normalized = normalizeBootstrapSnapshot(latest.snapshot, userId)
+      await queueLocalChange(userId, normalized, latest.snapshot)
+      if (localRevision !== revision || get().loadedKey !== activeKey) return
       set({
         ...normalized,
         hasLoaded: true,
@@ -481,13 +487,15 @@ export const useFinanceStore = create<FinanceStore>()((set, get) => ({
       const latest = await readSyncDocument(userId)
       if (localRevision !== revision) return false
       const normalized = normalizeBootstrapSnapshot(latest.snapshot, userId)
+      const queued = await queueLocalChange(userId, normalized, latest.snapshot)
+      if (localRevision !== revision || get().loadedKey !== `user:${userId}`) return false
       set({
         ...normalized,
         hasLoaded: true,
         loadedKey: `user:${userId}`,
       })
 
-      return latest.operations.length === 0 && latest.conflicts.length === 0
+      return queued.operations.length === 0 && queued.conflicts.length === 0
     } catch (error) {
       // Pending operations stay queued for the next attempt.
       if (error instanceof ApiRequestError && error.status === 401) {

@@ -10,6 +10,8 @@ const expense = { id: 'record-1', amount: 5, type: 'expense', description: 'food
 assert.deepEqual(parse('transactions', expense).value, expense, 'un gasto debe conservar su cuenta y método de pago')
 const salary = { id: 'record-1', amount: 400, balance: 395, transferAdjustment: 25, month: '2026-09', currencyCode: 'CUP', balanceMode: 'zero', sourceId: 'source-1', sourceName: 'Cuenta CUP', kind: 'recurring' }
 assert.deepEqual(parse('salaries', salary).value, salary, 'el saldo y moneda no deben desaparecer al validar')
+assert.deepEqual(parse('salaries', { ...salary, savingsLedgerMigrated: true }).value,
+  { ...salary, savingsLedgerMigrated: true }, 'la marca de migración debe sobrevivir la sincronización')
 const source = { id: 'record-1', name: 'Cuenta CUP', recurring: true, archived: false, currencyCode: 'CUP', balanceMode: 'zero', isCash: false }
 assert.deepEqual(parse('incomeSources', source).value, source)
 const planningItem = { amount: 5, itemName: 'Pan', category: 'food', status: 'pending', date: '2026-09-15', ...account }

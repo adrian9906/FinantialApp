@@ -12,6 +12,7 @@ import {
   getSavingsAccountName,
   ensureSavingsCurrencyAccounts,
   normalizeLegacySavingsAccounts,
+  migrateLegacySavingsLedger,
 } from './account-savings.ts'
 
 function account(id: string, currencyCode: string, isCash: boolean, amount: number, balance = amount) {
@@ -196,3 +197,32 @@ assert.equal(completedPlan, null, 'el 20% ya aplicado no debe aparecer de nuevo'
 console.log('PASS 15: la asignación por cuenta solo se aplica una vez')
 
 console.log('Metas de ahorro por cuenta correctas.')
+
+const legacyLedger = {
+  ...ensured,
+  transactions: [
+    { id: 'legacy-deposit', type: 'saving' as const, amount: 68, date: '2026-08-01' },
+    { id: 'legacy-withdrawal', type: 'saving' as const, amount: -20, date: '2026-08-02' },
+    { id: 'cup-deposit', type: 'saving' as const, amount: 100, date: '2026-09-01', incomeSourceId: 'cup' },
+  ],
+  incomeSources: [...ensured.incomeSources, { ...transferAccount.source, id: 'cup' }],
+}
+const migrated = migrateLegacySavingsLedger(legacyLedger, '2026-09')
+assert.equal(migrateLegacySavingsLedger(ensured, '2026-09'), ensured,
+  'un dispositivo vacío no se marca migrado antes de recibir los aportes remotos')
+assert.equal(getSavingsAccountBalance(migrated.salaries, 'savings-user-1-usd', '2026-09'), 48,
+  'los aportes antiguos aparecen aunque la cuenta interna estuviera vacía; se descuentan retiros')
+assert.equal(getSavingsAccountBalance(migrated.salaries, 'savings-user-1-cup', '2026-09'), 100,
+  'cada moneda recupera únicamente sus propios aportes')
+assert.equal(migrateLegacySavingsLedger(migrated, '2026-09'), migrated, 'la reparación es idempotente')
+const emptied = { ...migrated, salaries: migrated.salaries.map((salary) => ({ ...salary, balance: 0 })) }
+assert.equal(migrateLegacySavingsLedger(emptied, '2026-09'), emptied,
+  'un saldo gastado después de migrar no resucita al recargar')
+const nextMonth = ensureSavingsCurrencyAccounts(emptied, 'user-1', '2026-10')
+assert.equal(migrateLegacySavingsLedger(nextMonth, '2026-10'), nextMonth,
+  'el cambio de mes conserva la marca y no vuelve a sumar el historial')
+const alreadyRecorded = { ...legacyLedger, salaries: legacyLedger.salaries.map((salary) => ({ ...salary, balance: 200 })) }
+const preserved = migrateLegacySavingsLedger(alreadyRecorded, '2026-09')
+assert.ok(preserved.salaries.every((salary) => salary.balance === 200),
+  'el ahorro registrado en las cuentas no se suma otra vez al historial')
+console.log('PASS: migración de aportes históricos, retiros, monedas y recargas sin duplicar')
