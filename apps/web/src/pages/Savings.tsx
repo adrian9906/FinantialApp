@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { buildSavingWithdrawalDescription, getMonthKey, getSavingsFundingBreakdown, getWishlistReservedAmount, isWishlistPurchased, parseSavingDescription } from '@plata/shared'
+import { buildSavingWithdrawalDescription, getMonthKey, getSavingsFundingBreakdown, parseSavingDescription } from '@plata/shared'
 import { useFinanceStore } from '@/store/financeStore'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -17,7 +17,7 @@ import { usePreferencesStore } from '@/store/preferencesStore'
 import { getTodayDateKey } from '@/lib/date'
 import { AccountSavingsPanel } from '@/components/savings/AccountSavingsPanel'
 import { IncomeAccountSelect } from '@/components/income/IncomeAccountSelect'
-import { findSavingsAccount, getAccountAllocationFormula, getSavingsAccountBalances } from '@/lib/account-savings'
+import { findSavingsAccount, getAccountAllocationFormula, getAvailableSavingsByCurrency, getSavingsAccountBalances } from '@/lib/account-savings'
 import { useActiveIncomeAccount } from '@/lib/useActiveIncomeAccount'
 
 export default function Savings() {
@@ -41,7 +41,6 @@ export default function Savings() {
     selectAccount: setSelectedAccountPreference,
   } = useActiveIncomeAccount()
   const savingsCurrencyCode = activeCurrencyCode === 'CUP' ? 'CUP' : 'USD'
-  const selectedSavingsSource = findSavingsAccount(incomeSources, savingsCurrencyCode, true)
   const sourceById = useMemo(() => new Map(incomeSources.map((source) => [source.id, source])), [incomeSources])
   const selectedFormula = getAccountAllocationFormula(accountSavingsFormulas, selectedAccountId, formula)
   const wantsEnabled = selectedFormula.wants > 0
@@ -153,15 +152,9 @@ export default function Savings() {
   const accountBudgetSavings = (selectedAccount ? selectedAccount.salary.amount : 0) * (selectedFormula.savings / 100)
   const remaining = accountBudgetSavings - accountPeriodSavings
   const budgetFull = remaining <= 0
-  const generatedSavingsBalance = selectedSavingsSource
-    ? getSavingsAccountBalances(salaries, incomeSources, savingsCurrencyCode, getMonthKey())
-    : 0
   const currencyWishlist = wishlist
     .filter((item) => (item.sourceCurrency ?? 'USD').trim().toUpperCase() === savingsCurrencyCode)
-  const purchasedWishlistAmount = currencyWishlist
-    .filter((item) => isWishlistPurchased(item))
-    .reduce((sum, item) => sum + getWishlistReservedAmount(item), 0)
-  const accountAccumulatedSavings = Math.max(0, generatedSavingsBalance - purchasedWishlistAmount)
+  const accountAccumulatedSavings = getAvailableSavingsByCurrency(salaries, incomeSources, wishlist, savingsCurrencyCode, getMonthKey()).free
   const availableSavings = accountAccumulatedSavings
   const fundingBreakdown = getSavingsFundingBreakdown(savingsList, currencyWishlist)
   const borrowedSavings = Math.min(availableSavings, Math.max(0, fundingBreakdown.borrowedBalance))

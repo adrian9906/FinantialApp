@@ -461,7 +461,7 @@ function serializeSaving(entry: { id: string; cantidad: number; descripcion: str
   }
 }
 
-function serializeWishlist(entry: {
+export function serializeWishlist(entry: {
   id: string
   fuenteIngresoId?: string | null
   fuenteIngresoNombre?: string | null
@@ -472,7 +472,7 @@ function serializeWishlist(entry: {
   items: Array<{ nombre: string; precio: number; prioridad: string; foto: string | null; tienda: string | null; urlReferencia: string | null; moneda: string | null }>
 }): WishlistItem {
   const item = entry.items[0]
-  const isPurchased = entry.comprado || entry.cantidad > 0
+  const isPurchased = entry.comprado
 
   return {
     id: entry.id,
@@ -1635,8 +1635,7 @@ async function saveWishlist(userId: string, body: JsonRecord, id?: string) {
   const sourceStore = body.sourceStore ? String(body.sourceStore).trim() : null
   const sourceUrl = body.sourceUrl ? String(body.sourceUrl).trim() : null
   const sourceCurrency = body.sourceCurrency ? String(body.sourceCurrency).trim() : null
-  const inferredPurchased = rawSavedAmount > 0 && rawSavedAmount >= price
-  const isPurchased = typeof body.isPurchased === 'boolean' ? body.isPurchased : inferredPurchased
+  const isPurchased = body.isPurchased === true
   const savedAmount = isPurchased ? Math.max(0, rawSavedAmount) : 0
   const purchasedAt = body.purchasedAt ? new Date(String(body.purchasedAt)) : null
   const incomeSourceId = body.incomeSourceId ? String(body.incomeSourceId) : null

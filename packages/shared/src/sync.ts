@@ -100,6 +100,17 @@ export function acceptSyncResponse(document: SyncDocument, response: SyncRespons
     const index = conflicts.findIndex((entry) => entry.key === response.conflict!.key)
     if (index >= 0) conflicts.splice(index, 1)
     conflicts.push(response.conflict)
+    const first = operations.find((operation) => syncKey(operation.collection, operation.entityId) === response.conflict!.key)
+    if (first) {
+      const desired = getSyncValue(operations.reduce(applyOperation, response.snapshot), first.collection, first.entityId)
+      // An older queued write can conflict after a later repair already matches
+      // the server. Preserve that agreed final value without sending the obsolete write.
+      if (canonicalJson(desired) === canonicalJson(response.conflict.remote)) {
+        operations = operations.filter((operation) => syncKey(operation.collection, operation.entityId) !== response.conflict!.key)
+        const redundant = conflicts.findIndex((entry) => entry.key === response.conflict!.key)
+        if (redundant >= 0) conflicts.splice(redundant, 1)
+      }
+    }
   }
   return { ...document, initialized: true, base: response.snapshot, versions: response.versions, operations, conflicts, snapshot: operations.reduce(applyOperation, response.snapshot), lastSyncedAt: operations.length ? document.lastSyncedAt : new Date().toISOString() }
 }

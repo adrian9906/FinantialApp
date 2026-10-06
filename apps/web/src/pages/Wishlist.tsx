@@ -36,7 +36,7 @@ import { exportWishlistReport } from '@/lib/reportExports'
 import { useFinanceStore } from '@/store/financeStore'
 import { convertToUsd, convertUsdToInput, formatMoney, formatMoneyWithCode, getCurrencyByCode } from '@/lib/currency'
 import { WantCelebration } from '@/components/celebration/WantCelebration'
-import { findSavingsAccount, getSavingsAccountBalances } from '@/lib/account-savings'
+import { findSavingsAccount, getAvailableSavingsByCurrency } from '@/lib/account-savings'
 
 interface FormState {
   name: string
@@ -147,18 +147,9 @@ export default function Wishlist() {
   const savingsByCurrency = useMemo(() => {
     return Object.fromEntries((['USD', 'CUP'] as const).map((currencyCode) => {
       const savingsAccount = findSavingsAccount(incomeSources, currencyCode, true)
-      const generatedBalance = savingsAccount
-        ? getSavingsAccountBalances(salaries, incomeSources, currencyCode, getMonthKey())
-        : 0
-      const purchasedReserved = wishlist
-        .filter((item) => getWishlistCurrency(item) === currencyCode && isWishlistPurchased(item))
-        .reduce((sum, item) => sum + getWishlistReservedAmount(item), 0)
-
       return [currencyCode, {
         account: savingsAccount,
-        balance: Math.max(0, generatedBalance),
-        purchasedReserved,
-        free: Math.max(0, generatedBalance - purchasedReserved),
+        ...getAvailableSavingsByCurrency(salaries, incomeSources, wishlist, currencyCode, getMonthKey()),
       }]
     })) as Record<SavingsCurrencyCode, {
       account: ReturnType<typeof findSavingsAccount>

@@ -13,6 +13,8 @@ import {
   ensureSavingsCurrencyAccounts,
   normalizeLegacySavingsAccounts,
   migrateLegacySavingsLedger,
+  getAvailableSavingsByCurrency,
+  repairMisassignedLegacyCupSavings,
 } from './account-savings.ts'
 
 function account(id: string, currencyCode: string, isCash: boolean, amount: number, balance = amount) {
@@ -201,8 +203,8 @@ console.log('Metas de ahorro por cuenta correctas.')
 const legacyLedger = {
   ...ensured,
   transactions: [
-    { id: 'legacy-deposit', type: 'saving' as const, amount: 68, date: '2026-08-01' },
-    { id: 'legacy-withdrawal', type: 'saving' as const, amount: -20, date: '2026-08-02' },
+    { id: 'legacy-deposit', type: 'saving' as const, amount: 68, date: '2026-09-01' },
+    { id: 'legacy-withdrawal', type: 'saving' as const, amount: -20, date: '2026-09-02' },
     { id: 'cup-deposit', type: 'saving' as const, amount: 100, date: '2026-09-01', incomeSourceId: 'cup' },
   ],
   incomeSources: [...ensured.incomeSources, { ...transferAccount.source, id: 'cup' }],
@@ -226,3 +228,46 @@ const preserved = migrateLegacySavingsLedger(alreadyRecorded, '2026-09')
 assert.ok(preserved.salaries.every((salary) => salary.balance === 200),
   'el ahorro registrado en las cuentas no se suma otra vez al historial')
 console.log('PASS: migración de aportes históricos, retiros, monedas y recargas sin duplicar')
+
+const savingsOnlyUsd = {
+  ...migrated,
+  salaries: migrated.salaries.map((salary) => ({ ...salary,
+    balance: salary.sourceId === 'savings-user-1-usd' ? 200 : 0 })),
+}
+const fundedWish = { id: 'funded', name: 'Meta', price: 200, savedAmount: 200, priority: 'high' as const, sourceCurrency: 'USD' }
+assert.deepEqual(getAvailableSavingsByCurrency(savingsOnlyUsd.salaries, savingsOnlyUsd.incomeSources, [fundedWish], 'USD', '2026-09'),
+  { balance: 200, purchasedReserved: 0, free: 200 }, 'un deseo financiado sin compra no reduce el saldo USD')
+assert.deepEqual(getAvailableSavingsByCurrency(savingsOnlyUsd.salaries, savingsOnlyUsd.incomeSources, [fundedWish], 'CUP', '2026-09'),
+  { balance: 0, purchasedReserved: 0, free: 0 }, 'tener USD no genera ahorro CUP')
+assert.equal(getAvailableSavingsByCurrency(savingsOnlyUsd.salaries, savingsOnlyUsd.incomeSources,
+  [{ ...fundedWish, isPurchased: true, savedAmount: 50, purchasedAt: '2026-09-20' }], 'USD', '2026-09').free, 150,
+  'las compras confirmadas sí consumen ahorro de su moneda')
+assert.equal(getAvailableSavingsByCurrency(savingsOnlyUsd.salaries, savingsOnlyUsd.incomeSources,
+  [{ ...fundedWish, isPurchased: true, sourceCurrency: 'CUP' }], 'USD', '2026-09').free, 200,
+  'una compra CUP no consume ahorro USD')
+console.log('PASS: disponible común, metas sin comprar y separación USD/CUP')
+
+const oldPurchases = [200, 10, 10, 22, 8].map((savedAmount, index) => ({
+  ...fundedWish, id: `old-${index}`, savedAmount, isPurchased: true, purchasedAt: '2026-08-09',
+}))
+assert.equal(getAvailableSavingsByCurrency(savingsOnlyUsd.salaries, savingsOnlyUsd.incomeSources,
+  oldPurchases, 'USD', '2026-10').free, 200,
+  'las compras anteriores al saldo inicial no consumen los 200 USD actuales otra vez')
+const cupOrigin: IncomeSource = { id: 'transfer', name: 'Transferencia', currencyCode: 'CUP', recurring: true }
+const corrupt = {
+  ...ensured,
+  incomeSources: [cupOrigin, ...ensured.incomeSources],
+  transactions: [{ id: 'old-usd', type: 'saving' as const, amount: 318, date: '2026-08-01', incomeSourceId: cupOrigin.id }],
+  salaries: [...ensured.salaries, {
+    id: 'cup-current', sourceId: 'savings-user-1-cup', month: '2026-10', amount: 0, balance: 318, savingsLedgerMigrated: true,
+  }],
+}
+const repairedCup = repairMisassignedLegacyCupSavings(corrupt)
+assert.equal(getSavingsAccountBalance(repairedCup.salaries, 'savings-user-1-cup', '2026-10'), 0,
+  'elimina el CUP inventado por vincular historial USD anterior al saldo inicial')
+assert.equal(repairMisassignedLegacyCupSavings(repairedCup), repairedCup, 'la reparación CUP no se repite')
+const realCup = { ...corrupt, transactions: [...corrupt.transactions, {
+  id: 'real-cup', type: 'saving' as const, amount: 100, date: '2026-10-01', incomeSourceId: cupOrigin.id,
+}] }
+assert.equal(repairMisassignedLegacyCupSavings(realCup), realCup, 'conserva el CUP cuando existen aportes reales de esa moneda')
+console.log('PASS: caso real de 200 USD actuales, compras históricas y CUP creado por la migración')

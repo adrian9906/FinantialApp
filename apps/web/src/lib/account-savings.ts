@@ -1,4 +1,4 @@
-import { normalizeFormula, type AllocationFormula, type BootstrapPayload, type IncomeSource, type Salary } from '@plata/shared'
+import { getWishlistReservedAmount, isWishlistPurchased, normalizeFormula, type AllocationFormula, type BootstrapPayload, type IncomeSource, type Salary, type WishlistItem } from '@plata/shared'
 
 import type { IncomeAccountView } from '@/lib/income-account-view'
 
@@ -217,8 +217,10 @@ export function migrateLegacySavingsLedger(snapshot: BootstrapPayload, month: st
     })
     if (!currentEntries.length || currentEntries.some((entry) => entry.savingsLedgerMigrated)) continue
 
+    const ledgerStart = getSavingsLedgerStart(snapshot.salaries, sources)
+
     const recordedSavings = snapshot.transactions.reduce((total, transaction) => {
-      if (transaction.type !== 'saving') return total
+      if (transaction.type !== 'saving' || transaction.date < ledgerStart) return total
       const source = sourceById.get(transaction.incomeSourceId ?? '')
       const code = (source?.currencyCode ?? 'USD').trim().toUpperCase()
       return code === currencyCode ? total + transaction.amount : total
@@ -226,7 +228,7 @@ export function migrateLegacySavingsLedger(snapshot: BootstrapPayload, month: st
     const existingBalance = currentEntries.reduce((total, entry) => total + Number(entry.balance ?? entry.amount), 0)
     // An empty device cache can load before the remote transactions arrive.
     // Do not declare that empty placeholder migrated and skip recovery later.
-    if (existingBalance === 0 && !snapshot.transactions.some((transaction) => transaction.type === 'saving'
+    if (existingBalance === 0 && !snapshot.transactions.some((transaction) => transaction.type === 'saving' && transaction.date >= ledgerStart
       && (sourceById.get(transaction.incomeSourceId ?? '')?.currencyCode ?? 'USD').trim().toUpperCase() === currencyCode)) continue
     const missingBalance = Math.max(0, recordedSavings - existingBalance)
     const entryIds = new Set(currentEntries.map((entry) => entry.id))
@@ -322,6 +324,62 @@ export function getSavingsAccountBalances(
     (total, source) => total + getSavingsAccountBalance(salaries, source.id, month),
     0,
   )
+}
+
+/** Undo the former migration's identifiable CUP credit from pre-account USD history. */
+export function repairMisassignedLegacyCupSavings(snapshot: BootstrapPayload): BootstrapPayload {
+  const sources = findSavingsAccounts(snapshot.incomeSources, 'CUP')
+    .filter((source) => source.id.startsWith('savings-'))
+  const firstIncome = snapshot.incomeSources.find((source) => !source.archived && !isSavingsIncomeSource(source))
+  if (!sources.length || firstIncome?.currencyCode !== 'CUP') return snapshot
+  const ledgerStart = getSavingsLedgerStart(snapshot.salaries, sources)
+  if (!ledgerStart) return snapshot
+  const sourceById = new Map(snapshot.incomeSources.map((source) => [source.id, source]))
+  const hasRealCupSaving = snapshot.transactions.some((entry) => entry.type === 'saving'
+    && entry.date >= ledgerStart && sourceById.get(entry.incomeSourceId ?? '')?.currencyCode === 'CUP')
+  if (hasRealCupSaving) return snapshot
+  const legacyCredit = snapshot.transactions.reduce((sum, entry) => entry.type === 'saving'
+    && entry.date < ledgerStart && (!entry.incomeSourceId || entry.incomeSourceId === firstIncome.id)
+    ? sum + entry.amount : sum, 0)
+  if (legacyCredit <= 0) return snapshot
+  const ids = new Set<string>()
+  for (const source of sources) {
+    const entries = snapshot.salaries.filter((entry) => entry.sourceId === source.id)
+      .sort((left, right) => left.month.localeCompare(right.month))
+    const latest = entries.at(-1)
+    if (entries[0]?.balance === 0 && latest?.savingsLedgerMigrated
+      && Number(latest.transferAdjustment ?? 0) === 0 && Math.abs(Number(latest.balance) - legacyCredit) < 0.01) {
+      ids.add(latest.id)
+    }
+  }
+  return ids.size ? { ...snapshot, salaries: snapshot.salaries.map((entry) => ids.has(entry.id)
+    ? { ...entry, balance: 0 } : entry) } : snapshot
+}
+
+/** The first stored balance is an opening balance, already net of older purchases. */
+function getSavingsLedgerStart(salaries: Salary[], sources: IncomeSource[]) {
+  const ids = new Set(sources.map((source) => source.id))
+  const firstMonth = salaries.filter((salary) => ids.has(salary.sourceId ?? ''))
+    .map((salary) => salary.month).sort()[0]
+  return firstMonth ? `${firstMonth}-01` : ''
+}
+
+/** Shared spendable balance for Savings, Wishlist and the monthly overview. */
+export function getAvailableSavingsByCurrency(
+  salaries: Salary[],
+  sources: IncomeSource[],
+  wishlist: WishlistItem[],
+  currencyCode: string,
+  month: string,
+) {
+  const normalizedCode = currencyCode.trim().toUpperCase()
+  const balance = Math.max(0, getSavingsAccountBalances(salaries, sources, normalizedCode, month))
+  const ledgerStart = getSavingsLedgerStart(salaries, findSavingsAccounts(sources, normalizedCode))
+  const purchasedReserved = wishlist
+    .filter((item) => (item.sourceCurrency ?? 'USD').trim().toUpperCase() === normalizedCode && isWishlistPurchased(item)
+      && (!ledgerStart || !item.purchasedAt || item.purchasedAt.slice(0, 10) >= ledgerStart))
+    .reduce((sum, item) => sum + getWishlistReservedAmount(item), 0)
+  return { balance, purchasedReserved, free: Math.max(0, balance - purchasedReserved) }
 }
 
 export interface AccountSavingsGoal {

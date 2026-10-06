@@ -112,7 +112,8 @@ export function isWishlistPurchased(item: WishlistLike) {
     return explicitFlag
   }
 
-  return item.price > 0 && getWishlistReservedAmount(item) >= item.price
+  // Funding a goal is not a purchase. Only the explicit purchase action spends savings.
+  return false
 }
 
 export function getWishlistAvailableAmount(item: WishlistLike, currentSavedAmount: number) {

@@ -37,7 +37,7 @@ import { reconcileSavingsAccountTransaction } from '@/lib/savings-account-ledger
 import { ensureCurrencyPreference } from '@/lib/currency'
 import { useAuthStore } from '@/store/authStore'
 import { usePreferencesStore } from '@/store/preferencesStore'
-import { ensureSavingsCurrencyAccounts, getAccountAllocationFormula, migrateLegacySavingsLedger, normalizeLegacySavingsAccounts } from '@/lib/account-savings'
+import { ensureSavingsCurrencyAccounts, getAccountAllocationFormula, migrateLegacySavingsLedger, normalizeLegacySavingsAccounts, repairMisassignedLegacyCupSavings } from '@/lib/account-savings'
 
 const GUEST_FINANCE_STORAGE_KEY = 'plata-guest-finance'
 let voiceBatchSaving = false
@@ -135,7 +135,7 @@ function normalizeDebt(entry: Partial<Debt>): Debt {
 }
 
 function normalizeBootstrapSnapshot(payload?: Partial<BootstrapPayload> | null, ownerKey?: string): BootstrapPayload {
-  const snapshot = normalizeBootstrapPayload(payload)
+  const snapshot = repairMisassignedLegacyCupSavings(normalizeBootstrapPayload(payload))
 
   // Accounts created before their currency was registered as a preference would
   // otherwise resolve to USD on a fresh device and appear converted.
@@ -146,9 +146,26 @@ function normalizeBootstrapSnapshot(payload?: Partial<BootstrapPayload> | null, 
   const accountFields = defaultAccount
     ? { incomeSourceId: defaultAccount.id, incomeSourceName: defaultAccount.name }
     : {}
+  // Legacy savings were stored in canonical USD before income accounts existed.
+  // The first account may be CUP; assigning those old entries to it invents CUP savings.
+  const legacySavingsAccount = snapshot.incomeSources.find((source) => !source.archived
+    && !source.name.toLocaleLowerCase('es').startsWith('ahorro ')
+    && source.currencyCode === 'USD')
+  const legacySavingsFields = legacySavingsAccount
+    ? { incomeSourceId: legacySavingsAccount.id, incomeSourceName: legacySavingsAccount.name }
+    : {}
+  const firstAccountMonth = snapshot.salaries.filter((entry) => entry.sourceId === defaultAccount?.id)
+    .map((entry) => entry.month).sort()[0]
   const withLegacyAccounts = {
     ...snapshot,
-    transactions: snapshot.transactions.map((entry) => entry.incomeSourceId ? entry : { ...entry, ...accountFields }),
+    transactions: snapshot.transactions.map((entry) => {
+      const incorrectlyAssignedLegacySaving = entry.type === 'saving'
+        && defaultAccount?.currencyCode === 'CUP' && entry.incomeSourceId === defaultAccount.id
+        && firstAccountMonth && entry.date.slice(0, 7) < firstAccountMonth
+      if (incorrectlyAssignedLegacySaving) return { ...entry, ...legacySavingsFields }
+      return entry.incomeSourceId ? entry
+        : { ...entry, ...(entry.type === 'saving' ? legacySavingsFields : accountFields) }
+    }),
     debts: snapshot.debts.map((entry) => {
       const normalized = normalizeDebt(entry)
       return normalized.incomeSourceId ? normalized : { ...normalized, ...accountFields }

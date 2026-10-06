@@ -276,3 +276,20 @@ const tx = (id, amount, desc) => ({ id, amount, type: 'expense', description: de
 }
 
 console.log('\nAll sync scenarios passed.')
+
+{
+  const zero = { id: 'savings-cup', amount: 0, balance: 0, month: '2026-10' }
+  const remote = { ...empty(), salaries: [zero] }
+  let pending = { ...createSyncDocument(remote), initialized: true }
+  pending = queueSnapshot(pending, { ...remote, salaries: [{ ...zero, balance: 318 }] }, makeId)
+  pending = queueSnapshot(pending, remote, makeId)
+  const oldOperation = pending.operations[0]
+  const agreed = acceptSyncResponse(pending, {
+    protocol: SYNC_PROTOCOL, snapshot: remote, versions: { 'salaries/savings-cup': 'repair' }, acknowledged: [],
+    conflict: { operationId: oldOperation.id, key: 'salaries/savings-cup', remote: zero, version: 'repair' },
+  }, makeId)
+  assert.equal(agreed.operations.length, 0, 'el CUP incorrecto pendiente no se reenvía cuando la reparación ya coincide con el servidor')
+  assert.equal(agreed.conflicts.length, 0)
+  assert.equal(agreed.snapshot.salaries[0].balance, 0)
+  console.log('PASS: una reparación idéntica en móvil y servidor descarta la escritura antigua')
+}

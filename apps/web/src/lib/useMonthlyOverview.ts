@@ -6,10 +6,8 @@ import {
   getMonthKey,
   getMonthlyOverview,
   getSavingsFundingBreakdown,
-  getWishlistReservedAmount,
-  isWishlistPurchased,
 } from '@plata/shared'
-import { getAccountAllocationFormula, getSavingsAccountBalances } from '@/lib/account-savings'
+import { getAccountAllocationFormula, getAvailableSavingsByCurrency } from '@/lib/account-savings'
 import { getIncomeCycleMonth } from '@/lib/income-account-view'
 import { useActiveIncomeAccount } from '@/lib/useActiveIncomeAccount'
 
@@ -51,13 +49,10 @@ export function useMonthlyOverview() {
       (sourceById.get(transaction.incomeSourceId ?? '')?.currencyCode ?? 'USD').trim().toUpperCase() === savingsCurrency)
     const currencyWishlist = wishlist.filter((item) => (item.sourceCurrency ?? 'USD').trim().toUpperCase() === savingsCurrency)
     const funding = getSavingsFundingBreakdown(currencyTransactions, currencyWishlist)
-    const generatedSavingsBalance = getSavingsAccountBalances(salaries, incomeSources, savingsCurrency, getMonthKey())
-    const reservedForPurchasedWishlist = currencyWishlist.reduce(
-      (sum, item) => sum + (isWishlistPurchased(item) ? getWishlistReservedAmount(item) : 0),
-      0,
-    )
+    const savings = getAvailableSavingsByCurrency(salaries, incomeSources, wishlist, savingsCurrency, getMonthKey())
+    const reservedForPurchasedWishlist = savings.purchasedReserved
     const totalSavings = Math.max(0, overview.totalSavings)
-    const accumulatedSavings = Math.max(0, generatedSavingsBalance - reservedForPurchasedWishlist)
+    const accumulatedSavings = savings.free
     const borrowedSavings = Math.min(accumulatedSavings, Math.max(0, funding.borrowedBalance))
     const ownSavings = Math.max(0, accumulatedSavings - borrowedSavings)
     const assignedSavingsGoals = 0
