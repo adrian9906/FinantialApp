@@ -1,4 +1,5 @@
 import { create } from 'zustand'
+import { createDebtRecord, type DebtInput } from '@/lib/debt-record'
 import type {
   AppEvent,
   IncomeSource,
@@ -43,10 +44,6 @@ const GUEST_FINANCE_STORAGE_KEY = 'plata-guest-finance'
 let voiceBatchSaving = false
 const pendingSnapshotWrites = new Set<Promise<void>>()
 let localRevision = 0
-
-type DebtInput = Omit<Debt, 'id' | 'paidAmount' | 'remainingAmount' | 'progress' | 'isSettled'> & {
-  initialPayment?: number
-}
 
 interface FinanceStore extends BootstrapPayload {
   hasLoaded: boolean
@@ -166,10 +163,7 @@ function normalizeBootstrapSnapshot(payload?: Partial<BootstrapPayload> | null, 
       return entry.incomeSourceId ? entry
         : { ...entry, ...(entry.type === 'saving' ? legacySavingsFields : accountFields) }
     }),
-    debts: snapshot.debts.map((entry) => {
-      const normalized = normalizeDebt(entry)
-      return normalized.incomeSourceId ? normalized : { ...normalized, ...accountFields }
-    }),
+    debts: snapshot.debts.map(normalizeDebt),
     wishlist: snapshot.wishlist.map((entry) => entry.incomeSourceId ? entry : { ...entry, ...accountFields }),
     events: snapshot.events.map((entry) => entry.incomeSourceId ? entry : { ...entry, ...accountFields }),
     projections: snapshot.projections.map((entry) => entry.incomeSourceId ? entry : { ...entry, ...accountFields }),
@@ -857,26 +851,8 @@ export const useFinanceStore = create<FinanceStore>()((set, get) => ({
   },
   addDebt: async (debt) => {
     if (isLocalMutationMode()) {
-      const paidAmount = Math.min(debt.amount, Math.max(0, debt.initialPayment ?? 0))
-      const remainingAmount = Math.max(0, debt.amount - paidAmount)
       await updateLocalState(set, (state) => ({
-        debts: [{
-          id: makeId('debt'),
-          direction: debt.direction === 'receivable' ? 'receivable' : 'payable',
-          counterparty: debt.counterparty,
-          amount: debt.amount,
-          history: debt.history,
-          startDate: debt.startDate,
-          endDate: debt.endDate,
-          interest: debt.interest,
-          paidAmount,
-          remainingAmount,
-          progress: debt.amount > 0 ? Math.min(100, Math.round((paidAmount / debt.amount) * 100)) : 100,
-          isSettled: remainingAmount === 0,
-          payments: paidAmount > 0
-            ? [{ amount: paidAmount, date: new Date().toISOString().slice(0, 10), createdAt: new Date().toISOString() }]
-            : [],
-        }, ...state.debts],
+        debts: [createDebtRecord(debt, makeId('debt'), new Date().toISOString().slice(0, 10), new Date().toISOString()), ...state.debts],
       }))
       return
     }

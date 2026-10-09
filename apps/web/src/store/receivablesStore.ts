@@ -1,9 +1,12 @@
 import { create } from 'zustand'
 import type { Debt, DebtPayment } from '@plata/shared'
+import { createDebtRecord } from '@/lib/debt-record'
 
 const RECEIVABLES_STORAGE_KEY = 'plata-receivables'
 
 type ReceivableInput = {
+  incomeSourceId?: string
+  incomeSourceName?: string
   counterparty: string
   history: string
   amount: number
@@ -36,6 +39,8 @@ function normalizeReceivable(entry: Partial<Debt>): Debt {
 
   return {
     id: String(entry.id ?? makeId()),
+    incomeSourceId: entry.incomeSourceId,
+    incomeSourceName: entry.incomeSourceName,
     direction: 'receivable',
     counterparty: entry.counterparty ? String(entry.counterparty) : undefined,
     amount,
@@ -84,19 +89,7 @@ export const useReceivablesStore = create<ReceivablesStore>()((set, get) => ({
   },
 
   addReceivable: (data) => {
-    const newDebt: Debt = normalizeReceivable({
-      id: makeId(),
-      direction: 'receivable',
-      counterparty: data.counterparty,
-      history: data.history,
-      amount: data.amount,
-      interest: data.interest,
-      startDate: data.startDate,
-      endDate: data.endDate,
-      paidAmount: 0,
-      remainingAmount: data.amount,
-      isSettled: false,
-    })
+    const newDebt = createDebtRecord({ ...data, direction: 'receivable' }, makeId(), new Date().toISOString().slice(0, 10), new Date().toISOString())
     const next = [newDebt, ...get().receivables]
     writeToStorage(next)
     set({ receivables: next })

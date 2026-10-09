@@ -13,6 +13,7 @@ import { formatMoney, useCurrencyInput } from '@/lib/currency'
 import { getTodayDateKey } from '@/lib/date'
 import { useReceivablesStore } from '@/store/receivablesStore'
 import { useActiveIncomeAccount } from '@/lib/useActiveIncomeAccount'
+import { filterDebtsByAccount } from '@/lib/debt-record'
 
 interface ReceivableFormState {
   counterparty: string
@@ -42,11 +43,11 @@ function getDueStatus(debt: Debt) {
   return { label: 'Pendiente', className: 'bg-primary/10 text-primary' }
 }
 
-export function ReceivablesSection() {
+export function ReceivablesSection({ accountFilter = 'all' }: { accountFilter?: string }) {
   const hydrate = useReceivablesStore((state) => state.hydrate)
   const allReceivables = useReceivablesStore((state) => state.receivables)
   const { activeAccount, activeIncomeSourceId } = useActiveIncomeAccount()
-  const receivables = allReceivables.filter((debt) => debt.incomeSourceId === activeIncomeSourceId)
+  const receivables = filterDebtsByAccount(allReceivables, accountFilter === 'all' ? undefined : accountFilter === 'unassigned' ? '' : accountFilter)
   const addReceivable = useReceivablesStore((state) => state.addReceivable)
   const updateReceivable = useReceivablesStore((state) => state.updateReceivable)
   const markCollected = useReceivablesStore((state) => state.markCollected)
@@ -101,8 +102,7 @@ export function ReceivablesSection() {
     }
 
     const payload = {
-      incomeSourceId: activeIncomeSourceId,
-      incomeSourceName: activeAccount?.source.name,
+      ...(editId ? {} : { incomeSourceId: activeIncomeSourceId, incomeSourceName: activeAccount?.source.name }),
       counterparty: form.counterparty.trim(),
       history: form.history.trim(),
       amount,

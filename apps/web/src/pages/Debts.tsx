@@ -18,8 +18,11 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { formatMoney, useCurrencyInput } from '@/lib/currency'
 import { getTodayDateKey } from '@/lib/date'
 import { ReceivablesSection } from '@/components/debts/ReceivablesSection'
+import { filterDebtsByAccount } from '@/lib/debt-record'
+import { useActiveIncomeAccount } from '@/lib/useActiveIncomeAccount'
 
 interface DebtFormState {
+  incomeSourceId: string
   amount: string
   history: string
   startDate: string
@@ -37,10 +40,17 @@ export default function Debts() {
   const addTransaction = useFinanceStore((state) => state.addTransaction)
   const removeTransaction = useFinanceStore((state) => state.removeTransaction)
   const overview = useMonthlyOverview()
+  const incomeSources = useFinanceStore((state) => state.incomeSources)
+  const { allAccounts, selectAccount } = useActiveIncomeAccount()
+  const [accountFilter, setAccountFilter] = useState('all')
   const accountDebts = useMemo(
-    () => allDebts.filter((debt) => debt.incomeSourceId === overview.activeIncomeSourceId),
-    [allDebts, overview.activeIncomeSourceId],
+    () => filterDebtsByAccount(allDebts, accountFilter === 'all' ? undefined : accountFilter === 'unassigned' ? '' : accountFilter),
+    [allDebts, accountFilter],
   )
+  const debtAccounts = [...new Map([
+    ...incomeSources.filter((source) => !source.name.toLocaleLowerCase('es').startsWith('ahorro ')).map((source) => [source.id, source.name] as const),
+    ...allDebts.filter((debt) => debt.incomeSourceId).map((debt) => [debt.incomeSourceId!, debt.incomeSourceName ?? 'Cuenta anterior'] as const),
+  ]).entries()]
   const debts = useMemo(() => accountDebts.filter((debt) => debt.direction !== 'receivable'), [accountDebts])
   const moneyInput = useCurrencyInput()
 
@@ -61,6 +71,7 @@ export default function Debts() {
   const [strategy, setStrategy] = useState<DebtStrategy>('snowball')
   const [extraMonthlyPayment, setExtraMonthlyPayment] = useState('')
   const [form, setForm] = useState<DebtFormState>({
+    incomeSourceId: overview.activeIncomeSourceId,
     amount: '',
     history: '',
     startDate: getTodayDateKey(),
@@ -87,6 +98,7 @@ export default function Debts() {
 
   function resetForm() {
     setForm({
+      incomeSourceId: overview.activeIncomeSourceId,
       amount: '',
       history: '',
       startDate: getTodayDateKey(),
@@ -107,6 +119,7 @@ export default function Debts() {
     if (entry) {
       setEditId(entry.id)
       setForm({
+        incomeSourceId: entry.incomeSourceId ?? '',
         amount: moneyInput.fromUsd(entry.amount),
         history: entry.history,
         startDate: entry.startDate,
@@ -121,6 +134,7 @@ export default function Debts() {
   }
 
   function handleOpenPayment(entry: typeof debts[number]) {
+    if (allAccounts.some((account) => account.source.id === entry.incomeSourceId)) selectAccount(entry.incomeSourceId!)
     setPaymentDebtId(entry.id)
     setPaymentAmount('')
     setPaymentError(null)
@@ -128,6 +142,7 @@ export default function Debts() {
   }
 
   function handleOpenAcquisition(entry: typeof debts[number]) {
+    if (allAccounts.some((account) => account.source.id === entry.incomeSourceId)) selectAccount(entry.incomeSourceId!)
     setAcquisitionDebtId(entry.id)
     setAcquisitionError(null)
     setAcquisitionOpen(true)
@@ -148,8 +163,8 @@ export default function Debts() {
       startDate: form.startDate,
       endDate: form.endDate,
       interest: form.interest === '' ? undefined : Number(form.interest),
-      incomeSourceId: overview.activeIncomeSourceId,
-      incomeSourceName: overview.activeAccount?.source.name,
+      incomeSourceId: form.incomeSourceId || undefined,
+      incomeSourceName: debtAccounts.find(([id]) => id === form.incomeSourceId)?.[1],
     }
 
     setIsSaving(true)
@@ -162,6 +177,7 @@ export default function Debts() {
       }
 
       resetForm()
+      setAccountFilter('all')
       setOpen(false)
     } finally {
       setIsSaving(false)
@@ -170,6 +186,10 @@ export default function Debts() {
 
   async function handlePayDebt() {
     if (!paymentDebt || isPaying) return
+    if (!overview.activeIncomeSourceId || (paymentDebt.incomeSourceId && paymentDebt.incomeSourceId !== overview.activeIncomeSourceId)) {
+      setPaymentError('Selecciona la cuenta de esta deuda antes de pagarla.')
+      return
+    }
 
     const nextPayment = moneyInput.toUsd(paymentAmount)
     if (!Number.isFinite(nextPayment) || nextPayment <= 0) {
@@ -195,6 +215,8 @@ export default function Debts() {
         type: 'saving',
         description: buildDebtPaymentSavingDescription(paymentDebt.id, paymentDebt.history),
         date: new Date().toISOString().slice(0, 10),
+        incomeSourceId: overview.activeIncomeSourceId,
+        incomeSourceName: overview.activeAccount?.source.name,
       })
 
       try {
@@ -215,6 +237,10 @@ export default function Debts() {
 
   async function handleAcquireDebt() {
     if (!acquisitionDebt || isAcquiring) return
+    if (!overview.activeIncomeSourceId || (acquisitionDebt.incomeSourceId && acquisitionDebt.incomeSourceId !== overview.activeIncomeSourceId)) {
+      setAcquisitionError('Selecciona la cuenta de esta deuda antes de adquirirla.')
+      return
+    }
 
     const alreadyAcquired = getDebtAcquisitionAmount(transactions, acquisitionDebt.id)
     if (alreadyAcquired > 0) {
@@ -234,6 +260,8 @@ export default function Debts() {
         type: 'saving',
         description: buildDebtAcquisitionSavingDescription(acquisitionDebt.id, acquisitionDebt.history),
         date: new Date().toISOString().slice(0, 10),
+        incomeSourceId: overview.activeIncomeSourceId,
+        incomeSourceName: overview.activeAccount?.source.name,
       })
       setAcquisitionOpen(false)
       setAcquisitionDebtId(null)
@@ -283,6 +311,19 @@ export default function Debts() {
           </Button>
         </div>
       </header>
+
+      <div className="max-w-md space-y-2">
+        <Label>Mostrar deudas</Label>
+        <Select value={accountFilter} onValueChange={(value) => setAccountFilter(value ?? 'all')}>
+          <SelectTrigger><SelectValue /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">Todas las cuentas</SelectItem>
+            <SelectItem value="unassigned">Sin cuenta asignada</SelectItem>
+            {debtAccounts.map(([id, name]) => <SelectItem key={id} value={id}>{name}</SelectItem>)}
+          </SelectContent>
+        </Select>
+        <p className="text-xs text-muted-gray">Importes mostrados en {moneyInput.currency.code}. Ahorro disponible de la cuenta activa.</p>
+      </div>
 
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-5">
         <div className="rounded-xl bg-surface p-5 shadow-vault">
@@ -457,6 +498,7 @@ export default function Debts() {
                     <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
                       <div>
                         <h2 className="text-base font-semibold text-on-surface">{debt.history}</h2>
+                        <p className="mt-1 text-xs text-muted-gray">Cuenta: {debt.incomeSourceName ?? 'Sin cuenta asignada'}</p>
                         <div className="mt-1 flex flex-wrap gap-2">
                           <Badge variant="secondary" className={debt.isSettled ? 'bg-success/10 text-success' : 'bg-warning/10 text-warning'}>
                             {debt.isSettled ? 'Saldada' : 'Activa'}
@@ -541,7 +583,7 @@ export default function Debts() {
         </div>
       )}
 
-      <ReceivablesSection />
+      <ReceivablesSection accountFilter={accountFilter} />
 
       <Dialog open={open} onOpenChange={(nextOpen) => { if (!isSaving) setOpen(nextOpen) }}>
         <DialogContent className="border-graphite bg-surface sm:max-w-4xl">
@@ -552,6 +594,16 @@ export default function Debts() {
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
+            <div className="space-y-2">
+              <Label>Cuenta de la deuda</Label>
+              <Select value={form.incomeSourceId || 'unassigned'} onValueChange={(value) => setForm({ ...form, incomeSourceId: value === 'unassigned' ? '' : value ?? '' })}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="unassigned">Sin cuenta asignada</SelectItem>
+                  {debtAccounts.map(([id, name]) => <SelectItem key={id} value={id}>{name}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
             <div className="grid gap-4 lg:grid-cols-2">
               <div className="space-y-2">
                 <Label className="text-medium-gray">Monto total ({moneyInput.currency.code})</Label>
