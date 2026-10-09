@@ -6,7 +6,6 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { ExportExcelButton } from '@/components/reports/ExportExcelButton'
-import { DatePickerField } from '@/components/ui/date-picker-field'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -14,21 +13,13 @@ import { exportDebtsReport } from '@/lib/reportExports'
 import { useMonthlyOverview } from '@/lib/useMonthlyOverview'
 import { buildDebtPlanSummary, type DebtStrategy } from '@/lib/debtPlanner'
 import { useFinanceStore } from '@/store/financeStore'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { formatMoney, useCurrencyInput } from '@/lib/currency'
+import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { convertUsdToInput, formatMoney, getCurrencyByCode, parseMoneyInputToUsd, useCurrencyInput } from '@/lib/currency'
 import { getTodayDateKey } from '@/lib/date'
 import { ReceivablesSection } from '@/components/debts/ReceivablesSection'
-import { filterDebtsByAccount } from '@/lib/debt-record'
+import { filterDebtsByAccount, getDebtAccountOptions, getDebtCurrencyCode } from '@/lib/debt-record'
 import { useActiveIncomeAccount } from '@/lib/useActiveIncomeAccount'
-
-interface DebtFormState {
-  incomeSourceId: string
-  amount: string
-  history: string
-  startDate: string
-  endDate: string
-  interest: string
-}
+import { DebtFormDialog, type DebtFormState } from '@/components/debts/DebtFormDialog'
 
 export default function Debts() {
   const allDebts = useFinanceStore((state) => state.debts)
@@ -47,10 +38,8 @@ export default function Debts() {
     () => filterDebtsByAccount(allDebts, accountFilter === 'all' ? undefined : accountFilter === 'unassigned' ? '' : accountFilter),
     [allDebts, accountFilter],
   )
-  const debtAccounts = [...new Map([
-    ...incomeSources.filter((source) => !source.name.toLocaleLowerCase('es').startsWith('ahorro ')).map((source) => [source.id, source.name] as const),
-    ...allDebts.filter((debt) => debt.incomeSourceId).map((debt) => [debt.incomeSourceId!, debt.incomeSourceName ?? 'Cuenta anterior'] as const),
-  ]).entries()]
+  const debtAccounts = getDebtAccountOptions(incomeSources, allDebts)
+  const accountFilterItems = [{ value: 'all', label: 'Todas las cuentas' }, { value: 'unassigned', label: 'Sin cuenta asignada' }, ...debtAccounts.map((account) => ({ value: account.id, label: account.name }))]
   const debts = useMemo(() => accountDebts.filter((debt) => debt.direction !== 'receivable'), [accountDebts])
   const moneyInput = useCurrencyInput()
 
@@ -78,6 +67,7 @@ export default function Debts() {
     endDate: getTodayDateKey(),
     interest: '',
   })
+  const formCurrency = getCurrencyByCode(getDebtCurrencyCode(debtAccounts, form.incomeSourceId))
 
   const paymentDebt = useMemo(
     () => debts.find((entry) => entry.id === paymentDebtId) ?? null,
@@ -120,7 +110,7 @@ export default function Debts() {
       setEditId(entry.id)
       setForm({
         incomeSourceId: entry.incomeSourceId ?? '',
-        amount: moneyInput.fromUsd(entry.amount),
+        amount: convertUsdToInput(entry.amount, getCurrencyByCode(getDebtCurrencyCode(debtAccounts, entry.incomeSourceId))),
         history: entry.history,
         startDate: entry.startDate,
         endDate: entry.endDate,
@@ -131,6 +121,14 @@ export default function Debts() {
     }
     setFormError(null)
     setOpen(true)
+  }
+
+  function handleFormAccountChange(sourceId: string) {
+    const nextCurrency = getCurrencyByCode(getDebtCurrencyCode(debtAccounts, sourceId))
+    const amount = formCurrency.code === nextCurrency.code ? form.amount
+      : editId && form.amount ? convertUsdToInput(parseMoneyInputToUsd(form.amount, formCurrency), nextCurrency) : ''
+    setForm({ ...form, incomeSourceId: sourceId, amount })
+    setFormError(null)
   }
 
   function handleOpenPayment(entry: typeof debts[number]) {
@@ -151,9 +149,13 @@ export default function Debts() {
   async function handleSave() {
     if (!form.amount || !form.history || !form.startDate || !form.endDate || isSaving) return
 
-    const amount = moneyInput.toUsd(form.amount)
+    const amount = parseMoneyInputToUsd(form.amount, formCurrency)
     if (!Number.isFinite(amount) || amount <= 0) {
       setFormError('El monto total de la deuda debe ser mayor que cero.')
+      return
+    }
+    if (form.endDate < form.startDate) {
+      setFormError('El vencimiento no puede ser anterior a la fecha de inicio.')
       return
     }
 
@@ -164,7 +166,7 @@ export default function Debts() {
       endDate: form.endDate,
       interest: form.interest === '' ? undefined : Number(form.interest),
       incomeSourceId: form.incomeSourceId || undefined,
-      incomeSourceName: debtAccounts.find(([id]) => id === form.incomeSourceId)?.[1],
+      incomeSourceName: debtAccounts.find((account) => account.id === form.incomeSourceId)?.name,
     }
 
     setIsSaving(true)
@@ -314,12 +316,12 @@ export default function Debts() {
 
       <div className="max-w-md space-y-2">
         <Label>Mostrar deudas</Label>
-        <Select value={accountFilter} onValueChange={(value) => setAccountFilter(value ?? 'all')}>
-          <SelectTrigger><SelectValue /></SelectTrigger>
+        <Select items={accountFilterItems} value={accountFilter} onValueChange={(value) => setAccountFilter(value ?? 'all')}>
+          <SelectTrigger className="w-full min-w-0 data-[size=default]:h-11"><SelectValue className="min-w-0"><span className="truncate">{accountFilterItems.find((item) => item.value === accountFilter)?.label}</span></SelectValue></SelectTrigger>
           <SelectContent>
-            <SelectItem value="all">Todas las cuentas</SelectItem>
-            <SelectItem value="unassigned">Sin cuenta asignada</SelectItem>
-            {debtAccounts.map(([id, name]) => <SelectItem key={id} value={id}>{name}</SelectItem>)}
+            <SelectGroup>
+              {accountFilterItems.map((item) => <SelectItem key={item.value} value={item.value}>{item.label}</SelectItem>)}
+            </SelectGroup>
           </SelectContent>
         </Select>
         <p className="text-xs text-muted-gray">Importes mostrados en {moneyInput.currency.code}. Ahorro disponible de la cuenta activa.</p>
@@ -570,10 +572,10 @@ export default function Debts() {
                       </Button>
                     </>
                   ) : null}
-                  <Button variant="ghost" size="icon" className="text-muted-gray hover:text-primary" onClick={() => handleOpen(debt)}>
+                  <Button variant="ghost" size="icon" aria-label={`Editar ${debt.history}`} className="text-muted-gray hover:text-primary" onClick={() => handleOpen(debt)}>
                     <Pencil data-icon="inline-start" />
                   </Button>
-                  <Button variant="ghost" size="icon" className="text-muted-gray hover:text-error" onClick={() => void removeDebt(debt.id)}>
+                  <Button variant="ghost" size="icon" aria-label={`Eliminar ${debt.history}`} className="text-muted-gray hover:text-error" onClick={() => void removeDebt(debt.id)}>
                     <Trash2 data-icon="inline-start" />
                   </Button>
                 </div>
@@ -585,78 +587,20 @@ export default function Debts() {
 
       <ReceivablesSection accountFilter={accountFilter} />
 
-      <Dialog open={open} onOpenChange={(nextOpen) => { if (!isSaving) setOpen(nextOpen) }}>
-        <DialogContent className="border-graphite bg-surface sm:max-w-4xl">
-          <DialogHeader>
-            <DialogTitle className="text-on-surface">{editId ? 'Editar deuda' : 'Agregar deuda'}</DialogTitle>
-            <DialogDescription>
-              Define los datos de la deuda. Guardarla no descontará dinero de tu salario.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4">
-            <div className="space-y-2">
-              <Label>Cuenta de la deuda</Label>
-              <Select value={form.incomeSourceId || 'unassigned'} onValueChange={(value) => setForm({ ...form, incomeSourceId: value === 'unassigned' ? '' : value ?? '' })}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="unassigned">Sin cuenta asignada</SelectItem>
-                  {debtAccounts.map(([id, name]) => <SelectItem key={id} value={id}>{name}</SelectItem>)}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="grid gap-4 lg:grid-cols-2">
-              <div className="space-y-2">
-                <Label className="text-medium-gray">Monto total ({moneyInput.currency.code})</Label>
-                <Input
-                  type="number"
-                  value={form.amount}
-                  onChange={(e) => { setFormError(null); setForm({ ...form, amount: e.target.value }) }}
-                  className="bg-abyss border-graphite text-on-surface"
-                />
-              </div>
-              <div className="space-y-2">
-                <Label className="text-medium-gray">Interés (opcional)</Label>
-                <Input
-                  type="number"
-                  value={form.interest}
-                  onChange={(e) => { setFormError(null); setForm({ ...form, interest: e.target.value }) }}
-                  className="bg-abyss border-graphite text-on-surface"
-                />
-              </div>
-            </div>
-
-            <div className="space-y-2">
-              <Label className="text-medium-gray">Historial</Label>
-              <Input
-                value={form.history}
-                onChange={(e) => { setFormError(null); setForm({ ...form, history: e.target.value }) }}
-                placeholder="Préstamo personal, tarjeta, hipoteca..."
-                className="bg-abyss border-graphite text-on-surface"
-              />
-            </div>
-            <div className="grid gap-4 xl:grid-cols-2">
-              <DatePickerField
-                label="Fecha de inicio"
-                value={form.startDate}
-                onChange={(value) => { setFormError(null); setForm({ ...form, startDate: value }) }}
-                description="Indica cuando comenzo realmente la deuda."
-              />
-              <DatePickerField
-                label="Fecha de terminacion"
-                value={form.endDate}
-                onChange={(value) => { setFormError(null); setForm({ ...form, endDate: value }) }}
-                description="Marca la fecha objetivo o final de la deuda."
-              />
-            </div>
-            {formError ? <p className="text-sm text-error">{formError}</p> : null}
-          </div>
-          <DialogFooter>
-            <Button variant="ghost" disabled={isSaving} onClick={() => { resetForm(); setOpen(false) }} className="text-muted-gray">Cancelar</Button>
-            <Button loading={isSaving} onClick={() => void handleSave()} className="bg-primary-container text-white shadow-vault hover:brightness-110">Guardar</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
+      <DebtFormDialog
+        open={open}
+        editing={Boolean(editId)}
+        saving={isSaving}
+        error={formError}
+        form={form}
+        accounts={debtAccounts}
+        currencyCode={formCurrency.code}
+        onOpenChange={setOpen}
+        onChange={(nextForm) => { setFormError(null); setForm(nextForm) }}
+        onAccountChange={handleFormAccountChange}
+        onCancel={() => { resetForm(); setOpen(false) }}
+        onSave={() => void handleSave()}
+      />
       <Dialog open={acquisitionOpen} onOpenChange={(nextOpen) => { if (!isAcquiring) setAcquisitionOpen(nextOpen) }}>
         <DialogContent className="border-graphite bg-surface sm:max-w-2xl">
           <DialogHeader>

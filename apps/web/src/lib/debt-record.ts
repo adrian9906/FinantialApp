@@ -1,4 +1,28 @@
-import type { Debt } from '@plata/shared'
+import type { Debt, IncomeSource } from '@plata/shared'
+
+export interface DebtAccountOption {
+  id: string
+  name: string
+  currencyCode: string
+}
+
+export function getDebtAccountOptions(sources: IncomeSource[], debts: Debt[]): DebtAccountOption[] {
+  const options = new Map<string, DebtAccountOption>()
+  for (const source of sources) {
+    if (source.name.toLocaleLowerCase('es').startsWith('ahorro ')) continue
+    options.set(source.id, { id: source.id, name: source.name, currencyCode: (source.currencyCode ?? 'USD').trim().toUpperCase() })
+  }
+  for (const debt of debts) {
+    if (debt.incomeSourceId && !options.has(debt.incomeSourceId)) {
+      options.set(debt.incomeSourceId, { id: debt.incomeSourceId, name: debt.incomeSourceName ?? 'Cuenta anterior', currencyCode: 'USD' })
+    }
+  }
+  return [...options.values()]
+}
+
+export function getDebtCurrencyCode(options: DebtAccountOption[], sourceId?: string): string {
+  return options.find((option) => option.id === sourceId)?.currencyCode ?? 'USD'
+}
 
 export type DebtInput = Omit<Debt, 'id' | 'paidAmount' | 'remainingAmount' | 'progress' | 'isSettled'> & {
   initialPayment?: number
