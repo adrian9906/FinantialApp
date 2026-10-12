@@ -868,13 +868,20 @@ async function ensureSubscriptionExpenses(userId: string, prisma: Prisma.Transac
   }
 }
 
-async function writeSyncRecord(userId: string, operation: SyncOperation, tx: Prisma.TransactionClient) {
+export async function writeSyncRecord(userId: string, operation: SyncOperation, tx: Prisma.TransactionClient) {
   const payload = createEmptyBootstrapPayload()
   if (operation.value) Object.assign(payload, { [operation.collection]: [operation.value] })
   const transactions = payload.transactions
   const expenses = transactions.filter((entry) => entry.type === 'expense')
   const wants = transactions.filter((entry) => entry.type === 'want')
   const savings = transactions.filter((entry) => entry.type === 'saving')
+  // A sync edit must not turn an old purchase into a new savings withdrawal.
+  const existingWish = operation.collection === 'wishlist' && operation.value
+    ? await tx.deseo.findFirst({
+      where: { usuarioId: userId, id: operation.entityId },
+      select: { comprado: true, fecha: true },
+    })
+    : null
 
   {
     if (operation.collection === 'salaries') await tx.salario.deleteMany({ where: { usuarioId: userId, id: operation.entityId } })
@@ -1028,6 +1035,11 @@ async function writeSyncRecord(userId: string, operation: SyncOperation, tx: Pri
           cantidad: Number(entry.savedAmount ?? 0),
           aportado: Number(entry.externalContribution ?? 0),
           comprado: Boolean(entry.isPurchased),
+          fecha: entry.isPurchased && existingWish?.comprado
+            ? existingWish.fecha
+            : entry.isPurchased && entry.purchasedAt
+              ? new Date(entry.purchasedAt)
+              : new Date(),
           fuenteIngresoId: entry.incomeSourceId ?? null,
           fuenteIngresoNombre: entry.incomeSourceName ?? null,
           usuarioId: userId,

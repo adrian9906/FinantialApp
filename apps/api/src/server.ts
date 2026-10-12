@@ -9,7 +9,7 @@ const server = createServer(async (req, res) => {
   if (req.url === '/healthz') {
     res.statusCode = 200
     res.setHeader('Content-Type', 'application/json; charset=utf-8')
-    res.end(JSON.stringify({ ok: true }))
+    res.end(JSON.stringify({ ok: true, revision: process.env.RENDER_GIT_COMMIT ?? null }))
     return
   }
 
