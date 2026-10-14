@@ -30,6 +30,7 @@ const navItems = [
   { to: '/salary', icon: 'wallet', label: 'Ingresos' },
   { to: '/expenses', icon: 'expenses', label: 'Gastos' },
   { to: '/expense-calendar', icon: 'events', label: 'Calendario de gastos' },
+  { to: '/calendar', icon: 'events', label: 'Calendario' },
   { to: '/wants', icon: 'wants', label: 'Gustos' },
   { to: '/savings', icon: 'savings', label: 'Ahorros' },
   { to: '/debts', icon: 'debts', label: 'Deudas' },

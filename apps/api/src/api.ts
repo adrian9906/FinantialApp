@@ -579,7 +579,7 @@ function serializeMonthlyPlanningHistory(entry: {
   }
 }
 
-function serializeEvent(entry: {
+export function serializeEvent(entry: {
   id: string
   fuenteIngresoId?: string | null
   fuenteIngresoNombre?: string | null
@@ -587,6 +587,10 @@ function serializeEvent(entry: {
   fecha: Date
   cantidad: number
   isNotificacion: boolean
+  category?: string | null
+  recurrence?: string | null
+  time?: string | null
+  notes?: string | null
 }): AppEvent {
   return {
     id: entry.id,
@@ -596,6 +600,10 @@ function serializeEvent(entry: {
     date: toDateString(entry.fecha),
     amount: entry.cantidad,
     isNotification: entry.isNotificacion,
+    ...(entry.category === 'event' || entry.category === 'birthday' || entry.category === 'service' ? { category: entry.category } : {}),
+    ...(entry.recurrence === 'none' || entry.recurrence === 'monthly' || entry.recurrence === 'yearly' ? { recurrence: entry.recurrence } : {}),
+    ...(entry.time ? { time: entry.time } : {}),
+    ...(entry.notes ? { notes: entry.notes } : {}),
   }
 }
 
@@ -1083,6 +1091,10 @@ export async function writeSyncRecord(userId: string, operation: SyncOperation, 
           cantidad: Number(entry.amount ?? 0),
           fecha: entry.date ? new Date(entry.date) : new Date(),
           isNotificacion: Boolean(entry.isNotification),
+          category: entry.category ?? null,
+          recurrence: entry.recurrence ?? null,
+          time: entry.time ?? null,
+          notes: entry.notes ?? null,
           fuenteIngresoId: entry.incomeSourceId ?? null,
           fuenteIngresoNombre: entry.incomeSourceName ?? null,
           usuarioId: userId,
@@ -1744,6 +1756,10 @@ async function saveEvent(userId: string, body: JsonRecord, id?: string) {
     cantidad: Number(body.amount ?? 0),
     fecha: body.date ? new Date(String(body.date)) : new Date(),
     isNotificacion: Boolean(body.isNotification),
+    category: ['event', 'birthday', 'service'].includes(String(body.category)) ? String(body.category) : null,
+    recurrence: ['none', 'monthly', 'yearly'].includes(String(body.recurrence)) ? String(body.recurrence) : null,
+    time: body.time ? String(body.time) : null,
+    notes: body.notes ? String(body.notes) : null,
     fuenteIngresoId: body.incomeSourceId ? String(body.incomeSourceId) : null,
     fuenteIngresoNombre: body.incomeSourceName ? String(body.incomeSourceName) : null,
   }

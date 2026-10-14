@@ -62,7 +62,7 @@ export default function Events() {
   const removeEvent = useFinanceStore((state) => state.removeEvent)
   const overview = useMonthlyOverview()
   const events = useMemo(
-    () => allEvents.filter((event) => event.incomeSourceId === overview.activeIncomeSourceId),
+    () => allEvents.filter((event) => !event.category && event.incomeSourceId === overview.activeIncomeSourceId),
     [allEvents, overview.activeIncomeSourceId],
   )
   const moneyInput = useCurrencyInput()

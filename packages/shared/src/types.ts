@@ -146,6 +146,10 @@ export interface AppEvent {
   date: string
   amount: number
   isNotification: boolean
+  category?: 'event' | 'birthday' | 'service'
+  recurrence?: 'none' | 'monthly' | 'yearly'
+  time?: string
+  notes?: string
 }
 
 export interface Projection {

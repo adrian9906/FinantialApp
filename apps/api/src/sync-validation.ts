@@ -22,7 +22,7 @@ const schemas = {
   debts: z.object({ id, direction: z.enum(['payable', 'receivable']).optional(), counterparty: text.optional(), amount, history: text, startDate: date, endDate: date, interest: amount.optional(), paidAmount: amount, remainingAmount: amount, progress: z.number().finite(), isSettled: z.boolean(), payments: z.array(payment).max(10000).optional(), ...account }),
   wishlist: z.object({ id, name: text, price: amount, priority: z.enum(['low', 'medium', 'high']), savedAmount: amount, externalContribution: amount.optional(), isPurchased: z.boolean().optional(), purchasedAt: date.optional(), image: z.preprocess((value) => value === '' || value === null ? undefined : value, hostedImageUrl.optional()), sourceStore: text.optional(), sourceUrl: text.optional(), sourceCurrency: text.optional(), ...account }),
   monthlyPlanningHistory: z.object({ id, month, label: text, createdAt: date, expenses: z.array(planning), wants: z.array(planning), savingTransactionIds: z.array(id).optional() }),
-  events: z.object({ id, name: text, date, amount, isNotification: z.boolean(), ...account }),
+  events: z.object({ id, name: text, date, amount, isNotification: z.boolean(), category: z.enum(['event', 'birthday', 'service']).optional(), recurrence: z.enum(['none', 'monthly', 'yearly']).optional(), time: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/).optional(), notes: text.optional(), ...account }),
   projections: z.object({ id, targetSalary: amount, ...account }),
   savingsGoals: z.object({ id, name: text, category: z.enum(['emergency', 'travel', 'rent', 'phone', 'custom']), targetAmount: amount, currentAmount: amount, monthlyContribution: amount, ...account }),
   reminders: z.object({ id, title: text, description: text, date, completed: z.boolean() }),

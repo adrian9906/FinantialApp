@@ -227,6 +227,10 @@ model Evento {
   nombre         String
   cantidad       Float
   isNotificacion Boolean  @default(false)
+  category       String?
+  recurrence     String?
+  time           String?
+  notes          String?
   fuenteIngresoId     String?
   fuenteIngresoNombre String?
   fecha          DateTime

@@ -6,6 +6,7 @@ import Dashboard from '@/pages/Dashboard'
 import Salary from '@/pages/Salary'
 import Expenses from '@/pages/Expenses'
 import ExpenseCalendar from '@/pages/ExpenseCalendar'
+import Calendar from '@/pages/Calendar'
 import CurrencyCalculator from '@/pages/CurrencyCalculator'
 import { NativeWidgetBridge } from '@/components/layout/NativeWidgetBridge'
 import { NativeVoiceBridge } from '@/components/voice/NativeVoiceBridge'
@@ -124,6 +125,7 @@ function ProtectedApp() {
         <Route path="salary" element={<Salary />} />
         <Route path="expenses" element={<Expenses key={location.search} />} />
         <Route path="expense-calendar" element={<ExpenseCalendar />} />
+        <Route path="calendar" element={<Calendar />} />
         <Route path="currency-calculator" element={<CurrencyCalculator />} />
         <Route path="wants" element={<Wants />} />
         <Route path="savings" element={<Savings />} />
