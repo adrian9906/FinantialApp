@@ -26,6 +26,8 @@ export function NotificationSettings() {
   const enabled = usePreferencesStore((state) => state.systemNotificationsEnabled)
   const connectionEnabled = usePreferencesStore((state) => state.connectionNotificationsEnabled)
   const syncEnabled = usePreferencesStore((state) => state.syncNotificationsEnabled)
+  const healthEnabled = usePreferencesStore((state) => state.accountHealthNotificationsEnabled)
+  const setHealthEnabled = usePreferencesStore((state) => state.setAccountHealthNotificationsEnabled)
   const setEnabled = usePreferencesStore((state) => state.setSystemNotificationsEnabled)
   const setConnectionEnabled = usePreferencesStore((state) => state.setConnectionNotificationsEnabled)
   const setSyncEnabled = usePreferencesStore((state) => state.setSyncNotificationsEnabled)
@@ -134,6 +136,14 @@ export function NotificationSettings() {
               aria-label="Notificaciones de sincronización"
             />
           </div>
+        </div>
+
+        <div className="flex items-center justify-between gap-4 rounded-xl border border-graphite p-4">
+          <Label htmlFor="account-health-notifications" className="flex min-w-0 flex-col gap-1">
+            <span>Revisión de fin de mes</span>
+            <span className="text-xs font-normal text-muted-foreground">Avisos por cuenta en los últimos 7 días: rojo si vas justo, verde si hay margen. Se calculan con tus últimos datos guardados.</span>
+          </Label>
+          <Switch id="account-health-notifications" checked={healthEnabled} disabled={!enabled} onCheckedChange={setHealthEnabled} aria-label="Avisos de fin de mes por cuenta" />
         </div>
 
         <div>

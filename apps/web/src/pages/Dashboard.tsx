@@ -13,6 +13,7 @@ import { formatFormulaLabel } from '@/store/preferencesStore'
 import { Bar, BarChart, CartesianGrid, LabelList, Line, LineChart, Pie, PieChart, XAxis, YAxis } from 'recharts'
 import { buildReceivableReminder, getFinancialPeriodEnd, getFinancialPeriodStart, getPlannedExpenseTotal, getPlannedWantTotal, isInFinancialPeriod, isReceivable } from '@plata/shared'
 import { QuickExpenseEntry } from '@/components/dashboard/QuickExpenseEntry'
+import { AccountHealthCards } from '@/components/dashboard/AccountHealthCards'
 
 import { SpendingTrendCard } from '@/components/dashboard/SpendingTrendCard'
 import { buildMonthlyForecast, type BudgetForecast } from '@/lib/monthlyForecast'
@@ -270,6 +271,8 @@ export default function Dashboard() {
           </div>
         </div>
       </header>
+
+      <AccountHealthCards />
 
       <SpendingTrendCard
         history={monthlyPlanningHistory}

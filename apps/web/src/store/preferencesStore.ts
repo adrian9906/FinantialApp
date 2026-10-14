@@ -41,6 +41,7 @@ interface PreferencesStore {
   systemNotificationsEnabled: boolean
   connectionNotificationsEnabled: boolean
   syncNotificationsEnabled: boolean
+  accountHealthNotificationsEnabled: boolean
   setAppearance: (appearance: AppAppearance) => void
   setTheme: (theme: AppTheme) => void
   setBackground: (background: AppBackground) => void
@@ -65,6 +66,7 @@ interface PreferencesStore {
   setSystemNotificationsEnabled: (enabled: boolean) => void
   setConnectionNotificationsEnabled: (enabled: boolean) => void
   setSyncNotificationsEnabled: (enabled: boolean) => void
+  setAccountHealthNotificationsEnabled: (enabled: boolean) => void
   resetPreferences: () => void
 }
 
@@ -290,6 +292,7 @@ const defaultState = {
   systemNotificationsEnabled: false,
   connectionNotificationsEnabled: true,
   syncNotificationsEnabled: true,
+  accountHealthNotificationsEnabled: true,
 }
 
 export const usePreferencesStore = create<PreferencesStore>()(
@@ -412,6 +415,7 @@ export const usePreferencesStore = create<PreferencesStore>()(
       setSystemNotificationsEnabled: (enabled) => set({ systemNotificationsEnabled: enabled }),
       setConnectionNotificationsEnabled: (enabled) => set({ connectionNotificationsEnabled: enabled }),
       setSyncNotificationsEnabled: (enabled) => set({ syncNotificationsEnabled: enabled }),
+      setAccountHealthNotificationsEnabled: (enabled) => set({ accountHealthNotificationsEnabled: enabled }),
       resetPreferences: () => {
         set(defaultState)
         scheduleCurrencySync({ formula: defaultFormula, resetAccountFormulas: true })

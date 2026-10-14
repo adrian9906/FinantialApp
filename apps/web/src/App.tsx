@@ -9,6 +9,7 @@ import ExpenseCalendar from '@/pages/ExpenseCalendar'
 import Calendar from '@/pages/Calendar'
 import CurrencyCalculator from '@/pages/CurrencyCalculator'
 import { NativeWidgetBridge } from '@/components/layout/NativeWidgetBridge'
+import { AccountHealthBridge } from '@/components/layout/AccountHealthBridge'
 import { NativeVoiceBridge } from '@/components/voice/NativeVoiceBridge'
 import Wants from '@/pages/Wants'
 import Savings from '@/pages/Savings'
@@ -145,7 +146,7 @@ function ProtectedApp() {
 
 function AppRoutes() {
   return (
-    <><NativeWidgetBridge /><NativeVoiceBridge /><Routes>
+    <><NativeWidgetBridge /><AccountHealthBridge /><NativeVoiceBridge /><Routes>
       <Route path="/login" element={<Login />} />
       <Route path="/*" element={<ProtectedApp />} />
     </Routes></>

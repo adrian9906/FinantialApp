@@ -53,23 +53,30 @@ export async function showSystemNotification({
   body,
   tag,
   force = false,
+  level,
+  extra,
 }: {
   title: string
   body: string
   tag: string
   force?: boolean
+  level?: 'critical' | 'warning' | 'success'
+  extra?: Record<string, unknown>
 }) {
   if (await getSystemNotificationPermission() !== 'granted') return false
 
   if (Capacitor.isNativePlatform()) {
     await ensureAndroidChannel()
+    if (level && Capacitor.getPlatform() === 'android') await LocalNotifications.createChannel({ id: 'plata-account-health', name: 'Revisión de tus cuentas', description: 'Avisos de saldo y margen de la última semana del mes.', importance: 4, visibility: 0, vibration: true })
     notificationSequence = (notificationSequence + 1) % 1000
     await LocalNotifications.schedule({
       notifications: [{
         id: (Date.now() % 2_000_000_000) + notificationSequence,
         title,
         body,
-        channelId: ANDROID_CHANNEL_ID,
+        channelId: level ? 'plata-account-health' : ANDROID_CHANNEL_ID,
+        ...(extra ? { extra } : {}),
+        ...(level ? { iconColor: level === 'critical' ? '#DC2626' : level === 'success' ? '#16A34A' : '#D97706', smallIcon: 'ic_stat_account_health' } : {}),
       }],
     })
     return true
