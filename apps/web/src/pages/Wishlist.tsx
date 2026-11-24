@@ -194,6 +194,7 @@ export default function Wishlist() {
       items: sortWishlistByPriority(wishlist.filter((item) => isWishlistPurchased(item) && getWishlistCurrency(item) === currencyCode)),
     },
   ])).filter((section) => section.items.length > 0 || section.status === 'pending')
+  const getSectionTotal = (items: typeof wishlist) => items.reduce((total, item) => total + Math.max(0, item.price), 0)
   const editItem = useMemo(() => wishlist.find((item) => item.id === editId) ?? null, [editId, wishlist])
   const formCurrencyCode = getWishlistCurrency(form)
   const formCurrency = getCurrencyByCode(formCurrencyCode)
@@ -455,12 +456,17 @@ export default function Wishlist() {
                   <h2 className="text-xl font-semibold text-on-surface">{section.title}</h2>
                   <p className="mt-1 text-sm text-muted-gray">{section.description}</p>
                 </div>
-                <Badge
-                  variant="secondary"
-                  className={section.status === 'purchased' ? 'w-fit bg-success/10 text-success' : 'w-fit bg-primary/10 text-primary'}
-                >
-                  {section.items.length} {section.items.length === 1 ? 'deseo' : 'deseos'}
-                </Badge>
+                <div className="flex flex-wrap items-center gap-2">
+                  <Badge
+                    variant="secondary"
+                    className={section.status === 'purchased' ? 'w-fit bg-success/10 text-success' : 'w-fit bg-primary/10 text-primary'}
+                  >
+                    {section.items.length} {section.items.length === 1 ? 'deseo' : 'deseos'}
+                  </Badge>
+                  <Badge variant="outline" className="w-fit border-graphite bg-abyss text-on-surface">
+                    Total {section.status === 'purchased' ? 'comprado' : 'por comprar'}: {formatMoneyWithCode(getSectionTotal(section.items), getCurrencyByCode(section.currencyCode))}
+                  </Badge>
+                </div>
               </div>
 
               {section.items.length === 0 ? (
@@ -642,12 +648,17 @@ export default function Wishlist() {
                   <h2 className="text-xl font-semibold text-on-surface">{section.title}</h2>
                   <p className="mt-1 text-sm text-muted-gray">{section.description}</p>
                 </div>
-                <Badge
-                  variant="secondary"
-                  className={section.status === 'purchased' ? 'w-fit bg-success/10 text-success' : 'w-fit bg-primary/10 text-primary'}
-                >
-                  {section.items.length} {section.items.length === 1 ? 'deseo' : 'deseos'}
-                </Badge>
+                <div className="flex flex-wrap items-center gap-2">
+                  <Badge
+                    variant="secondary"
+                    className={section.status === 'purchased' ? 'w-fit bg-success/10 text-success' : 'w-fit bg-primary/10 text-primary'}
+                  >
+                    {section.items.length} {section.items.length === 1 ? 'deseo' : 'deseos'}
+                  </Badge>
+                  <Badge variant="outline" className="w-fit border-graphite bg-abyss text-on-surface">
+                    Total {section.status === 'purchased' ? 'comprado' : 'por comprar'}: {formatMoneyWithCode(getSectionTotal(section.items), getCurrencyByCode(section.currencyCode))}
+                  </Badge>
+                </div>
               </div>
 
               {section.items.length === 0 ? (
