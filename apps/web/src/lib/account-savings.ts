@@ -1,4 +1,4 @@
-import { getWishlistReservedAmount, isWishlistPurchased, normalizeFormula, type AllocationFormula, type BootstrapPayload, type IncomeSource, type Salary, type WishlistItem } from '@plata/shared'
+import { getSalaryIncomeBase, getWishlistReservedAmount, isWishlistPurchased, normalizeFormula, type AllocationFormula, type BootstrapPayload, type IncomeSource, type Salary, type WishlistItem } from '@plata/shared'
 
 import type { IncomeAccountView } from '@/lib/income-account-view'
 
@@ -108,7 +108,7 @@ export function getAccountSavingsAmount(account: IncomeAccountView, rate: number
   const normalizedRate = Math.min(100, Math.max(0, rate))
   if (normalizedRate <= 0) return 0
 
-  const base = account.salary.amount
+  const base = getSalaryIncomeBase(account.salary)
   const balance = Number(account.salary.balance ?? account.salary.amount)
   if (!Number.isFinite(base) || !Number.isFinite(balance)) return 0
 
@@ -421,7 +421,7 @@ export function getAccountSavingsGoals(
     // The account's own savings account is not a source of new savings.
     if (savingsAccount?.id === account.source.id) return []
 
-    const goalUsd = account.salary.amount * (rate / 100)
+    const goalUsd = getSalaryIncomeBase(account.salary) * (rate / 100)
     const savedUsd = savingsAccount
       ? getSavingsAccountBalances(salaries, sources, currencyCode, month)
       : 0

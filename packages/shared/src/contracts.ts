@@ -11,6 +11,7 @@ import type {
   Subscription,
   Transaction,
   WishlistItem,
+  VacationAdjustment,
 } from './types.js'
 import { getWishlistExternalContribution, isWishlistPurchased } from './wishlist.js'
 
@@ -43,6 +44,7 @@ export interface BootstrapPayload {
   savingsGoals: SavingsGoal[]
   reminders: Reminder[]
   subscriptions: Subscription[]
+  vacationAdjustments: VacationAdjustment[]
 }
 
 export function createEmptyBootstrapPayload(): BootstrapPayload {
@@ -58,23 +60,34 @@ export function createEmptyBootstrapPayload(): BootstrapPayload {
     savingsGoals: [],
     reminders: [],
     subscriptions: [],
+    vacationAdjustments: [],
   }
 }
 
 export function normalizeBootstrapPayload(payload?: Partial<BootstrapPayload> | null): BootstrapPayload {
   return {
-    salaries: (payload?.salaries ?? []).map((salary) => ({
-      ...salary,
-      currencyCode: String(payload?.incomeSources?.find((source) => source.id === salary.sourceId)?.currencyCode ?? salary.currencyCode ?? 'USD').trim().toUpperCase() || 'USD',
-      balanceMode: salary.balanceMode === 'zero' ? 'zero' : 'fixed',
-      balance: Number(salary.balance ?? salary.amount ?? 0),
-      transferAdjustment: Number(salary.transferAdjustment ?? (
-        (payload?.incomeSources?.find((source) => source.id === salary.sourceId)?.name ?? '')
-          .trim().toLocaleLowerCase('es').startsWith('ahorro ')
-          ? 0
-          : Math.max(0, Number(salary.balance ?? salary.amount ?? 0) - Number(salary.amount ?? 0))
-      )),
-    })),
+    salaries: (payload?.salaries ?? []).map((salary) => {
+      const source = payload?.incomeSources?.find((entry) => entry.id === salary.sourceId)
+      const isSavingsAccount = (source?.name ?? salary.sourceName ?? '').trim().toLocaleLowerCase('es').startsWith('ahorro ')
+      const amount = Number(salary.amount ?? 0)
+      const balance = Number(salary.balance ?? amount)
+      const transferAdjustment = Number(salary.transferAdjustment ?? (
+        isSavingsAccount ? 0 : Math.max(0, balance - amount)
+      ))
+      const inferredRollover = isSavingsAccount
+        ? 0
+        : Math.max(0, balance - amount - Math.max(0, transferAdjustment))
+
+      return {
+        ...salary,
+        currencyCode: String(source?.currencyCode ?? salary.currencyCode ?? 'USD').trim().toUpperCase() || 'USD',
+        balanceMode: salary.balanceMode === 'zero' ? 'zero' : 'fixed',
+        balance,
+        rolloverAmount: Number(salary.rolloverAmount ?? inferredRollover),
+        transferAdjustment,
+        vacationAdjustment: Number(salary.vacationAdjustment ?? 0),
+      }
+    }),
     incomeSources: (payload?.incomeSources ?? []).map((source) => ({
       ...source,
       currencyCode: String(source.currencyCode ?? 'USD').trim().toUpperCase() || 'USD',
@@ -95,5 +108,6 @@ export function normalizeBootstrapPayload(payload?: Partial<BootstrapPayload> | 
     savingsGoals: payload?.savingsGoals ?? [],
     reminders: payload?.reminders ?? [],
     subscriptions: payload?.subscriptions ?? [],
+    vacationAdjustments: payload?.vacationAdjustments ?? [],
   }
 }

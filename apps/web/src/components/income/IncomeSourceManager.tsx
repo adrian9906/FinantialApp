@@ -18,7 +18,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { convertToUsd, convertUsdToInput, ensureCurrencyPreference, formatMoneyWithCode, getCurrencyByCode } from '@/lib/currency'
 import { useFinanceStore } from '@/store/financeStore'
 import { usePreferencesStore } from '@/store/preferencesStore'
-import { getMonthKey, normalizeSalaryHistory } from '@plata/shared'
+import { getMonthKey, getSalaryIncomeBase, normalizeSalaryHistory } from '@plata/shared'
 import { isSavingsIncomeSource } from '@/lib/account-savings'
 import { getIncomeAccountsForCycle } from '@/lib/income-account-view'
 
@@ -245,7 +245,9 @@ export function IncomeSourceManager() {
             const currentIncome = currentIncomes.find((entry) => entry.sourceId === source.id)
             const latestIncome = salaryHistory.find((entry) => entry.sourceId === source.id)
             const accountCurrency = getCurrencyByCode(source.currencyCode ?? currentIncome?.currencyCode ?? latestIncome?.currencyCode ?? activeCurrencyCode)
-            const accountIncome = currentIncome?.amount ?? latestIncome?.amount ?? 0
+            const accountIncome = currentIncome
+              ? getSalaryIncomeBase(currentIncome)
+              : latestIncome?.amount ?? 0
             const accountBalance = currentIncome?.balance ?? currentIncome?.amount ?? 0
 
             return (
@@ -260,7 +262,12 @@ export function IncomeSourceManager() {
                       {formatMoneyWithCode(accountBalance, accountCurrency)}
                     </p>
                     <p className="text-xs text-muted-gray">Saldo restante</p>
-                    <p className="mt-1 text-xs text-medium-gray">Ingreso inicial: {formatMoneyWithCode(accountIncome, accountCurrency)}</p>
+                    <p className="mt-1 text-xs text-medium-gray">Ingreso para distribuir: {formatMoneyWithCode(accountIncome, accountCurrency)}</p>
+                    {currentIncome && Number(currentIncome.rolloverAmount ?? 0) > 0 ? (
+                      <p className="mt-1 text-xs text-muted-gray">
+                        Incluye {formatMoneyWithCode(Number(currentIncome.rolloverAmount), accountCurrency)} agregados o arrastrados.
+                      </p>
+                    ) : null}
                   </div>
                   <div className="flex shrink-0 gap-1">
                     {currentIncome ? (

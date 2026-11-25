@@ -36,6 +36,7 @@ model Usuario {
   fuentesIngreso FuenteIngreso[]
   syncRecords    SyncRecord[]
   syncReceipts   SyncReceipt[]
+  vacaciones     AjusteVacaciones[]
 
   @@map("usuarios")
 }
@@ -83,6 +84,8 @@ model Salario {
   id        String   @id @default(uuid())
   salario   Float
   saldo     Float
+  saldoArrastre Float @default(0)
+  ajusteVacaciones Float @default(0)
   ajusteTransferencias Float @default(0)
   ahorroMigrado Boolean @default(false)
   moneda    String   @default("USD")
@@ -241,6 +244,27 @@ model Evento {
 
   @@index([usuarioId, fuenteIngresoId, fecha])
   @@map("eventos")
+}
+
+model AjusteVacaciones {
+  id String @id
+  modo String
+  fuenteIngresoId String
+  fuenteIngresoNombre String
+  fechaInicio String
+  fechaFin String
+  mesNomina String
+  diasLaborablesMes Int
+  diasVacaciones Int
+  tarifaDiaria Float
+  cantidad Float
+  usuarioId String
+  usuario Usuario @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([usuarioId, mesNomina, fuenteIngresoId])
+  @@map("ajustes_vacaciones")
 }
 
 model Deseo {

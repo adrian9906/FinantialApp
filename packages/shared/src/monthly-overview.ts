@@ -120,7 +120,9 @@ export function getMonthlyOverview(
   const registeredIncomes = getIncomesForMonth(salaries, salaryMonth)
   const registered = getTotalIncomeForMonth(salaries, salaryMonth)
   const fallbackIncome = registered > 0 ? null : getSalaryForMonth(salaries, salaryMonth)
-  const grossSalary = registered > 0 ? registered : fallbackIncome?.amount ?? 0
+  const grossSalary = registered > 0
+    ? registered
+    : Number(fallbackIncome?.amount ?? 0) + Number(fallbackIncome?.rolloverAmount ?? 0) + Number(fallbackIncome?.vacationAdjustment ?? 0)
   const transferAdjustment = registeredIncomes.length > 0
     ? registeredIncomes.reduce((sum, salary) => sum + Number(salary.transferAdjustment ?? 0), 0)
     : Number(fallbackIncome?.transferAdjustment ?? 0)

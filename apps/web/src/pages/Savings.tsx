@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { buildSavingWithdrawalDescription, getMonthKey, getSavingsFundingBreakdown, parseSavingDescription } from '@plata/shared'
+import { buildSavingWithdrawalDescription, getMonthKey, getSalaryIncomeBase, getSavingsFundingBreakdown, parseSavingDescription } from '@plata/shared'
 import { useFinanceStore } from '@/store/financeStore'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -149,7 +149,7 @@ export default function Savings() {
       && transaction.incomeSourceId === selectedAccountId
       && transaction.amount > 0)
     .reduce((sum, transaction) => sum + transaction.amount, 0)
-  const accountBudgetSavings = (selectedAccount ? selectedAccount.salary.amount : 0) * (selectedFormula.savings / 100)
+  const accountBudgetSavings = (selectedAccount ? getSalaryIncomeBase(selectedAccount.salary) : 0) * (selectedFormula.savings / 100)
   const remaining = accountBudgetSavings - accountPeriodSavings
   const budgetFull = remaining <= 0
   const currencyWishlist = wishlist

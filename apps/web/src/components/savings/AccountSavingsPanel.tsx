@@ -2,6 +2,7 @@ import { useMemo } from 'react'
 import { PiggyBank } from 'lucide-react'
 import {
   getFinancialPeriodStart,
+  getSalaryIncomeBase,
   getTransactionsInFinancialPeriod,
 } from '@plata/shared'
 
@@ -32,7 +33,7 @@ export function AccountSavingsPanel({ accounts }: { accounts: IncomeAccountView[
       const accountFormula = getAccountAllocationFormula(accountSavingsFormulas, account.source.id, formula)
       if (accountFormula.savings <= 0) return []
 
-      const target = account.salary.amount * (accountFormula.savings / 100)
+      const target = getSalaryIncomeBase(account.salary) * (accountFormula.savings / 100)
       if (target <= 0) return []
 
       const saved = periodTransactions

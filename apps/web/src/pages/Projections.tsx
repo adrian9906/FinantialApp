@@ -9,6 +9,7 @@ import { Label } from '@/components/ui/label'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog'
 import { TrendingUp, PlusCircle, Pencil, Trash2, Target } from 'lucide-react'
 import { useActiveIncomeAccount } from '@/lib/useActiveIncomeAccount'
+import { getSalaryIncomeBase } from '@plata/shared'
 
 export default function Projections() {
   const allProjections = useFinanceStore((state) => state.projections)
@@ -28,6 +29,7 @@ export default function Projections() {
   const latestSalary = salaries.length > 0
     ? salaries.reduce((max, salary) => new Date(salary.month) > new Date(max.month) ? salary : max)
     : null
+  const currentIncome = latestSalary ? getSalaryIncomeBase(latestSalary) : 0
   const targetSalaryInUsd = targetSalary ? moneyInput.toUsd(targetSalary) : 0
 
   function resetForm() {
@@ -79,7 +81,7 @@ export default function Projections() {
             <span className="text-base font-medium">Ingresos actuales</span>
             <TrendingUp className="size-5 text-primary" />
           </div>
-          <div className="text-[28px] font-semibold text-on-surface">{formatMoney(latestSalary?.amount ?? 0)}</div>
+          <div className="text-[28px] font-semibold text-on-surface">{formatMoney(currentIncome)}</div>
           <p className="text-xs text-muted-gray mt-1">{latestSalary?.month ?? 'Sin salario base'}</p>
         </div>
         <div className="bg-surface rounded-xl p-5 shadow-vault">
@@ -120,7 +122,7 @@ export default function Projections() {
           </div>
           <div className="divide-y divide-graphite">
             {projections.map((projection) => {
-              const gap = projection.targetSalary - (latestSalary?.amount ?? 0)
+              const gap = projection.targetSalary - currentIncome
               const reached = gap <= 0
               return (
                 <div key={projection.id} className="grid grid-cols-1 md:grid-cols-[1fr_1fr_1fr_80px] gap-3 md:gap-4 p-4 hover:bg-surface-container-low transition-colors items-center group">
@@ -166,9 +168,9 @@ export default function Projections() {
               </p>
               <p className="mt-1 text-sm text-muted-gray">
                 {targetSalary && latestSalary
-                  ? targetSalaryInUsd - latestSalary.amount > 0
-                    ? `Te faltan ${formatMoney(targetSalaryInUsd - latestSalary.amount)} para alcanzarla.`
-                    : `Ya superaste esta meta por ${formatMoney(Math.abs(targetSalaryInUsd - latestSalary.amount))}.`
+                  ? targetSalaryInUsd - currentIncome > 0
+                    ? `Te faltan ${formatMoney(targetSalaryInUsd - currentIncome)} para alcanzarla.`
+                    : `Ya superaste esta meta por ${formatMoney(Math.abs(targetSalaryInUsd - currentIncome))}.`
                   : 'Usa esta tarjeta para validar el impacto antes de guardar.'}
               </p>
             </Card>

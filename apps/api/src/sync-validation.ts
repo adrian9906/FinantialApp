@@ -16,7 +16,7 @@ const balanceMode = z.enum(['fixed', 'zero'])
 const planning = z.object({ amount, itemName: text, category: text, status: z.enum(['pending', 'checked']), date, unnecessary: z.boolean().optional(), ...account })
 const hostedImageUrl = z.string().url().max(2_000).refine((value) => /^https:\/\//i.test(value), 'La imagen debe usar una URL HTTPS.')
 const schemas = {
-  salaries: z.object({ id, amount, month, balance: z.number().finite().optional(), savingsLedgerMigrated: z.boolean().optional(), transferAdjustment: z.number().finite().optional(), currencyCode: currencyCode.optional(), balanceMode: balanceMode.optional(), sourceId: id.optional(), sourceName: text.optional(), kind: z.enum(['recurring', 'one-off']).optional() }),
+  salaries: z.object({ id, amount, month, balance: z.number().finite().optional(), rolloverAmount: amount.optional(), savingsLedgerMigrated: z.boolean().optional(), transferAdjustment: z.number().finite().optional(), vacationAdjustment: z.number().finite().optional(), currencyCode: currencyCode.optional(), balanceMode: balanceMode.optional(), sourceId: id.optional(), sourceName: text.optional(), kind: z.enum(['recurring', 'one-off']).optional() }),
   incomeSources: z.object({ id, name: text, recurring: z.boolean(), archived: z.boolean().optional(), currencyCode: currencyCode.optional(), balanceMode: balanceMode.optional(), isCash: z.boolean().optional() }),
   transactions: z.object({ id, amount, type: z.enum(['expense', 'want', 'saving']), description: text.optional(), date, createdAt: date.optional(), place: place.optional(), attachments: attachments.optional(), isCash: z.boolean().optional(), ...account }),
   debts: z.object({ id, direction: z.enum(['payable', 'receivable']).optional(), counterparty: text.optional(), amount, history: text, startDate: date, endDate: date, interest: amount.optional(), paidAmount: amount, remainingAmount: amount, progress: z.number().finite(), isSettled: z.boolean(), payments: z.array(payment).max(10000).optional(), ...account }),
@@ -27,6 +27,7 @@ const schemas = {
   savingsGoals: z.object({ id, name: text, category: z.enum(['emergency', 'travel', 'rent', 'phone', 'custom']), targetAmount: amount, currentAmount: amount, monthlyContribution: amount, ...account }),
   reminders: z.object({ id, title: text, description: text, date, completed: z.boolean() }),
   subscriptions: z.object({ id, name: text, amount, billingDay: z.number().int().min(1).max(31), status: z.enum(['active', 'cancelled']), startedAt: date, cancelledAt: date.optional(), ...account }),
+  vacationAdjustments: z.object({ id, mode: z.enum(['paid', 'deducted']), incomeSourceId: id, incomeSourceName: text, startDate: date, endDate: date, payrollMonth: month, workingDaysInMonth: z.number().int().positive(), vacationWorkingDays: z.number().int().positive(), dailyRate: amount, amount }),
 }
 export function parseSyncOperation(value: unknown): SyncOperation {
   const operation = z.object({ id, collection: z.enum(syncCollections), entityId: id, baseVersion: z.string().max(500).nullable(), value: z.unknown() }).parse(value)
@@ -49,10 +50,10 @@ export function getLegacySyncOperation(operation: SyncOperation): SyncOperation 
   if (!operation.value) return operation
   const value = { ...operation.value } as Record<string, unknown>
   if (operation.collection === 'salaries') {
-    delete value.balance; delete value.transferAdjustment; delete value.currencyCode; delete value.balanceMode; delete value.savingsLedgerMigrated
+    delete value.balance; delete value.rolloverAmount; delete value.transferAdjustment; delete value.vacationAdjustment; delete value.currencyCode; delete value.balanceMode; delete value.savingsLedgerMigrated
   } else if (operation.collection === 'incomeSources') {
     delete value.currencyCode; delete value.balanceMode; delete value.isCash
-  } else {
+  } else if (operation.collection !== 'vacationAdjustments') {
     delete value.incomeSourceId; delete value.incomeSourceName
   }
   if (operation.collection === 'monthlyPlanningHistory') {

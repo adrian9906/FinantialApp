@@ -327,6 +327,8 @@ function serializeSalary(entry: {
   id: string
   salario: number
   saldo: number
+  saldoArrastre: number
+  ajusteVacaciones: number
   ajusteTransferencias: number
   ahorroMigrado: boolean
   moneda: string
@@ -340,6 +342,8 @@ function serializeSalary(entry: {
     id: entry.id,
     amount: entry.salario,
     balance: entry.saldo,
+    rolloverAmount: entry.saldoArrastre,
+    vacationAdjustment: entry.ajusteVacaciones,
     transferAdjustment: entry.ajusteTransferencias,
     savingsLedgerMigrated: entry.ahorroMigrado,
     month: toMonthString(entry.fecha),
@@ -722,6 +726,8 @@ async function loadBootstrap(userId: string, prisma: Prisma.TransactionClient, m
         const carried = {
           salario: income,
           saldo: previousSalary.saldo + income,
+          saldoArrastre: Math.max(0, previousSalary.saldo),
+          ajusteVacaciones: 0,
           ajusteTransferencias: Math.min(Math.max(0, previousSalary.saldo), Math.max(0, previousSalary.ajusteTransferencias)),
           ahorroMigrado: previousSalary.ahorroMigrado,
           moneda: latestSalary.moneda,
@@ -746,7 +752,7 @@ async function loadBootstrap(userId: string, prisma: Prisma.TransactionClient, m
   await ensureSubscriptionExpenses(userId, prisma)
   }
 
-  const [salaries, incomeSources, expenses, wants, savings, debts, wishlist, monthlyPlanningHistory, events, projections, savingsGoals, reminders, subscriptions] = await Promise.all([
+  const [salaries, incomeSources, expenses, wants, savings, debts, wishlist, monthlyPlanningHistory, events, projections, savingsGoals, reminders, subscriptions, vacationAdjustments] = await Promise.all([
     prisma.salario.findMany({
       where: { usuarioId: userId },
       orderBy: [
@@ -788,6 +794,7 @@ async function loadBootstrap(userId: string, prisma: Prisma.TransactionClient, m
     prisma.metaAhorro.findMany({ where: { usuarioId: userId }, orderBy: { createdAt: 'desc' } }),
     prisma.notificacion.findMany({ where: { usuarioId: userId }, orderBy: { fecha: 'asc' } }),
     prisma.suscripcion.findMany({ where: { usuarioId: userId }, orderBy: [{ estado: 'asc' }, { diaCobro: 'asc' }] }),
+    prisma.ajusteVacaciones.findMany({ where: { usuarioId: userId }, orderBy: [{ mesNomina: 'asc' }, { fechaInicio: 'asc' }] }),
   ])
 
   const transactions = sortByDateDesc(
@@ -811,6 +818,13 @@ async function loadBootstrap(userId: string, prisma: Prisma.TransactionClient, m
     savingsGoals: savingsGoals.map(serializeSavingsGoal),
     reminders: reminders.map(serializeReminder),
     subscriptions: subscriptions.map(serializeSubscription),
+    vacationAdjustments: vacationAdjustments.map((entry) => ({
+      id: entry.id, mode: entry.modo === 'deducted' ? 'deducted' as const : 'paid' as const,
+      incomeSourceId: entry.fuenteIngresoId, incomeSourceName: entry.fuenteIngresoNombre,
+      startDate: entry.fechaInicio, endDate: entry.fechaFin, payrollMonth: entry.mesNomina,
+      workingDaysInMonth: entry.diasLaborablesMes, vacationWorkingDays: entry.diasVacaciones,
+      dailyRate: entry.tarifaDiaria, amount: entry.cantidad,
+    })),
   }
 }
 
@@ -890,6 +904,12 @@ export async function writeSyncRecord(userId: string, operation: SyncOperation, 
       select: { comprado: true, fecha: true },
     })
     : null
+  const existingSalary = operation.collection === 'salaries' && operation.value
+    ? await tx.salario.findFirst({
+      where: { usuarioId: userId, id: operation.entityId },
+      select: { saldoArrastre: true },
+    })
+    : null
 
   {
     if (operation.collection === 'salaries') await tx.salario.deleteMany({ where: { usuarioId: userId, id: operation.entityId } })
@@ -905,6 +925,7 @@ export async function writeSyncRecord(userId: string, operation: SyncOperation, 
     if (operation.collection === 'savingsGoals') await tx.metaAhorro.deleteMany({ where: { usuarioId: userId, id: operation.entityId } })
     if (operation.collection === 'reminders') await tx.notificacion.deleteMany({ where: { usuarioId: userId, id: operation.entityId } })
     if (operation.collection === 'subscriptions') await tx.suscripcion.deleteMany({ where: { usuarioId: userId, id: operation.entityId } })
+    if (operation.collection === 'vacationAdjustments') await tx.ajusteVacaciones.deleteMany({ where: { usuarioId: userId, id: operation.entityId } })
 
     for (const entry of payload.salaries) {
       const source = entry.sourceId ? await tx.fuenteIngreso.findFirst({ where: { id: entry.sourceId, usuarioId: userId }, select: { moneda: true } }) : null
@@ -913,6 +934,8 @@ export async function writeSyncRecord(userId: string, operation: SyncOperation, 
           id: entry.id,
           salario: Number(entry.amount ?? 0),
           saldo: Number(entry.balance ?? entry.amount ?? 0),
+          saldoArrastre: Number(entry.rolloverAmount ?? existingSalary?.saldoArrastre ?? 0),
+          ajusteVacaciones: Number(entry.vacationAdjustment ?? 0),
           ajusteTransferencias: Number(entry.transferAdjustment ?? 0),
           ahorroMigrado: entry.savingsLedgerMigrated === true,
           moneda: String(source?.moneda ?? entry.currencyCode ?? 'USD').trim().toUpperCase() || 'USD',
@@ -1100,6 +1123,16 @@ export async function writeSyncRecord(userId: string, operation: SyncOperation, 
           usuarioId: userId,
         },
       })
+    }
+
+    for (const entry of payload.vacationAdjustments) {
+      await tx.ajusteVacaciones.create({ data: {
+        id: entry.id, modo: entry.mode, fuenteIngresoId: entry.incomeSourceId,
+        fuenteIngresoNombre: entry.incomeSourceName, fechaInicio: entry.startDate,
+        fechaFin: entry.endDate, mesNomina: entry.payrollMonth,
+        diasLaborablesMes: entry.workingDaysInMonth, diasVacaciones: entry.vacationWorkingDays,
+        tarifaDiaria: entry.dailyRate, cantidad: entry.amount, usuarioId: userId,
+      } })
     }
 
     for (const entry of payload.projections) {

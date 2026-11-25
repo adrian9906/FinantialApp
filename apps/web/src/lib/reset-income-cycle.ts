@@ -9,8 +9,8 @@ export interface ResetIncomeCycleResult {
 
 /**
  * Starts a clean planning cycle without rewriting older recurring-income
- * history. Temporary accounts are removed, regular accounts recover their
- * original monthly amount, and real savings balances remain untouched.
+ * history. Temporary accounts are removed, unspent funds become the next
+ * cycle's rollover, and real savings balances remain untouched.
  */
 export function resetIncomeCycle(
   salaries: Salary[],
@@ -38,11 +38,13 @@ export function resetIncomeCycle(
       const source = salary.sourceId ? sourceById.get(salary.sourceId) : undefined
       if (source && isSavingsIncomeSource(source)) return salary
 
-      const startsAtZero = salary.balanceMode === 'zero' || source?.balanceMode === 'zero'
+      const rolloverAmount = Math.max(0, Number(salary.balance ?? salary.amount))
       return {
         ...salary,
-        balance: startsAtZero ? 0 : salary.amount,
+        rolloverAmount,
+        balance: salary.amount + rolloverAmount,
         transferAdjustment: 0,
+        vacationAdjustment: 0,
       }
     })
 

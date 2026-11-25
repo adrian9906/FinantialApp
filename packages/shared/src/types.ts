@@ -21,12 +21,16 @@ export interface IncomeSource {
 export interface Salary {
   id: string
   amount: number
-  /** Spendable account balance; amount remains the monthly planning base. */
+  /** Current cash balance; amount remains the recurring salary base. */
   balance?: number
+  /** Unspent cash from prior cycles or extra funds, distributed through the formula. */
+  rolloverAmount?: number
   /** Historical saving transactions have been reconciled into this balance. */
   savingsLedgerMigrated?: boolean
   /** Net account transfers in this month; changes its planning base, not income. */
   transferAdjustment?: number
+  /** One-time paid or deducted vacation adjustment for this month. */
+  vacationAdjustment?: number
   month: string
   /** Currency used by this income account. Amount stays normalized to USD. */
   currencyCode?: string
@@ -150,6 +154,21 @@ export interface AppEvent {
   recurrence?: 'none' | 'monthly' | 'yearly'
   time?: string
   notes?: string
+}
+
+/** A vacation salary adjustment scheduled for one future payroll month. */
+export interface VacationAdjustment {
+  id: string
+  mode: 'paid' | 'deducted'
+  incomeSourceId: string
+  incomeSourceName: string
+  startDate: string
+  endDate: string
+  payrollMonth: string
+  workingDaysInMonth: number
+  vacationWorkingDays: number
+  dailyRate: number
+  amount: number
 }
 
 export interface Projection {

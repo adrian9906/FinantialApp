@@ -13,6 +13,7 @@ import type {
   SavingsGoal,
   Subscription,
   Transaction,
+  VacationAdjustment,
   WishlistItem,
 } from '@plata/shared'
 import {
@@ -34,6 +35,7 @@ import { applyIncomeMoneyMovement, type IncomeMoneyDestination } from '@/lib/inc
 import { reconcileIncomeAccountCharge } from '@/lib/income-account'
 import { getIncomeAccountTransferLimit, getIncomeCycleMonth } from '@/lib/income-account-view'
 import { resetIncomeCycle } from '@/lib/reset-income-cycle'
+import { applyVacationDelta, vacationSalaryDelta } from '@/lib/vacation-payroll'
 import { reconcileSavingsAccountTransaction } from '@/lib/savings-account-ledger'
 import { ensureCurrencyPreference } from '@/lib/currency'
 import { useAuthStore } from '@/store/authStore'
@@ -79,6 +81,9 @@ interface FinanceStore extends BootstrapPayload {
   addEvent: (e: Omit<AppEvent, 'id'>) => Promise<void>
   updateEvent: (id: string, data: Partial<Omit<AppEvent, 'id'>>) => Promise<void>
   removeEvent: (id: string) => Promise<void>
+  addVacationAdjustment: (vacation: Omit<VacationAdjustment, 'id'>) => Promise<void>
+  updateVacationAdjustment: (id: string, data: Omit<VacationAdjustment, 'id'>) => Promise<void>
+  removeVacationAdjustment: (id: string) => Promise<void>
   addProjection: (p: Omit<Projection, 'id'>) => Promise<void>
   updateProjection: (id: string, data: Partial<Omit<Projection, 'id'>>) => Promise<void>
   removeProjection: (id: string) => Promise<void>
@@ -341,6 +346,7 @@ function buildSnapshotFromState(state: BootstrapPayload, next?: Partial<Bootstra
     savingsGoals: next?.savingsGoals ?? state.savingsGoals,
     reminders: next?.reminders ?? state.reminders,
     subscriptions: next?.subscriptions ?? state.subscriptions,
+    vacationAdjustments: next?.vacationAdjustments ?? state.vacationAdjustments,
   }
 }
 
@@ -633,7 +639,11 @@ export const useFinanceStore = create<FinanceStore>()((set, get) => ({
       }
       return {
         salaries: state.salaries.map((salary) => salary.id === salaryId
-          ? { ...salary, balance: Number(salary.balance ?? salary.amount) + amountUsd }
+          ? {
+              ...salary,
+              balance: Number(salary.balance ?? salary.amount) + amountUsd,
+              rolloverAmount: Number(salary.rolloverAmount ?? 0) + amountUsd,
+            }
           : salary),
       }
     })
@@ -932,6 +942,37 @@ export const useFinanceStore = create<FinanceStore>()((set, get) => ({
         events: state.events.filter((entry) => entry.id !== id),
       }))
       return
+    }
+  },
+  addVacationAdjustment: async (vacation) => {
+    if (isLocalMutationMode()) {
+      await updateLocalState(set, (state) => {
+        const entry = { ...vacation, id: makeId('vacation') }
+        const salaries = applyVacationDelta(state.salaries, state.incomeSources, entry, vacationSalaryDelta(entry), () => makeId('salary'))
+        return { salaries, vacationAdjustments: [entry, ...state.vacationAdjustments] }
+      })
+    }
+  },
+  updateVacationAdjustment: async (id, data) => {
+    if (isLocalMutationMode()) {
+      await updateLocalState(set, (state) => {
+        const old = state.vacationAdjustments.find((entry) => entry.id === id)
+        if (!old) return {}
+        const reverted = applyVacationDelta(state.salaries, state.incomeSources, old, -vacationSalaryDelta(old), () => makeId('salary'))
+        const entry = { ...data, id }
+        const salaries = applyVacationDelta(reverted, state.incomeSources, entry, vacationSalaryDelta(entry), () => makeId('salary'))
+        return { salaries, vacationAdjustments: state.vacationAdjustments.map((item) => item.id === id ? entry : item) }
+      })
+    }
+  },
+  removeVacationAdjustment: async (id) => {
+    if (isLocalMutationMode()) {
+      await updateLocalState(set, (state) => {
+        const entry = state.vacationAdjustments.find((item) => item.id === id)
+        if (!entry) return {}
+        const salaries = applyVacationDelta(state.salaries, state.incomeSources, entry, -vacationSalaryDelta(entry), () => makeId('salary'))
+        return { salaries, vacationAdjustments: state.vacationAdjustments.filter((item) => item.id !== id) }
+      })
     }
   },
   addProjection: async (projection) => {

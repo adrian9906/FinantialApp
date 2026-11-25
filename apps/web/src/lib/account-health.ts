@@ -1,4 +1,4 @@
-import { getFinancialPeriodStart, isInFinancialPeriod, parseExpenseDescription, parseWantDescription, type BootstrapPayload, type IncomeSource, type Salary } from '@plata/shared'
+import { getFinancialPeriodStart, getSalaryIncomeBase, isInFinancialPeriod, parseExpenseDescription, parseWantDescription, type BootstrapPayload, type IncomeSource, type Salary } from '@plata/shared'
 
 export type AccountHealthLevel = 'critical' | 'warning' | 'success'
 export interface AccountHealth {
@@ -70,7 +70,7 @@ export function buildAccountHealth(
     const margin = balance - commitments - forecast
     const hasHistory = recordedDays >= 3
     const level: AccountHealthLevel = margin <= 0 ? 'critical'
-      : !hasHistory || margin < Math.max(money(salary.amount) * 0.1, (commitments + forecast) * 0.25) ? 'warning' : 'success'
+      : !hasHistory || margin < Math.max(money(getSalaryIncomeBase(salary)) * 0.1, (commitments + forecast) * 0.25) ? 'warning' : 'success'
     return { accountId: source.id, accountName: source.name, currencyCode: source.currencyCode ?? salary.currencyCode ?? 'USD', level, balance, commitments, forecast, margin, hasHistory, asOf: today, month }
   })
 }

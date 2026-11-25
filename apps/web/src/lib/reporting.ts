@@ -127,7 +127,7 @@ function getMonthSalaryMap(salaries: Salary[]) {
   const totals = new Map<string, number>()
 
   salaries.forEach((salary) => {
-    totals.set(salary.month, (totals.get(salary.month) ?? 0) + salary.amount)
+    totals.set(salary.month, (totals.get(salary.month) ?? 0) + salary.amount + Number(salary.rolloverAmount ?? 0) + Number(salary.vacationAdjustment ?? 0))
   })
 
   return totals

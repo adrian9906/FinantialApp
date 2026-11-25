@@ -47,14 +47,22 @@ export function getIncomesForMonth(salaries: Salary[], month = getMonthKey()) {
   return normalizeSalaryHistory(salaries).filter((salary) => salary.month === month)
 }
 
-/** Total income for a month: the base for the allocation formula. */
+/** Monthly declared income plus funds carried into the month. */
 export function getTotalIncomeForMonth(salaries: Salary[], month = getMonthKey()) {
-  return getIncomesForMonth(salaries, month).reduce((sum, salary) => sum + salary.amount, 0)
+  return getIncomesForMonth(salaries, month).reduce(
+    (sum, salary) => sum + salary.amount + Number(salary.rolloverAmount ?? 0) + Number(salary.vacationAdjustment ?? 0),
+    0,
+  )
+}
+
+/** Monthly salary plus the money carried into the current spending cycle. */
+export function getSalaryIncomeBase(salary: Pick<Salary, 'amount' | 'rolloverAmount' | 'vacationAdjustment'>) {
+  return Math.max(0, Number(salary.amount) + Number(salary.rolloverAmount ?? 0) + Number(salary.vacationAdjustment ?? 0))
 }
 
 /** Money assigned to this account's formula after transfers, without changing income. */
 export function getSalaryPlanningBase(salary: Salary) {
-  return Math.max(0, salary.amount + Number(salary.transferAdjustment ?? 0))
+  return Math.max(0, getSalaryIncomeBase(salary) + Number(salary.transferAdjustment ?? 0))
 }
 
 /**
@@ -67,7 +75,9 @@ export function getSalaryForMonth(salaries: Salary[], month = getMonthKey()) {
   const current = normalized.filter((salary) => salary.month === month)
   if (current.length > 0) {
     const total = current.reduce((sum, salary) => sum + salary.amount, 0)
-    return { ...current[0], amount: total }
+    const rolloverAmount = current.reduce((sum, salary) => sum + Number(salary.rolloverAmount ?? 0), 0)
+    const vacationAdjustment = current.reduce((sum, salary) => sum + Number(salary.vacationAdjustment ?? 0), 0)
+    return { ...current[0], amount: total, rolloverAmount, vacationAdjustment }
   }
 
   const previous = normalized.find((salary) => salary.month < month)
@@ -85,6 +95,8 @@ export function getSalaryForMonth(salaries: Salary[], month = getMonthKey()) {
       (sum, salary) => sum + (salary.balanceMode === 'zero' ? 0 : salary.amount),
       0,
     ),
+    rolloverAmount: previousMonth.reduce((sum, salary) => sum + Number(salary.rolloverAmount ?? 0), 0),
+    vacationAdjustment: previousMonth.reduce((sum, salary) => sum + Number(salary.vacationAdjustment ?? 0), 0),
   }
 }
 
@@ -124,14 +136,16 @@ export function carrySalaryForwardToMonth(
       covered.add(key)
       const previous = previousBySource.get(getIncomeKey(source))!
       const income = source.balanceMode === 'zero' ? 0 : source.amount
-      // A monthly income is new money; the account's unspent balance remains
-      // available. Accounts without automatic income retain their money too.
+      // A monthly income is new money; prior cash remains available and is
+      // included in the next cycle's planning base. Zero-income accounts retain it too.
       // Legacy entries have no recorded balance, so do not invent a remainder.
       const next: Salary = {
         ...source,
         id: createId(),
         month,
         amount: income,
+        vacationAdjustment: 0,
+        rolloverAmount: Math.max(0, Number(previous.balance ?? 0)),
         balance: (previous.balance ?? 0) + income,
         // Keep only transferred money that is still in the account. It is
         // spendable next month without becoming a second income payment.

@@ -103,7 +103,7 @@ export async function exportSalariesReport(salaries: Salary[]) {
     {
       name: 'Ingresos',
       columns: ['Mes', 'Monto'],
-      rows: salaries.map((salary) => [salary.month, toCurrency(salary.amount)]),
+      rows: salaries.map((salary) => [salary.month, toCurrency(salary.amount + Number(salary.rolloverAmount ?? 0) + Number(salary.vacationAdjustment ?? 0))]),
     },
   ])
 }

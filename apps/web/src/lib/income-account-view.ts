@@ -5,6 +5,7 @@ import {
   getMonthKey,
   getAdjustedFormulaBudgets,
   getMonthlyOverview,
+  getSalaryIncomeBase,
   type AllocationFormula,
   type IncomeSource,
   type Salary,
@@ -102,7 +103,7 @@ export function getIncomeAccountOverview(
     ? transactions.filter((transaction) => transaction.incomeSourceId === account.source.id)
     : []
   const budgets = account
-    ? getAdjustedFormulaBudgets(account.salary.amount, formula, Number(account.salary.transferAdjustment ?? 0))
+    ? getAdjustedFormulaBudgets(getSalaryIncomeBase(account.salary), formula, Number(account.salary.transferAdjustment ?? 0))
     : { expenses: 0, wants: 0, savings: 0 }
   const budgetExpenses = budgets.expenses
   const budgetWants = budgets.wants
