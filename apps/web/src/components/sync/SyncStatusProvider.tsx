@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { toast } from 'sonner'
 
 import { getSyncProgress, subscribeToSyncProgress, type SyncProgress, type SyncReason } from '@/lib/sync-engine'
-import { isOnline } from '@/lib/offline'
+import { hasRetryableSyncChanges, isOnline } from '@/lib/offline'
 import { useAuthStore } from '@/store/authStore'
 import { useFinanceStore } from '@/store/financeStore'
 import { SyncProgressDialog } from '@/components/sync/SyncProgressDialog'
@@ -84,12 +84,14 @@ export function SyncStatusProvider() {
   // indicator. Normal edits already upload through the finance store and stay
   // silent, so a stable connection never produces UI noise.
   useEffect(() => {
-    if (authMode !== 'authenticated') return
+    if (authMode !== 'authenticated' || !userId) return
+
+    let retryCheckInProgress = false
 
     const run = (reason: SyncReason) => {
-      if (!isOnline()) return
+      if (reason === 'startup' && !isOnline()) return
       void (async () => {
-        if (userId) await usePreferencesStore.getState().hydrateCurrencyPreferences(userId).catch(() => {})
+        if (reason !== 'silent') await usePreferencesStore.getState().hydrateCurrencyPreferences(userId).catch(() => {})
         if (useAuthStore.getState().authMode !== 'authenticated' || useAuthStore.getState().user?.id !== userId) return
         await syncPendingChanges(reason)
       })().catch(() => {})
@@ -99,13 +101,37 @@ export function SyncStatusProvider() {
       run('reconnect')
     }
 
+    function handleResume() {
+      if (document.visibilityState === 'visible') run('reconnect')
+    }
+
+    // Android WebView may not emit `online` when its network becomes usable
+    // again. Retry queued writes while the app is foregrounded until they drain.
+    const retryTimer = window.setInterval(() => {
+      if (retryCheckInProgress || document.visibilityState !== 'visible') return
+      retryCheckInProgress = true
+      void hasRetryableSyncChanges(userId)
+        .then((hasChanges) => {
+          if (hasChanges && useAuthStore.getState().user?.id === userId) run('silent')
+        })
+        .catch(() => {})
+        .finally(() => { retryCheckInProgress = false })
+    }, 15_000)
+
     window.addEventListener('online', handleReconnect)
+    window.addEventListener('focus', handleResume)
+    window.addEventListener('pageshow', handleResume)
+    document.addEventListener('visibilitychange', handleResume)
 
     // Every authenticated app start checks for local and remote changes.
     run('startup')
 
     return () => {
       window.removeEventListener('online', handleReconnect)
+      window.removeEventListener('focus', handleResume)
+      window.removeEventListener('pageshow', handleResume)
+      document.removeEventListener('visibilitychange', handleResume)
+      window.clearInterval(retryTimer)
     }
   }, [authMode, syncPendingChanges, userId])
 

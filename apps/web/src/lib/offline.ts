@@ -1,6 +1,6 @@
 import type { AuthUser, BootstrapPayload } from '@plata/shared'
 
-import { clearSyncDocument, readCachedSnapshot, readSyncDocument, writeSyncDocument } from '@/lib/sync-store'
+import { clearSyncDocument, readCachedSnapshot, readSyncDocument, waitForSyncDocumentWrites, writeSyncDocument } from '@/lib/sync-store'
 
 const AUTH_USER_KEY = 'plata-auth-user'
 
@@ -67,6 +67,15 @@ export function clearCachedBootstrap(userId: string) {
  * never reported pending work, letting server data overwrite local edits.
  */
 export async function hasPendingSync(userId: string) {
+  await waitForSyncDocumentWrites(userId)
   const document = await readSyncDocument(userId)
   return document.operations.length > 0 || document.conflicts.length > 0
+}
+
+/** True only when there is queued work that can progress without conflict resolution. */
+export async function hasRetryableSyncChanges(userId: string) {
+  await waitForSyncDocumentWrites(userId)
+  const document = await readSyncDocument(userId)
+  const conflicts = new Set(document.conflicts.map((entry) => entry.key))
+  return document.operations.some((operation) => !conflicts.has(`${operation.collection}/${operation.entityId}`))
 }

@@ -168,6 +168,11 @@ export async function readSyncDocument(userId: string): Promise<SyncDocument> {
   return migrated
 }
 
+/** Wait for local queue writes already started for this account. */
+export async function waitForSyncDocumentWrites(userId: string) {
+  await documentUpdates.get(userId)?.catch(() => undefined)
+}
+
 export function writeSyncDocument(userId: string, document: SyncDocument): Promise<boolean> {
   return writeRecord(SYNC_STORE, userId, document)
 }

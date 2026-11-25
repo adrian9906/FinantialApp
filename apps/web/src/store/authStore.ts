@@ -2,7 +2,7 @@ import { create } from 'zustand'
 import type { AuthCredentials, AuthMode, AuthUser, RegisterPayload } from '@plata/shared'
 
 import { ApiRequestError, isNetworkRequestError, requestJson } from '@/lib/api'
-import { clearCachedAuthUser, clearCachedBootstrap, isOnline, persistCachedAuthUser, readCachedAuthUser } from '@/lib/offline'
+import { clearCachedAuthUser, clearCachedBootstrap, hasPendingSync, isOnline, persistCachedAuthUser, readCachedAuthUser } from '@/lib/offline'
 
 const GUEST_AUTH_STORAGE_KEY = 'plata-auth-mode'
 const SESSION_TOKEN_KEY = 'plata-session-token'
@@ -188,7 +188,9 @@ export const useAuthStore = create<AuthStore>()((set) => ({
     persistGuestMode(false)
     clearCachedAuthUser()
     if (user) {
-      void clearCachedBootstrap(user.id)
+      // Keep the device snapshot if logout happens before offline edits upload.
+      const hasPendingChanges = await hasPendingSync(user.id).catch(() => true)
+      if (!hasPendingChanges) await clearCachedBootstrap(user.id)
     }
     set({
       authMode: 'anonymous',

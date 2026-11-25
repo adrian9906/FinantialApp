@@ -491,7 +491,9 @@ export const useFinanceStore = create<FinanceStore>()((set, get) => ({
   syncPendingChanges: async (reason = 'silent') => {
     if (voiceBatchSaving) return false
     const userId = getAuthenticatedUserId()
-    if (!userId || !isOnline()) return false
+    // navigator.onLine is only a hint on Android WebView and can remain false
+    // after connectivity returns. Let the request confirm reachability instead.
+    if (!userId) return false
 
     try {
       await Promise.all([...pendingSnapshotWrites])
