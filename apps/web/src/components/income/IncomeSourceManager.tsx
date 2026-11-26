@@ -220,8 +220,8 @@ export function IncomeSourceManager() {
   }
 
   return (
-    <Card className="border-graphite bg-surface p-5 shadow-vault">
-      <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+    <Card className="border-graphite bg-surface p-4 shadow-vault sm:p-5">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-2">
           <Briefcase className="size-4 text-primary" aria-hidden="true" />
           <div>
@@ -253,11 +253,11 @@ export function IncomeSourceManager() {
             return (
               <li
                 key={source.id}
-                className="rounded-xl border border-graphite bg-abyss p-4 shadow-vault-sm"
+                className="rounded-xl border border-graphite bg-abyss p-3 shadow-vault-sm sm:p-4"
               >
-                <div className="flex items-start justify-between gap-3">
-                  <div className="min-w-0">
-                    <p className="truncate text-sm font-medium text-on-surface">{source.name}</p>
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div className="min-w-0 flex-1 basis-52 wrap-anywhere">
+                    <p className="text-sm font-medium text-on-surface">{source.name}</p>
                     <p className="mt-1 text-2xl font-semibold tracking-tight text-on-surface">
                       {formatMoneyWithCode(accountBalance, accountCurrency)}
                     </p>
@@ -269,17 +269,17 @@ export function IncomeSourceManager() {
                       </p>
                     ) : null}
                   </div>
-                  <div className="flex shrink-0 gap-1">
+                  <div className="flex max-w-full flex-wrap items-center gap-1">
                     {currentIncome ? (
-                      <Button size="sm" variant="outline" onClick={() => openAddMoney(currentIncome.id)}>
+                      <Button size="sm" variant="outline" className="h-auto min-h-10 max-w-full py-1 whitespace-normal" onClick={() => openAddMoney(currentIncome.id)}>
                         <Plus className="size-4" aria-hidden="true" />
                         Agregar más dinero
                       </Button>
                     ) : null}
-                    <Button size="sm" variant="ghost" aria-label={`Editar ${source.name}`} onClick={() => openEdit(source.id)}>
+                    <Button size="icon-sm" variant="ghost" className="size-10" aria-label={`Editar ${source.name}`} onClick={() => openEdit(source.id)}>
                       <Pencil className="size-4" aria-hidden="true" />
                     </Button>
-                    <Button size="sm" variant="ghost" aria-label={`Eliminar ${source.name}`} onClick={() => void handleRemove(source.id)}>
+                    <Button size="icon-sm" variant="ghost" className="size-10" aria-label={`Eliminar ${source.name}`} onClick={() => void handleRemove(source.id)}>
                       <Trash2 className="size-4 text-error" aria-hidden="true" />
                     </Button>
                   </div>
